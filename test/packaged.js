@@ -40,6 +40,7 @@ async function launch() {
   assert(page, 'Packaged main window opens');
   page.setDefaultTimeout(30000);
   await page.locator('#input').waitFor();
+  await page.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
   return page;
 }
 async function main() {

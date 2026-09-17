@@ -3,6 +3,7 @@
 
 const App = {
   async init() {
+    this.ready = false;
     state.world = await api.app.world().catch(() => null);
     if (state.world) {
       state.boot = state.world.boot;
@@ -34,6 +35,7 @@ const App = {
       this.renderStreamingState();
     }
     Sidebar.renderAll();
+    this.ready = true;
   },
 
   applyAppearance() {
