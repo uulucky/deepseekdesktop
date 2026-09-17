@@ -1,0 +1,65 @@
+{
+  "appId": "com.deepseek.desktop",
+  "productName": "DeepSeek Desktop",
+  "copyright": "Copyright © 2026 uulucky",
+  "directories": {
+    "output": "dist",
+    "buildResources": "build"
+  },
+  "files": [
+    "src/**/*",
+    "package.json",
+    "LICENSE",
+    "!**/*.map",
+    "!**/test/**",
+    "!**/build/**",
+    "!**/*.md"
+  ],
+  "extraMetadata": {
+    "main": "src/main/index.js"
+  },
+  "extraResources": [
+    {
+      "from": "vendor/node",
+      "to": "vendor/node"
+    },
+    {
+      "from": "vendor/kernel",
+      "to": "vendor/kernel"
+    }
+  ],
+  "asar": true,
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "DeepSeekDesktop-${version}-${channel}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "DeepSeek",
+    "deleteAppDataOnUninstall": false,
+    "runAfterFinish": true
+  },
+  "portable": {
+    "artifactName": "DeepSeekDesktop-${version}-单文件便携版.${ext}",
+    "requestExecutionLevel": "user"
+  },
+  "publish": null
+}

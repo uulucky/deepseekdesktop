@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data: app: ad:;" />
+<title>DeepSeek</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #121722;
+    --line: #222a3a;
+    --text: #e8ecf4;
+    --muted: #8b96ad;
+    --brand: #4d6bfe;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(120% 120% at 12% 10%, #16203a 0%, var(--bg) 58%);
+    color: var(--text);
+    font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 30px 34px; user-select: none;
+    -webkit-app-region: drag;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(140deg, #5a78ff, #3550e0);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
+    box-shadow: 0 6px 20px rgba(77,107,254,.35);
+  }
+  .name { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
+  .sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .track { height: 6px; border-radius: 999px; background: #1b2130; overflow: hidden; margin-top: 4px; }
+  .bar { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #4d6bfe, #7f96ff); transition: width .35s ease; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; }
+  .label { color: var(--muted); font-size: 12px; }
+  .percent { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
+  .hint { margin-top: 18px; font-size: 11px; color: #5f6a80; line-height: 1.6; }
+  .error { color: #ff8a8a; margin-top: 12px; font-size: 12px; display: none; }
+</style>
+</head>
+<body>
+  <div class="logo">
+    <div class="mark">D</div>
+    <div>
+      <div class="name">DeepSeek</div>
+      <div class="sub">正在启动本地服务</div>
+    </div>
+  </div>
+  <div class="track"><div class="bar" id="bar"></div></div>
+  <div class="row">
+    <div class="label" id="label">正在检查运行环境</div>
+    <div class="percent" id="percent">0%</div>
+  </div>
+  <div class="hint" id="hint">首次启动需要准备本地运行环境，之后启动会很快。</div>
+  <div class="error" id="error"></div>
+
+<script src="scripts/splash.js"></script>
+</body>
+</html>

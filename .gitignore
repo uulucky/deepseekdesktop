@@ -1,0 +1,8 @@
+node_modules/
+vendor/
+dist/
+docs/
+build/app/
+build/ui-shot*.png
+*.log
+.DS_Store

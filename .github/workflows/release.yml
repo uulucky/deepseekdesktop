@@ -1,0 +1,49 @@
+name: Publish latest Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download and verify portable package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          asset="DeepSeekDesktop-${version}-portable.zip"
+          expected="$(awk -v file="$asset" '$2 == file { print $1 }' SHA256SUMS.txt)"
+          test -n "$expected"
+          curl --fail --location --retry 3 \
+            "https://img.uulucky.com/han/deepseek/${asset}?github=${GITHUB_SHA}" \
+            --output "$asset"
+          echo "${expected}  ${asset}" | sha256sum --check --strict
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          asset="DeepSeekDesktop-${version}-portable.zip"
+          cat > release-notes.txt <<'EOF'
+          Windows 10/11 x64 便携版，下载后完整解压，双击 `DeepSeek Desktop.exe` 即可运行。
+
+          重点功能：实时显示余额与当天用量、软件内充值、滑动选择推理等级、滑动选择工具权限，以及软件内自动更新。
+
+          本版本修复了部分电脑生成新 API Key 后未能自动写入本地 Harness 的问题，并增强了旧内核兼容与失败重试能力。
+          EOF
+          gh release create "$GITHUB_REF_NAME" "$asset" \
+            --title "DeepSeek Desktop ${version}" \
+            --notes-file release-notes.txt \
+            --latest
