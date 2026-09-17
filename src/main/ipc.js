@@ -35,6 +35,42 @@ function registerIpc(services) {
   // Never snapshot late-created services here. The kernel, chat controller and window-backed
   // platform client come online at different points during startup.
   const service = (name) => getContext()?.[name] ?? services[name];
+  // Harness permission commands are not durable across kernel restarts. Persist the
+  // confirmed per-session choice separately from the default for future conversations.
+  const restoredPermissions = new WeakMap();
+  const restoredFor = (client) => {
+    if (!restoredPermissions.has(client)) restoredPermissions.set(client, new Set());
+    return restoredPermissions.get(client);
+  };
+  const rememberPermission = (sessionId, value) => {
+    if (!['read-only', 'workspace-write', 'danger-full-access'].includes(value)) return;
+    const store = getContext().uiStore;
+    const saved = store.get('sessionPermissions', {});
+    if (saved?.[sessionId] !== value) store.set('sessionPermissions', { ...saved, [sessionId]: value });
+  };
+  const selectPermission = async (sessionId, preset) => {
+    const client = getContext().client;
+    const result = await client.selectPermission(sessionId, preset);
+    if (result?.currentValue !== preset) throw new Error('内核没有确认新的权限模式');
+    rememberPermission(sessionId, preset);
+    restoredFor(client).add(sessionId);
+    return result;
+  };
+  const restorePermission = async (sessionId) => {
+    const ctx = getContext();
+    const restored = restoredFor(ctx.client);
+    const current = await ctx.client.permissions(sessionId);
+    const saved = ctx.uiStore.get('sessionPermissions', {})?.[sessionId];
+    if (!restored.has(sessionId) && ['read-only', 'workspace-write', 'danger-full-access'].includes(saved)
+      && current.currentValue !== saved) {
+      return selectPermission(sessionId, saved);
+    }
+    // Preserve old sessions without a saved desktop choice and any in-session /permission
+    // command. A changed global default must never overwrite a particular session's choice.
+    rememberPermission(sessionId, current.currentValue);
+    restored.add(sessionId);
+    return current;
+  };
 
   // ------------------------------------------------------------------ lifecycle
   handle('app:info', () => {
@@ -90,13 +126,16 @@ function registerIpc(services) {
       }))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
   });
-  handle('sessions:open', (sessionId) => service('chat').open(sessionId));
+  handle('sessions:open', async (sessionId) => {
+    await restorePermission(sessionId);
+    return service('chat').open(sessionId);
+  });
   handle('sessions:refresh', (sessionId) => service('chat').refresh(sessionId));
   handle('sessions:create', async () => {
     const ctx = getContext();
     const created = await service('chat').createSession(ctx.defaultSessionOptions());
     // The renderer alone must not be responsible for initial tool permissions.
-    await ctx.client.selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', null)));
+    await selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', null)));
     return created;
   });
   handle('sessions:rename', async (sessionId, title) => {
@@ -104,7 +143,10 @@ function registerIpc(services) {
     return result;
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  handle('sessions:prompt', (sessionId, text) => service('chat').send(sessionId, text));
+  handle('sessions:prompt', async (sessionId, text) => {
+    await restorePermission(sessionId);
+    return service('chat').send(sessionId, text);
+  });
   handle('sessions:cancel', (sessionId) => service('chat').cancel(sessionId));
   handle('sessions:answer-approval', (sessionId, eventId, outcome) => (
     service('chat').answerApproval(sessionId, eventId, outcome)
@@ -115,7 +157,7 @@ function registerIpc(services) {
     return { current: models.current ?? null, routable: models.routable, failures: models.failures ?? [] };
   });
   handle('sessions:permissions', (sessionId) => getContext().client.permissions(sessionId));
-  handle('sessions:select-permission', (sessionId, preset) => getContext().client.selectPermission(sessionId, preset));
+  handle('sessions:select-permission', selectPermission);
 
   // ----------------------------------------------------------------------- llm
   handle('llm:catalog', async () => {

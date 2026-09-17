@@ -22,9 +22,11 @@ const untrusted = { senderFrame: untrustedFrame, sender: { mainFrame: untrustedF
 const permissions = new Map([['old', 'danger-full-access']]);
 let promptPermission;
 let savedDefault;
+let savedSessions = {};
 const ctx = {
   uiStore: {
-    get: () => savedDefault,
+    get: key => key === 'sessionPermissions' ? savedSessions : savedDefault,
+    set: (key, value) => { assert.equal(key, 'sessionPermissions'); savedSessions = value; },
     merge: patch => { savedDefault = patch.defaultPermission; return patch; },
   },
   defaultSessionOptions: () => ({}),
@@ -59,10 +61,25 @@ async function main() {
     await call('sessions:create');
     assert.equal(permissions.get('new'), preset, 'New sessions inherit the saved preference');
     await call('sessions:select-permission', 'old', preset);
+    assert.equal(savedSessions.old, preset, 'Confirmed per-session permission is persisted');
+    // A real Harness restart resets /permission to workspace-write (covered in packaged CI).
+    ctx.client = { ...ctx.client };
+    permissions.set('old', 'workspace-write');
     await call('sessions:open', 'old');
     await call('sessions:prompt', 'old', 'fixture');
     assert.equal(promptPermission, preset, 'Open/send must not override explicit session permissions');
   }
+  ctx.client = { ...ctx.client };
+  permissions.set('old', 'workspace-write');
+  await call('sessions:prompt', 'old', 'fixture without opening first');
+  assert.equal(promptPermission, 'danger-full-access', 'Direct send also restores a saved choice after reconnect');
+  permissions.set('old', 'read-only'); // User invoked the Harness command during this process.
+  await call('sessions:prompt', 'old', 'fixture');
+  assert.equal(promptPermission, 'read-only', 'Do not override an in-session permission change on every send');
+  assert.equal(savedSessions.old, 'read-only');
+  permissions.set('legacy', 'read-only');
+  await call('sessions:open', 'legacy');
+  assert.equal(permissions.get('legacy'), 'read-only', 'Do not escalate a legacy session without a saved choice');
   console.log('PASS main-process IPC rejects remote senders, defaults to Full Access and preserves explicit permission choices');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => fs.rmSync(temporary, { recursive: true, force: true }));
