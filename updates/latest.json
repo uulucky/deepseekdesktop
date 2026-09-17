@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "version": "0.2.19",
+  "publishedAt": "2026-09-17T11:45:47.924Z",
+  "notes": [
+    "更新清单必须通过客户端内置公钥的 Ed25519 签名验证。",
+    "公开 Windows 源码构建与测试、构建来源证明及依赖清单。",
+    "补充隐私、网络连接、广告和许可说明；完全访问不再成为默认权限。"
+  ],
+  "platforms": {
+    "win32-x64": {
+      "format": "portable-zip",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.19-update.zip",
+      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.19-portable.zip",
+      "size": 2740669,
+      "sha256": "53da924db84243c641dc04c4ba1d6c8a930b01ce692d23fa2a75eb9511058311",
+      "bootstrap": {
+        "format": "bootstrap-exe",
+        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.19-update-bootstrap.exe",
+        "size": 6373376,
+        "sha256": "03dee202befea9e18c7871d204222ea553b113bb20ad240551ea2ee96cb0b745"
+      }
+    }
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "2dc3a1563d303a42c92f5289",
+    "value": "qOwnf0K7UJd2lif63rOruKfHd7qnYjpohLZgaCa1PdXHNi1pzhdVfUC3cX9f4thffeIJyFF5mpUVD7Y1MppADg=="
+  }
+}
