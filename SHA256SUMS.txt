@@ -1,4 +1,0 @@
-0cc703cc1418a9f5fecdeb9a624befdc6eb00055dd4d3e4f6e092d367275c7e3  DeepSeekDesktop-0.2.18-portable.zip
-5ad3ad92aac1c724d3f3ab65e665f3bb6a363bf60490f95b7dc83211cc577994  DeepSeekDesktop-0.2.18-update.zip
-e09421e15b9bc20fa975146ac98daeaadff255ef4c444a033fbd6c19a8220e5d  DeepSeekDesktop-0.2.18-update-bootstrap.exe
-e6cc074326cda4b92f627a9d56af7254929b6d24d8ee51ff1e5c68c4184b6ebf  DeepSeekDesktop-0.2.18-update-repair.zip

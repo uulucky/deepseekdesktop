@@ -24,6 +24,7 @@ const { AdSlot } = require('./modules/ad');
 const { PortableUpdater, UPDATE_INTERVAL_MS } = require('./modules/updater');
 const { Store } = require('./modules/store');
 const { registerIpc } = require('./ipc');
+const { externalUrl, isPlatformUrl } = require('./modules/security');
 
 const PLATFORM_PARTITION = 'persist:deepseek-platform';
 const PLATFORM_REFRESH_MS = 10 * 60 * 1000;
@@ -42,6 +43,7 @@ const ctx = {
   platformStore: null,
   catalog: { snapshot: readSnapshot(), changed: false },
   credentialState: null,
+  fullAccessSessions: new Set(),
   domMirror: null,
   dataDir: DIRS.root,
   logFile: logFilePath(),
@@ -104,9 +106,11 @@ function main() {
     // Keep the app self-contained: remote links open in the system browser, new windows
     // never spawn unmanaged Electron shells.
     contents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\/127\.0\.0\.1/.test(url)) return { action: 'allow' };
-      if (/deepseek\.com/.test(url)) return { action: 'allow' };
-      shell.openExternal(url).catch(() => {});
+      if (isPlatformUrl(url)) {
+        return { action: 'allow', overrideBrowserWindowOptions: { webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: PLATFORM_PARTITION, preload: undefined } } };
+      }
+      const safe = externalUrl(url);
+      if (safe) shell.openExternal(safe).catch(() => {});
       return { action: 'deny' };
     });
   });
@@ -381,6 +385,8 @@ function createMainWindow() {
       spellcheck: false,
     },
   });
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.on('will-attach-webview', (event) => event.preventDefault());
   const reveal = () => {
     if (win.isDestroyed() || win.isVisible()) return;
     win.show();
@@ -604,7 +610,7 @@ ctx.clearPlatformSession = async () => {
 };
 ctx.defaultSessionOptions = () => ({
   agentPreset: AGENT_PRESET,
-  cwd: ctx.uiStore?.get('workdir', null) || require('node:os').homedir(),
+  cwd: ctx.uiStore?.get('workdir', null) || DIRS.workspace,
 });
 
 // The bootstrap reports a stopped kernel; the shell surfaces it and offers a restart.

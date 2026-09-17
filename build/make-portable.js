@@ -39,6 +39,11 @@ for (const file of fs.readdirSync(path.join(__dirname, 'portable'))) {
 // Keep the user-visible archive legally self-contained. The packaged app also carries the
 // same source license inside app.asar via electron-builder.json.
 fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(STAGE, 'LICENSE.txt'));
+for (const file of ['PRIVACY.md','NETWORK.md','SECURITY.md','THIRD_PARTY_NOTICES.md']) {
+  fs.copyFileSync(path.join(ROOT,file),path.join(STAGE,file));
+}
+fs.copyFileSync(path.join(DIST,'build-info.json'),path.join(STAGE,'build-info.json'));
+fs.copyFileSync(path.join(DIST,'sbom.cdx.json'),path.join(STAGE,'sbom.cdx.json'));
 // The marker keeps portable mode active even when the exe is started directly, without the
 // .cmd launcher (double-clicking the exe must behave the same way).
 fs.writeFileSync(path.join(STAGE, 'portable.flag'), 'portable\n');

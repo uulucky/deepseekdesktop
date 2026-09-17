@@ -1,0 +1,36 @@
+name: 问题反馈
+description: 提供可复现问题，帮助验证修复
+body:
+  - type: markdown
+    attributes:
+      value: 请勿提交 API Key、密码、Cookie、私人对话。安全漏洞请私下发至 489583561@qq.com。
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本和下载来源
+      placeholder: 0.2.19，GitHub Release
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows 版本与相关安全软件
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤、预期和实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 已检查并脱敏的日志或截图（可选）
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私检查
+      options:
+        - label: 我确认没有包含真实密钥、密码、会话令牌或私人内容
+          required: true

@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const dist=path.resolve(__dirname,'../dist');
+const version=require('../package.json').version;
+const files=fs.readdirSync(dist).filter(n=>n.startsWith(`DeepSeekDesktop-${version}-`) && /\.(zip|exe)$/.test(n));
+files.push('build-info.json','sbom.cdx.json','unsigned-update.json');
+const lines=files.sort().map(n=>`${crypto.createHash('sha256').update(fs.readFileSync(path.join(dist,n))).digest('hex')}  ${n}`);
+fs.writeFileSync(path.join(dist,'SHA256SUMS.txt'),lines.join('\n')+'\n');
+console.log(lines.join('\n'));

@@ -24,7 +24,7 @@ const state = {
   selection: null,
   selectionRoutable: false,
   pendingSelection: null,
-  permissionMode: 'workspace-write',
+  permissionMode: 'read-only',
   permissionBusy: false,
   pendingPermission: null,
   transcript: null,

@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: app: ad:; font-src 'self';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.uulucky.com; font-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none';" />
+<meta name="referrer" content="no-referrer" />
 <title>DeepSeek</title>
 <link rel="stylesheet" href="styles/app.css" />
 </head>
@@ -106,8 +107,8 @@
             <div class="composer-right">
               <div class="permission-control" id="permission-control">
                 <span class="permission-title">权限</span>
-                <input id="permission-slider" class="permission-slider" type="range" min="0" max="2" step="1" value="1" aria-label="权限等级" />
-                <span class="permission-value" id="permission-value">工作区</span>
+                <input id="permission-slider" class="permission-slider" type="range" min="0" max="2" step="1" value="0" aria-label="权限等级" />
+                <span class="permission-value" id="permission-value">只读</span>
               </div>
               <button class="stop-btn" id="stop-btn" type="button" hidden>停止</button>
               <button class="send-btn" id="send-btn" type="button" title="发送" aria-label="发送">
@@ -156,7 +157,7 @@
           <span>此模式不会再弹出单次批准请求。请只在任务与文件来源可信时启用。</span>
         </div>
         <div class="risk-actions">
-          <button class="risk-btn" id="permission-confirm-cancel" type="button">保持 Workspace Write</button>
+          <button class="risk-btn" id="permission-confirm-cancel" type="button">保留当前权限</button>
           <button class="risk-btn danger" id="permission-confirm-accept" type="button">确认启用 Full Access</button>
         </div>
       </div>

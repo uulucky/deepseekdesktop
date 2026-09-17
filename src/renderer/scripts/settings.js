@@ -224,6 +224,10 @@ const Settings = {
           <div class="k">系统</div><div>${esc(world.platformName || '')} / ${esc(world.arch || '')}</div>
           <div class="k">模型表来源</div><div class="mono">api-docs.deepseek.com/zh-cn/quick_start/pricing</div>
           <div class="k">问题反馈</div><div><button class="feedback-email" data-action="feedback-email">489583561@qq.com</button></div>
+          <div class="k">隐私与连接</div><div><button class="about-link" data-action="privacy">隐私、广告与网络说明</button></div>
+          <div class="k">验证状态</div><div>更新清单：Ed25519 签名校验；Windows 程序：暂未代码签名</div>
+          <div class="k">许可</div><div>源码可查看，个人非商业免费；企业与工作用途需授权</div>
+          <div class="k">广告说明</div><div>包含远程配置广告，约每 30 分钟获取配置，点击后打开外部网站。</div>
         </div>
         <div class="row" style="margin-top:14px">
           <button class="btn small" data-action="open-log">打开日志</button>
@@ -327,6 +331,10 @@ const Settings = {
       case 'feedback-email': {
         await guard(api.app.openExternal('mailto:489583561@qq.com'), '打开邮件客户端失败');
         return true;
+      }
+      case 'privacy': {
+        await api.app.openExternal(`${PROJECT_URL}/blob/main/PRIVACY.md`);
+        break;
       }
       case 'service-source': {
         await guard(api.app.openExternal(PROJECT_URL), '打开项目主页失败');

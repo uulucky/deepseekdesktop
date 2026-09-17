@@ -1,7 +1,7 @@
 {
   "name": "deepseek-desktop",
   "productName": "DeepSeek Desktop",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "DeepSeek 桌面客户端 — 用 ChatGPT 式原生界面驱动本地 DeepSeek Harness (dsh web) 内核",
   "main": "src/main/index.js",
   "author": "uulucky",
@@ -12,21 +12,26 @@
     "url": "git+https://github.com/uulucky/deepseekdesktop.git"
   },
   "dependencies": {
-    "ws": "^8.18.3"
+    "ws": "8.21.3",
+    "yaml": "2.9.0"
   },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "ui:shot": "node build/build-main.js && node build/run-ui.js",
-    "test": "node test/bootstrap.js && node test/platform.js && node test/updater.js && node test/chat.js && node test/credentials.js && node test/smoke.js",
+    "test": "node test/bootstrap.js && node test/platform.js && node test/updater.js && node test/chat.js && node test/credentials.js && node test/security.js",
+    "test:integration": "node test/integration.js",
+    "test:packaged": "node test/packaged.js",
+    "runtime:stage": "node build/prebundle.js",
     "test:portable": "node build/build-main.js && node build/run-probe.js",
-    "dist:portable": "electron-builder --win --x64 --dir && node build/make-portable.js && node build/make-update-manifest.js",
+    "dist:portable": "node build/build-info.js && electron-builder --win --x64 --dir && node build/make-portable.js && node build/make-update-manifest.js && node build/checksums.js",
     "dist:update-manifest": "node build/make-update-manifest.js",
     "dist:win": "electron-builder --win --x64",
     "dist:dir": "electron-builder --dir"
   },
   "devDependencies": {
-    "electron": "^38.0.0",
-    "electron-builder": "^25.1.8"
+    "electron": "44.4.1",
+    "electron-builder": "25.1.8",
+    "playwright": "1.55.1"
   }
 }

@@ -17,7 +17,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { DIRS, IS_WINDOWS, IS_MAC, log, clamp, sleep, existsSync, readJsonSync, writeJsonSync } = require('./util');
+const { DIRS, IS_WINDOWS, IS_MAC, isDev, log, clamp, sleep, existsSync, readJsonSync, writeJsonSync } = require('./util');
 const { run, runStreaming, killTree, waitFor } = require('./proc');
 
 const DEFAULT_PORT = 3080;
@@ -171,6 +171,11 @@ class Bootstrap {
     // 0. explicit override wins (used by tests and by power users who already run dsh).
     const forced = process.env.DEEPSEEK_DESKTOP_DSH_BIN;
     if (forced && existsSync(forced)) this.dshBin = forced;
+    // A published portable package is self-contained. Never silently replace a missing
+    // reviewed kernel with a floating registry build on a customer's machine.
+    if (!isDev() && !forced && (!this.bundledKernelEntry() || !existsSync(path.join(this.bundledVendorDir() || '', 'node', 'node.exe')))) {
+      throw new Error('随包运行组件不完整，请从项目发布页重新下载完整便携包');
+    }
 
     // 1. reuse a DSH web instance that already answers on the preferred port.
     const existing = await this.probeDshService(this.preferredPort, 1200);
@@ -670,8 +675,9 @@ class Bootstrap {
       this.kernelOutput = [];
       this.authenticatedUrl = null;
       this.authCookie = null;
+      fs.mkdirSync(DIRS.workspace, { recursive: true });
       const handle = runStreaming(command, args, {
-        cwd: require('node:os').homedir(),
+        cwd: DIRS.workspace,
         env: {
           DSH_WEB_URL: `http://127.0.0.1:${port}`,
           // Keep profiles, auth secrets and sessions inside the portable/app data root instead

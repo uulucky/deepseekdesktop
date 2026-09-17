@@ -1,103 +1,68 @@
 # DeepSeek Desktop
 
-面向 Windows 用户的 DeepSeek 桌面客户端。它把 DeepSeek Harness、本地对话、账号余额、充值、API Key 和工具权限放进同一个原生界面，下载便携版后解压即可使用。
+[![Windows build and tests](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml/badge.svg)](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml)
 
-> 当前版本：**0.2.18** · Windows 10/11 x64 · 便携版
+面向 Windows 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-[从 GitHub 下载最新版](https://github.com/uulucky/deepseekdesktop/releases/latest/download/DeepSeekDesktop-0.2.18-portable.zip) · [从 img.uulucky.com 下载最新版](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.18-portable.zip)
+当前版本：**0.2.19 · Windows 10/11 x64 · 便携版**。
+
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内 CDN 下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.19-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
-## 重点功能
+## 主要功能
 
-- **余额和当天用量**：界面实时显示 DeepSeek 账户余额、当日费用、Token 和请求数，每 10 分钟自动刷新，也可以手动刷新。
-- **软件内充值**：无需切换浏览器，在客户端中直接打开 DeepSeek 官方充值页面；登录完成后账户信息会立即同步。
-- **滑动选择推理等级**：在输入框下方用滑块切换关闭、低、高、最大等等级，支持的档位会随当前模型自动调整。
-- **滑动选择权限**：发送按钮左侧可切换 Read Only、Workspace Write、Full Access，让每个任务的文件和命令权限一目了然。
-- **API Key 一站式配置**：登录后可以生成、粘贴、验证并写入本地内核；兼容旧内核，配置失败时不会丢失新生成的完整 Key。
-- **本地对话与自动更新**：对话记录、登录状态和设置保存在便携目录的 `data` 中；更新后继续保留，发现新版本时可在软件内完成升级。
+- **余额与当天用量**：每 10 分钟自动刷新，可手动刷新；金额、Token 和请求数以平台可返回数据为准，不是逐秒计费仪表。
+- **软件内充值**：在应用内打开 DeepSeek 官方充值页面，由官方及其支付服务处理付款；客户端维护者不代收款。
+- **推理滑块**：按当前模型支持的档位选择推理等级。
+- **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；全访问需确认，且不继承为新对话默认权限。
+- **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
+- **本地记录与更新**：便携模式数据保存在 `data/`，每小时检查更新，用户确认后安装并重启。
 
-## 下载与使用
+DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许可免费不等于 API 免费。
 
-1. 下载 `DeepSeekDesktop-0.2.18-portable.zip`。
-2. 完整解压到一个可写目录，例如 `D:\DeepSeekDesktop`。不要直接在压缩包预览窗口中运行。
-3. 双击 `DeepSeek Desktop.exe`，也可以运行 `Run-DeepSeek.cmd`。
-4. 第一次启动会准备本地运行组件，完成后进入主界面。
+## 开始使用
 
-便携版不需要安装 Node.js 或 npm。配置、日志、登录状态和本地对话都在解压目录的 `data` 文件夹中；删除整个软件目录即可卸载。
+1. 从上方入口下载完整便携 ZIP，按 [安全说明](SECURITY.md) 核对校验值和 GitHub 构建来源。
+2. 完整解压到自己可写的目录，不要直接在 ZIP 预览中运行。
+3. 双击 `DeepSeek Desktop.exe`，在账户设置中登录或配置 API Key。
+4. 从只读权限开始；需要处理自己的文件时，在通用设置中选择具体工作目录。新用户默认目录是 `data/workspace/`。
 
-Windows 可能因为程序暂未购买代码签名证书而显示“未知发布者”。请核对下载地址和校验值后，选择“更多信息 → 仍要运行”。
+包内自带 Node 与固定版本 Harness，不需要另装它们。更新设计为保留数据，重要内容仍请备份。**不要把运行过、包含 `data/` 的软件目录分享给别人。**
 
-## 权限选择
+## 下载前请了解
 
-| 档位 | 适合场景 | 能力 |
-| --- | --- | --- |
-| Read Only | 阅读、分析、回答问题 | 默认不修改工作区；需要写入时请求批准 |
-| Workspace Write | 日常编程和文档修改 | 可写当前工作目录和临时目录 |
-| Full Access | 明确信任的系统级任务 | 取消内核沙箱限制；启用前会再次确认 |
+| 项目 | 当前情况 |
+| --- | --- |
+| Windows 发行者 | 暂无 Authenticode 证书，可能显示未知发布者；不宣称已通过系统或第三方安全认证 |
+| 发布透明度 | 公开 Windows 源码构建、测试日志、构建来源证明、SHA-256、依赖清单；不是字节级可重现构建承诺 |
+| 自动更新 | 内置公钥验证 Ed25519 清单，再验证文件 SHA-256；首次安装仍需核实来源 |
+| 数据 | 对话在本机；模型请求可发送上下文与工具内容；API Key 本地文件可能明文 |
+| 广告 | 内置远程广告位，目前无关闭开关；从 uulucky 域名拉取配置与图片，点击打开外站 |
+| 许可 | 源码可查看，个人非商业免费；公司、组织与工作用途需授权；不允许修改或再分发自有代码 |
 
-Full Access 不会绕过 Windows 账户权限或 UAC。仅在理解风险并信任当前任务时使用。
+## 权限与安全
 
-## 最新版本
+Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full Access 取消 Harness 沙箱限制，可能影响工作目录外的文件和系统。Full Access 不绕过 UAC，也不适合把不可信任务当普通聊天直接执行。权限并不意味着没有网络访问。
 
-**0.2.18**
+新用户默认只读；已保存的低权限偏好保留。全访问不保存为默认值，重启后旧会话再次打开或发送前会降为只读。详见 [SECURITY.md](SECURITY.md)。
 
-- “关于”页面的服务来源改为项目 GitHub 仓库地址。
-- 服务来源可以直接点击，在系统浏览器中打开源码与最新发布页面。
+## 当前版本改进
 
-本仓库只提供当前版本，不保存历史安装包。软件内自动更新和两个下载入口始终指向最新版本。
+0.2.19 增加签名更新清单、公开源码构建与隔离测试、隐私和网络清单；收紧 IPC 来源、外链与广告图片范围，更新 Electron，默认使用专用工作目录，避免默认授权整个用户目录。
 
-## 架构
+项目仍处于早期阶段。CI 不使用真实账号充值或付费推理，不能覆盖所有 Windows/杀毒软件组合；欢迎提交可复现问题，而非把 Star 或下载量当作质量认证。
 
-```mermaid
-flowchart LR
-    UI[原生 Electron 界面] --> IPC[安全 IPC 桥]
-    IPC --> Core[DeepSeek Harness 本地内核]
-    Core --> API[DeepSeek API]
-    UI --> Account[DeepSeek 开放平台]
-    Account --> Wallet[余额 / 当天用量 / 充值]
-    Account --> Keys[API Key 管理]
-    UI --> Data[便携目录 data]
-    Data --> History[本地对话和设置]
-```
+## 架构与参与
 
-主要代码位于：
+Electron 界面通过经过来源校验的 IPC 连接主进程；主进程通过本机认证 HTTP/WebSocket 与 Harness 通信，由 Harness 调用模型和执行工具。账户页面连接 DeepSeek 官方平台；广告与更新连接维护者的服务。
 
-- `src/main/`：窗口生命周期、内核启动、平台接口、自动更新。
-- `src/preload/`：主进程和界面的最小权限桥接。
-- `src/renderer/`：聊天、设置、余额、推理与权限滑块界面。
-- `build/`：便携包、原生更新器和发布清单构建脚本。
-- `test/`：启动、平台、更新、聊天和凭据契约测试。
+源码：`src/main/`（启动、账号、更新、IPC）、`src/preload/`（桥接）、`src/renderer/`（界面）、`build/`（构建与更新器）、`test/`（测试）。
 
-## 数据与隐私
+[构建与测试](BUILDING.md) · [维护者发布流程](RELEASING.md) · [第三方组件](THIRD_PARTY_NOTICES.md) · [提交问题](https://github.com/uulucky/deepseekdesktop/issues)
 
-- 登录状态、API Key 配置和对话数据保存在本机便携目录中。
-- 余额、充值和 API Key 页面连接 DeepSeek 官方开放平台。
-- 聊天请求由本地 Harness 发往用户选择的 DeepSeek 模型。
-- 请勿把包含 `data` 文件夹的软件目录分享给他人。
-
-## 从源码构建
-
-需要 Node.js、npm、Go，以及已经准备好的 Windows x64 运行组件目录 `vendor/`。
-
-```bash
-npm install
-npm test
-npm run dist:portable
-```
-
-构建结果位于 `dist/`。仓库不提交 `vendor/`、`node_modules/`、`dist/` 和内部 `docs/`。
+问题反馈与商业授权：**489583561@qq.com**。报告问题请提供版本和脱敏复现，不要提供密码、Key 或完整私人对话。
 
 ## 许可
 
-本项目采用 [DeepSeek Desktop Personal Use License 1.0](LICENSE)，属于 **source-available（源码可查看）** 软件，并非 OSI 定义的开源软件。
-
-- 自然人可以免费运行未修改的软件，用于个人、非商业用途。
-- 公司、组织、工作用途、商业用途需要取得书面商业许可。
-- 不允许修改、制作衍生版本或重新分发。
-
-商业授权与问题反馈：`489583561@qq.com`
-
-## 说明
-
-DeepSeek Desktop 是独立的第三方桌面客户端，并非 DeepSeek 官方产品，也不代表 DeepSeek 官方背书。DeepSeek 名称、服务和相关权利归其各自权利人所有。
+采用 [DeepSeek Desktop Personal Use License 1.0](LICENSE)，属于 **source-available（源码可查看）**，不是 OSI 定义的开源软件。自然人可免费运行未修改的软件用于个人非商业用途；公司、组织、工作及商业用途需书面许可。不允许修改、衍生或重新分发本项目自有代码；第三方组件依各自许可。

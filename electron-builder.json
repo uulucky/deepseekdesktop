@@ -10,10 +10,14 @@
     "src/**/*",
     "package.json",
     "LICENSE",
+    "PRIVACY.md",
+    "NETWORK.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
     "!**/*.map",
     "!**/test/**",
     "!**/build/**",
-    "!**/*.md"
+    "!**/node_modules/**/README.md"
   ],
   "extraMetadata": {
     "main": "src/main/index.js"

@@ -7,11 +7,13 @@
 const { ipcMain, shell, dialog, app, clipboard } = require('electron');
 const { log } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
+const { isTrustedIpc, reusablePermission } = require('./modules/security');
 
 /** Wrap a handler so a thrown error becomes a structured failure instead of a rejection. */
 function handle(channel, fn) {
-  ipcMain.handle(channel, async (_event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
     try {
+      if (!isTrustedIpc(event)) throw new Error('已拒绝非客户端页面的请求');
       return { ok: true, value: await fn(...args) };
     } catch (error) {
       log('ipc', `${channel} failed`, String(error?.stack ?? error));
@@ -33,6 +35,13 @@ function registerIpc(services) {
   // Never snapshot late-created services here. The kernel, chat controller and window-backed
   // platform client come online at different points during startup.
   const service = (name) => getContext()?.[name] ?? services[name];
+  const resetUnconfirmedFullAccess = async (sessionId) => {
+    const ctx = getContext();
+    const permission = await ctx.client.permissions(sessionId);
+    if (permission?.currentValue === 'danger-full-access' && !ctx.fullAccessSessions?.has(sessionId)) {
+      await ctx.client.selectPermission(sessionId, 'read-only');
+    }
+  };
 
   // ------------------------------------------------------------------ lifecycle
   handle('app:info', () => {
@@ -88,15 +97,27 @@ function registerIpc(services) {
       }))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
   });
-  handle('sessions:open', (sessionId) => service('chat').open(sessionId));
+  handle('sessions:open', async (sessionId) => {
+    await resetUnconfirmedFullAccess(sessionId);
+    return service('chat').open(sessionId);
+  });
   handle('sessions:refresh', (sessionId) => service('chat').refresh(sessionId));
-  handle('sessions:create', () => service('chat').createSession(getContext().defaultSessionOptions()));
+  handle('sessions:create', async () => {
+    const ctx = getContext();
+    const created = await service('chat').createSession(ctx.defaultSessionOptions());
+    // The renderer alone must not be responsible for initial tool permissions.
+    await ctx.client.selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', 'read-only')));
+    return created;
+  });
   handle('sessions:rename', async (sessionId, title) => {
     const result = await getContext().client.renameSession(sessionId, title);
     return result;
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  handle('sessions:prompt', (sessionId, text) => service('chat').send(sessionId, text));
+  handle('sessions:prompt', async (sessionId, text) => {
+    await resetUnconfirmedFullAccess(sessionId);
+    return service('chat').send(sessionId, text);
+  });
   handle('sessions:cancel', (sessionId) => service('chat').cancel(sessionId));
   handle('sessions:answer-approval', (sessionId, eventId, outcome) => (
     service('chat').answerApproval(sessionId, eventId, outcome)
@@ -107,9 +128,13 @@ function registerIpc(services) {
     return { current: models.current ?? null, routable: models.routable, failures: models.failures ?? [] };
   });
   handle('sessions:permissions', (sessionId) => getContext().client.permissions(sessionId));
-  handle('sessions:select-permission', (sessionId, preset) => (
-    getContext().client.selectPermission(sessionId, preset)
-  ));
+  handle('sessions:select-permission', async (sessionId, preset) => {
+    const ctx = getContext();
+    const result = await ctx.client.selectPermission(sessionId, preset);
+    if (result.currentValue === 'danger-full-access') ctx.fullAccessSessions.add(sessionId);
+    else ctx.fullAccessSessions.delete(sessionId);
+    return result;
+  });
 
   // ----------------------------------------------------------------------- llm
   handle('llm:catalog', async () => {
@@ -158,7 +183,11 @@ function registerIpc(services) {
     else getContext().uiStore.delete('kernelSpec');
     return text || null;
   });
-  handle('settings:ui-set', (patch) => getContext().uiStore.merge(patch ?? {}));
+  handle('settings:ui-set', (patch) => {
+    const safe = { ...(patch ?? {}) };
+    if ('defaultPermission' in safe) safe.defaultPermission = reusablePermission(safe.defaultPermission);
+    return getContext().uiStore.merge(safe);
+  });
 
   // ---------------------------------------------------------------- credentials
   handle('credentials:describe', (refs) => getContext().client.credentialsDescribe(refs ?? ['DEEPSEEK_API_KEY']));

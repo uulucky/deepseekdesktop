@@ -18,6 +18,7 @@ const IS_LINUX = process.platform === 'linux';
  * it degrades to "development" instead of throwing, so every module stays importable.
  */
 function isDev() {
+  if (!process.versions.electron) return true;
   try {
     return !require('electron').app.isPackaged;
   } catch {
@@ -27,6 +28,7 @@ function isDev() {
 
 /** Directory holding the running app, or null outside a packaged Electron process. */
 function execDir() {
+  if (!process.versions.electron) return null;
   try {
     const { app } = require('electron');
     if (!app.isPackaged) return null;
@@ -114,6 +116,7 @@ const DIRS = {
   get cache() { return path.join(dataRoot(), 'cache'); },
   get logs() { return path.join(dataRoot(), 'logs'); },
   get runtime() { return path.join(dataRoot(), 'runtime'); },
+  get workspace() { return path.join(dataRoot(), 'workspace'); },
   /** Install prefix used when the app has to obtain dsh itself. */
   get dshPrefix() { return path.join(dataRoot(), 'runtime', 'dsh'); },
   /** Portable Node runtime used on machines without a usable system Node.js. */
@@ -121,7 +124,7 @@ const DIRS = {
 };
 
 function ensureDirs() {
-  for (const dir of [DIRS.root, DIRS.config, DIRS.cache, DIRS.logs, DIRS.runtime]) {
+  for (const dir of [DIRS.root, DIRS.config, DIRS.cache, DIRS.logs, DIRS.runtime, DIRS.workspace]) {
     try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
   }
 }
@@ -142,7 +145,7 @@ function logFilePath() {
  * survive, and an async stream would lose the last lines when the process dies.
  */
 function log(scope, message, extra) {
-  const line = `${new Date().toISOString()} [${scope}] ${message}${extra === undefined ? '' : ' ' + safeJson(extra)}`;
+  const line = redact(`${new Date().toISOString()} [${scope}] ${message}${extra === undefined ? '' : ' ' + safeJson(extra)}`);
   try {
     const day = new Date().toISOString().slice(0, 10);
     if (logFd === null || logFdDay !== day) {
@@ -160,6 +163,15 @@ function log(scope, message, extra) {
     logFdDay = null;
   }
   if (isDev() || process.env.DEEPSEEK_DESKTOP_VERBOSE) process.stdout.write(line + '\n');
+}
+
+/** Defense in depth; logs can still contain user text/paths and need review before sharing. */
+function redact(value) {
+  return String(value)
+    .replace(/\bsk-[a-zA-Z0-9_-]+/g, 'sk-[REDACTED]')
+    .replace(/\bBearer\s+[^\s"\\]+/gi, 'Bearer [REDACTED]')
+    .replace(/([?&](?:token|access_token|api_key)=)[^&\s"\\]+/gi, '$1[REDACTED]')
+    .replace(/("(?:password|secret|apiKey|access_token|authorization|cookie)"\s*:\s*")[^"\r\n]*"/gi, '$1[REDACTED]"');
 }
 
 function safeJson(value) {
@@ -210,6 +222,6 @@ function writeJsonSync(file, value) {
 module.exports = {
   IS_WINDOWS, IS_MAC, IS_LINUX, isDev,
   DIRS, dataRoot, ensureDirs, isPortable, portableDataDir, adoptPortablePaths, execDir,
-  log, logFilePath, safeJson, sleep, clamp, rid, spawnSpec,
+  log, logFilePath, redact, safeJson, sleep, clamp, rid, spawnSpec,
   existsSync, readJsonSync, writeJsonSync,
 };

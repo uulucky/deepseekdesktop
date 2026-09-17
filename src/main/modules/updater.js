@@ -14,6 +14,7 @@ const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 
 const { DIRS, log } = require('./util');
+const { verifySignedManifest } = require('./update-trust');
 
 const DEFAULT_MANIFEST_URL = 'https://img.uulucky.com/han/deepseek/latest.json';
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
@@ -34,6 +35,7 @@ class PortableUpdater {
     this.quit = options.quit || (() => {});
     this.onState = options.onState || (() => {});
     this.allowedPackageOrigin = options.allowedPackageOrigin || ALLOWED_PACKAGE_ORIGIN;
+    this.trustedKeys = options.trustedKeys;
     this.manifest = null;
     this.package = null;
     this.checkPromise = null;
@@ -73,10 +75,13 @@ class PortableUpdater {
       const separator = this.manifestUrl.includes('?') ? '&' : '?';
       const response = await this.fetch(`${this.manifestUrl}${separator}t=${Date.now()}`, {
         cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(20000),
         headers: { accept: 'application/json' },
       });
       if (!response?.ok) throw new Error(`版本服务器返回 HTTP ${response?.status ?? 0}`);
       const manifest = await response.json();
+      verifySignedManifest(manifest, this.trustedKeys);
       const target = manifest?.platforms?.[`${this.platform}-${this.arch}`] ?? manifest?.package;
       validateManifest(manifest, target, this.allowedPackageOrigin);
       this.manifest = manifest;
@@ -121,6 +126,13 @@ class PortableUpdater {
       throw new Error(this.state.error || '当前已是最新版本');
     }
 
+    // Verify again at the handoff boundary; a caller cannot bypass checkNow by assigning
+    // package state, and no executable is downloaded from an unsigned descriptor.
+    verifySignedManifest(this.manifest, this.trustedKeys);
+    const signedTarget = this.manifest.platforms?.[`${this.platform}-${this.arch}`];
+    validateManifest(this.manifest, signedTarget, this.allowedPackageOrigin);
+    this.package = signedTarget;
+
     const updateDir = path.join(this.dataRoot, 'update');
     fs.mkdirSync(updateDir, { recursive: true });
     const safeVersion = String(this.manifest.version).replace(/[^0-9A-Za-z._-]/g, '');
@@ -136,7 +148,7 @@ class PortableUpdater {
     this.publish({ status: 'downloading', progress: 0, error: null });
 
     try {
-      const response = await this.fetch(delivery.url, { cache: 'no-store' });
+      const response = await this.fetch(delivery.url, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30 * 60 * 1000) });
       if (!response?.ok || !response.body) throw new Error(`更新包下载失败 (HTTP ${response?.status ?? 0})`);
       const expectedSize = Number(delivery.size || 0);
       const reportedSize = Number(response.headers?.get?.('content-length') || 0);
@@ -304,7 +316,8 @@ function validateTarget(target, allowedOrigin) {
     throw new Error('版本清单缺少更新包或校验值');
   }
   const url = new URL(target.url);
-  if (url.protocol !== 'https:' || (allowedOrigin && url.origin !== allowedOrigin)) {
+  if (url.protocol !== 'https:' || url.username || url.password || url.hash
+    || (allowedOrigin && url.origin !== allowedOrigin)) {
     throw new Error('版本清单包含未受信任的下载地址');
   }
   if (target.size !== undefined && (!Number.isSafeInteger(Number(target.size)) || Number(target.size) <= 0)) {

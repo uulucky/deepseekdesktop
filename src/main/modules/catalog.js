@@ -176,6 +176,7 @@ function readSnapshot() {
 async function fetchCatalog() {
   const response = await fetch(PRICING_URL, {
     headers: { 'user-agent': 'DeepSeekDesktop/1.0 (+local client)', accept: 'text/html' },
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error(`pricing page HTTP ${response.status}`);
   const html = await response.text();

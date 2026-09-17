@@ -18,6 +18,7 @@
  */
 const path = require('node:path');
 const { DIRS, log, readJsonSync, writeJsonSync } = require('./util');
+const { externalUrl } = require('./security');
 
 const DEFAULT_AD_URL = 'https://www.uulucky.com/dsad.json';
 const REFRESH_MS = 30 * 60 * 1000;
@@ -45,10 +46,17 @@ function normalize(payload) {
     if (!entry || typeof entry !== 'object') continue;
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     const pic = typeof entry.pic === 'string' ? entry.pic.trim() : '';
-    if (!/^https?:\/\//i.test(url)) continue;
+    if (!externalUrl(url)) continue;
+    // Remote metadata can change the ad text and destination, never execute scripts or
+    // silently cause requests to arbitrary tracking-image servers / private addresses.
+    let safePicture = null;
+    try {
+      const image = new URL(pic);
+      if (image.origin === 'https://img.uulucky.com' && !image.username && !image.password) safePicture = image.href;
+    } catch { /* no remote image */ }
     ads.push({
       url,
-      pic: /^https?:\/\//i.test(pic) ? pic : null,
+      pic: safePicture,
       title: typeof entry.title === 'string' && entry.title.trim() ? entry.title.trim().slice(0, 60) : null,
       text: typeof entry.text === 'string' && entry.text.trim() ? entry.text.trim().slice(0, 80) : null,
     });
@@ -96,7 +104,7 @@ class AdSlot {
     };
   }
 
-  /** The feed URL, overridable from Settings for self-hosted setups. */
+  /** Maintainer-controlled feed; users cannot change its destination. */
   url() {
     return DEFAULT_AD_URL;
   }
@@ -112,7 +120,7 @@ class AdSlot {
     const url = this.url();
     const before = JSON.stringify({ ads: this.state.ads, rotateSeconds: this.state.rotateSeconds, source: this.state.source });
     try {
-      const response = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+      const response = await fetch(url, { headers: { accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const normalized = normalize(await response.json());
       if (!normalized) throw new Error('配置格式不正确');

@@ -6,3 +6,11 @@ build/app/
 build/ui-shot*.png
 *.log
 .DS_Store
+*.pem
+*.pfx
+*.p12
+*.key
+.env*
+test-results/
+.tools/
+build/kernel/node_modules/

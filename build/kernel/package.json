@@ -1,0 +1,9 @@
+{
+  "name": "deepseek-desktop-kernel-bundle",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned upstream Harness runtime for reproducible clean builds",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.5-rc.1"
+  }
+}

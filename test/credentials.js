@@ -14,7 +14,7 @@ const {
   applyHarnessCredential,
   createAndApplyPlatformKey,
 } = require('../src/main/modules/credentials');
-const YAML = require('../vendor/kernel/node_modules/yaml');
+const YAML = require('yaml');
 
 async function main() {
   const filename = path.join(root, 'harness', '.credentials.yaml');
@@ -36,7 +36,7 @@ async function main() {
   assert.equal(parsed.refs.DEEPSEEK_API_KEY, 'sk-fallback-secret-value');
   assert.equal(parsed.refs.OPENAI_API_KEY, 'keep-this');
   assert.equal(parsed.records['plugin/example'].payload.enabled, true);
-  assert.equal(fs.statSync(filename).mode & 0o077, 0);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(filename).mode & 0o077, 0);
 
   let describes = 0;
   const legacyClient = {

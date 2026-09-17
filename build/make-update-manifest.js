@@ -17,12 +17,13 @@ if (!fs.existsSync(archive) || !fs.existsSync(bootstrapFile)) {
 const bytes = fs.readFileSync(archive);
 const bootstrapBytes = fs.readFileSync(bootstrapFile);
 const manifest = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '“关于”页面的服务来源已改为项目 GitHub 仓库地址。',
-    '点击服务来源可以直接在系统浏览器中打开源码与最新发布页面。',
+    '更新清单必须通过客户端内置公钥的 Ed25519 签名验证。',
+    '公开 Windows 源码构建与测试、构建来源证明及依赖清单。',
+    '补充隐私、网络连接、广告和许可说明；完全访问不再成为默认权限。',
   ],
   platforms: {
     'win32-x64': {
@@ -40,7 +41,9 @@ const manifest = {
     },
   },
 };
-const target = path.join(root, 'dist', 'latest.json');
+// Never publish an unsigned descriptor as latest.json. A maintainer signs this file
+// using the offline key after verifying the public workflow / release artifacts.
+const target = path.join(root, 'dist', 'unsigned-update.json');
 fs.writeFileSync(target, JSON.stringify(manifest, null, 2) + '\n');
 console.log(`update manifest: ${target}`);
 console.log(`sha256        : ${manifest.platforms['win32-x64'].sha256}`);

@@ -20,6 +20,7 @@ function credentialFile() {
 }
 
 function loadYaml() {
+  try { return require('yaml'); } catch { /* compatibility with older packages */ }
   const candidates = [];
   if (process.resourcesPath) candidates.push(path.join(process.resourcesPath, 'vendor', 'kernel', 'node_modules', 'yaml'));
   candidates.push(path.join(__dirname, '..', '..', '..', 'vendor', 'kernel', 'node_modules', 'yaml'));

@@ -6,6 +6,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
+const { signManifest, verifySignedManifest } = require('../src/main/modules/update-trust');
+const signing = crypto.generateKeyPairSync('ed25519');
+const trustedKeys = { test: signing.publicKey.export({ format: 'pem', type: 'spki' }) };
+const signed = (value) => signManifest(value, signing.privateKey, 'test');
 const {
   PortableUpdater, compareVersions, validateManifest, updaterScript, waitForReadyFile,
 } = require('../src/main/modules/updater');
@@ -53,6 +57,7 @@ async function nativeHandoffContract() {
   let spawnCall;
   let quitCalls = 0;
   const updater = new PortableUpdater({
+    trustedKeys,
     currentVersion: '0.2.11',
     platform: 'win32',
     arch: 'x64',
@@ -76,7 +81,7 @@ async function nativeHandoffContract() {
     },
     quit: () => { quitCalls += 1; },
   });
-  updater.manifest = { version: '0.2.12' };
+  updater.manifest = signed({ version: '0.2.12', platforms: { 'win32-x64': { ...target, bootstrap: direct } } });
   updater.package = { ...target, bootstrap: direct };
   await updater.install();
   await new Promise((resolve) => setTimeout(resolve, 220));
@@ -96,7 +101,37 @@ async function nativeHandoffContract() {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
-nativeHandoffContract().then(() => {
+async function signatureContract() {
+  const good = signed({ version: '0.2.19', notes: ['signed'], platforms: { 'win32-x64': { ...target, bootstrap } } });
+  verifySignedManifest(good, trustedKeys);
+  for (const mutate of [
+    (x) => { delete x.signature; },
+    (x) => { x.signature.keyId = 'unknown'; },
+    (x) => { x.version = '9.9.9'; },
+    (x) => { x.platforms['win32-x64'].bootstrap.sha256 = 'c'.repeat(64); },
+    (x) => { x.platforms['win32-x64'].bootstrap.url = 'https://img.uulucky.com/evil.exe'; },
+    (x) => { x.notes = ['tampered']; },
+  ]) {
+    const value = structuredClone(good); mutate(value);
+    assert.throws(() => verifySignedManifest(value, trustedKeys));
+    let executed = false;
+    const updater = new PortableUpdater({
+      trustedKeys, currentVersion: '0.2.18',
+      fetch: async () => new Response(JSON.stringify(value)),
+      spawn: () => { executed = true; },
+    });
+    assert.equal((await updater.check()).status, 'error');
+    assert.equal(updater.package, null);
+    assert.equal(executed, false);
+  }
+  const valid = new PortableUpdater({ trustedKeys, currentVersion: '0.2.18', platform: 'win32', arch: 'x64', fetch: async () => new Response(JSON.stringify(good)) });
+  assert.equal((await valid.check()).status, 'available');
+  const replay = new PortableUpdater({ trustedKeys, currentVersion: '0.2.20', platform: 'win32', arch: 'x64', fetch: async () => new Response(JSON.stringify(good)) });
+  assert.equal((await replay.check()).status, 'current');
+  console.log('PASS signed updates — tampering, unknown keys, unsigned manifests and rollback rejected');
+}
+
+signatureContract().then(nativeHandoffContract).then(() => {
   console.log('PASS updater contracts — trusted manifests, acknowledged native handoff and data preservation');
 }).catch((error) => {
   console.error(error);

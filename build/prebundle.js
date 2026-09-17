@@ -17,14 +17,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
+const pins = require('./runtime-pins.json');
 
 const ROOT = path.join(__dirname, '..');
 const VENDOR = path.join(ROOT, 'vendor');
-const NODE_VERSION = process.env.DEEPSEEK_DESKTOP_NODE_VERSION || 'v24.15.0';
+const NODE_VERSION = pins.nodeVersion;
 const MINIMUM_NODE_MAJOR = 24;
-const NODE_MIRROR = process.env.DEEPSEEK_DESKTOP_NODE_MIRROR || 'https://npmmirror.com/mirrors/node';
+const NODE_MIRROR = process.env.DEEPSEEK_DESKTOP_NODE_MIRROR || 'https://nodejs.org/dist';
 const NPM_REGISTRY = process.env.DEEPSEEK_DESKTOP_NPM_REGISTRY || 'https://registry.npmjs.org';
-const KERNEL_PACKAGE = process.env.DEEPSEEK_DESKTOP_DSH_PACKAGE || '@deepseek-ai/dsh';
 const only = (process.argv.find((arg) => arg.startsWith('--only=')) || '').split('=')[1] || 'all';
 
 const log = (...args) => console.log('[prebundle]', ...args);
@@ -92,11 +93,15 @@ async function stageNode() {
     log('downloading ' + url);
     await download(url, zip);
   }
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
+  if (digest !== pins.nodeWindowsX64Sha256) throw new Error('Official Node archive SHA-256 mismatch; refusing extraction');
   log('extracting ' + path.basename(zip));
   const staging = path.join(VENDOR, '.node-staging');
   fs.rmSync(staging, { recursive: true, force: true });
   fs.mkdirSync(staging, { recursive: true });
-  const unzip = spawnSync('unzip', ['-oq', zip, '-d', staging]);
+  const unzip = process.platform === 'win32'
+    ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:DS_BUILD_ARCHIVE -DestinationPath $env:DS_BUILD_STAGING -Force'], { env: { ...process.env, DS_BUILD_ARCHIVE: zip, DS_BUILD_STAGING: staging } })
+    : spawnSync('unzip', ['-oq', zip, '-d', staging]);
   if (unzip.status !== 0) throw new Error('unzip failed — extract ' + zip + ' manually into ' + dest);
   const inner = fs.readdirSync(staging).find((name) => name.startsWith('node-'));
   fs.rmSync(dest, { recursive: true, force: true });
@@ -133,31 +138,29 @@ function stageKernel() {
   log('installing kernel with production dependencies for win32-x64');
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
-  fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({
-    name: 'deepseek-desktop-kernel-bundle',
-    private: true,
-    version: '1.0.0',
-    description: 'Pre-staged DeepSeek Harness kernel shipped with the desktop client',
-  }, null, 2));
+  fs.copyFileSync(path.join(__dirname, 'kernel', 'package.json'), path.join(dest, 'package.json'));
+  fs.copyFileSync(path.join(__dirname, 'kernel', 'package-lock.json'), path.join(dest, 'package-lock.json'));
 
   // --os/--cpu make npm resolve the win32-x64 optional packages (sharp, koffi prebuilds);
   // --ignore-scripts stops native modules from being compiled for the *build* machine, which
   // is exactly what would otherwise put macOS binaries (or a failed build) into the bundle.
   const args = [
-    'install', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error',
+    'ci', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error',
     '--os=win32', '--cpu=x64', '--ignore-scripts',
     '--registry', NPM_REGISTRY,
-    KERNEL_PACKAGE + '@latest',
   ];
   const npmCli = process.env.DEEPSEEK_DESKTOP_NPM_CLI;
-  if (npmCli) run(process.execPath, [npmCli, ...args], { cwd: dest });
-  else run(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, { cwd: dest });
+  const cli = npmCli || process.env.npm_execpath;
+  if (cli) run(process.execPath, [cli, ...args], { cwd: dest });
+  else if (process.platform === 'win32') run(process.execPath, [path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), ...args], { cwd: dest });
+  else run('npm', args, { cwd: dest });
 
   const entry = path.join(dest, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   if (!fs.existsSync(entry)) throw new Error('kernel entry point missing after install: ' + entry);
   const before = dirSize(dest);
   pruneBundle(dest);
   const manifest = JSON.parse(fs.readFileSync(path.join(dest, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'));
+  if (manifest.version !== pins.kernelVersion) throw new Error('Staged Harness does not match reviewed runtime pins');
   log('kernel staged: ' + manifest.name + '@' + manifest.version
     + ' (' + (before / 1048576).toFixed(1) + ' MB -> ' + (dirSize(dest) / 1048576).toFixed(1) + ' MB, '
     + countFiles(dest) + ' files)');

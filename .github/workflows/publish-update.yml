@@ -1,0 +1,27 @@
+name: Publish approved signed update manifest
+on:
+  push:
+    branches: [main]
+    paths: ['updates/latest.json']
+permissions:
+  contents: write
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.15.0
+      - name: Verify offline signature and release identity
+        run: node build/verify-update.js updates/latest.json
+      - name: Attach independently approved manifest to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./updates/latest.json').version")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release view "v$version" --repo "$GITHUB_REPOSITORY"
+          gh release upload "v$version" updates/latest.json --clobber --repo "$GITHUB_REPOSITORY"

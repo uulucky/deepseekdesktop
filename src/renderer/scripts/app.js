@@ -14,9 +14,9 @@ const App = {
       state.ui = state.world.ui ?? {};
       state.credentials = state.world.credential?.refs ?? {};
     }
-    state.permissionMode = PERMISSION_MODES.includes(state.ui.defaultPermission)
+    state.permissionMode = ['read-only', 'workspace-write'].includes(state.ui.defaultPermission)
       ? state.ui.defaultPermission
-      : 'workspace-write';
+      : 'read-only';
     state.account.summary = state.platform.lastBalance ?? null;
     state.account.usage = state.platform.lastUsage ?? null;
     state.account.keys = state.platform.lastKeys?.keys ?? null;
@@ -212,8 +212,8 @@ const App = {
 
   async newSession() {
     const intended = state.pendingSelection ?? state.selection ?? this.localDefaultSelection();
-    const intendedPermission = state.pendingPermission ?? state.permissionMode
-      ?? state.ui.defaultPermission ?? 'workspace-write';
+    const intendedPermission = state.pendingPermission
+      ?? (['read-only', 'workspace-write'].includes(state.ui.defaultPermission) ? state.ui.defaultPermission : 'read-only');
     const created = await guard(api.sessions.create(), '新建对话');
     if (!created?.sessionId) return;
     state.activeSessionId = created.sessionId;
@@ -427,7 +427,8 @@ const App = {
 
   async loadPermission() {
     if (!state.activeSessionId) {
-      state.permissionMode = state.pendingPermission ?? state.ui.defaultPermission ?? 'workspace-write';
+      state.permissionMode = state.pendingPermission
+        ?? (['read-only', 'workspace-write'].includes(state.ui.defaultPermission) ? state.ui.defaultPermission : 'read-only');
       this.renderPermissionControl();
       return state.permissionMode;
     }
@@ -446,7 +447,7 @@ const App = {
     if (!slider || !value) return;
     const mode = PERMISSION_MODES.includes(state.permissionMode)
       ? state.permissionMode
-      : 'workspace-write';
+      : 'read-only';
     slider.value = String(PERMISSION_MODES.indexOf(mode));
     slider.disabled = Boolean(state.permissionBusy || (state.activeSessionId && (state.streaming || state.stopping)));
     value.textContent = permissionLabel(mode);
@@ -454,7 +455,7 @@ const App = {
   },
 
   previewPermission(slider) {
-    const mode = PERMISSION_MODES[Number(slider.value)] ?? 'workspace-write';
+    const mode = PERMISSION_MODES[Number(slider.value)] ?? 'read-only';
     const value = document.getElementById('permission-value');
     if (value) value.textContent = permissionLabel(mode);
     slider.title = `权限：${permissionTitle(mode)}`;
@@ -489,7 +490,7 @@ const App = {
       applied = { currentValue: mode };
     }
     if (applied?.currentValue === mode) {
-      api.settings.setUi({ defaultPermission: mode })
+      api.settings.setUi({ defaultPermission: mode === 'danger-full-access' ? 'read-only' : mode })
         .then((ui) => { state.ui = ui; })
         .catch(() => {});
       toast(`权限已设为${permissionTitle(mode)}`, 'ok');
