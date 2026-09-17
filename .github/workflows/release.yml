@@ -41,7 +41,7 @@ jobs:
 
           重点功能：实时显示余额与当天用量、软件内充值、滑动选择推理等级、滑动选择工具权限，以及软件内自动更新。
 
-          本版本修复了部分电脑生成新 API Key 后未能自动写入本地 Harness 的问题，并增强了旧内核兼容与失败重试能力。
+          本版本将“关于”页面的服务来源改为项目 GitHub 仓库地址，并支持点击后直接打开项目主页。
           EOF
           gh release create "$GITHUB_REF_NAME" "$asset" \
             --title "DeepSeek Desktop ${version}" \

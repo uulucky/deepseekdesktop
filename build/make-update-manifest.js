@@ -21,9 +21,8 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '修复部分电脑生成新 API Key 后，旧版 Harness 无法自动配置的问题，并增加安全兼容回退。',
-    '客户端不再误用 3080 端口上残留的旧内核；配置失败时保留完整 Key，支持直接重试。',
-    '新增 GitHub 源码与最新版下载入口，软件包内附个人非商业使用许可。',
+    '“关于”页面的服务来源已改为项目 GitHub 仓库地址。',
+    '点击服务来源可以直接在系统浏览器中打开源码与最新发布页面。',
   ],
   platforms: {
     'win32-x64': {

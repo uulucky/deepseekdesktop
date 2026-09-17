@@ -1,4 +1,4 @@
-4af8b8b01be0d07f8b286d966ed29fd4dfd22da50217c00cfc3f212cc755416c  DeepSeekDesktop-0.2.17-portable.zip
-957fbf2d5fd9a4e44b7a5355736b03ba795ca4b8a543e98ba349ae219df02975  DeepSeekDesktop-0.2.17-update.zip
-048bb8dc947d3cfb78e6092f18c281e76c4fe3432d4e34f7bcf3a09333f78bcf  DeepSeekDesktop-0.2.17-update-bootstrap.exe
-14a2f8303028492a045362f62510ef1649fdb4bd0019c0e9dfa512a6de6239c1  DeepSeekDesktop-0.2.17-update-repair.zip
+0cc703cc1418a9f5fecdeb9a624befdc6eb00055dd4d3e4f6e092d367275c7e3  DeepSeekDesktop-0.2.18-portable.zip
+5ad3ad92aac1c724d3f3ab65e665f3bb6a363bf60490f95b7dc83211cc577994  DeepSeekDesktop-0.2.18-update.zip
+e09421e15b9bc20fa975146ac98daeaadff255ef4c444a033fbd6c19a8220e5d  DeepSeekDesktop-0.2.18-update-bootstrap.exe
+e6cc074326cda4b92f627a9d56af7254929b6d24d8ee51ff1e5c68c4184b6ebf  DeepSeekDesktop-0.2.18-update-repair.zip

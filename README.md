@@ -2,9 +2,9 @@
 
 面向 Windows 用户的 DeepSeek 桌面客户端。它把 DeepSeek Harness、本地对话、账号余额、充值、API Key 和工具权限放进同一个原生界面，下载便携版后解压即可使用。
 
-> 当前版本：**0.2.17** · Windows 10/11 x64 · 便携版
+> 当前版本：**0.2.18** · Windows 10/11 x64 · 便携版
 
-[从 GitHub 下载最新版](https://github.com/uulucky/deepseekdesktop/releases/latest/download/DeepSeekDesktop-0.2.17-portable.zip) · [从 img.uulucky.com 下载最新版](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.17-portable.zip)
+[从 GitHub 下载最新版](https://github.com/uulucky/deepseekdesktop/releases/latest/download/DeepSeekDesktop-0.2.18-portable.zip) · [从 img.uulucky.com 下载最新版](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.18-portable.zip)
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -19,7 +19,7 @@
 
 ## 下载与使用
 
-1. 下载 `DeepSeekDesktop-0.2.17-portable.zip`。
+1. 下载 `DeepSeekDesktop-0.2.18-portable.zip`。
 2. 完整解压到一个可写目录，例如 `D:\DeepSeekDesktop`。不要直接在压缩包预览窗口中运行。
 3. 双击 `DeepSeek Desktop.exe`，也可以运行 `Run-DeepSeek.cmd`。
 4. 第一次启动会准备本地运行组件，完成后进入主界面。
@@ -40,12 +40,10 @@ Full Access 不会绕过 Windows 账户权限或 UAC。仅在理解风险并信�
 
 ## 最新版本
 
-**0.2.17**
+**0.2.18**
 
-- 修复部分电脑生成新 API Key 后未能自动写入内核的问题。
-- 避免复用 3080 端口上残留的旧 Harness 服务。
-- 为旧内核增加凭据配置兼容通道；失败时保留完整 Key，用户可以直接重试。
-- 软件包内附个人非商业使用许可文本。
+- “关于”页面的服务来源改为项目 GitHub 仓库地址。
+- 服务来源可以直接点击，在系统浏览器中打开源码与最新发布页面。
 
 本仓库只提供当前版本，不保存历史安装包。软件内自动更新和两个下载入口始终指向最新版本。
 

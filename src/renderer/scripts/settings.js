@@ -8,6 +8,8 @@ const TABS = [
   { id: 'about', label: '关于' },
 ];
 
+const PROJECT_URL = 'https://github.com/uulucky/deepseekdesktop';
+
 const Settings = {
   async open(tab = 'account') {
     state.view.modal = true;
@@ -192,7 +194,6 @@ const Settings = {
   renderAbout() {
     const body = document.getElementById('modal-body');
     const world = state.world ?? {};
-    const boot = state.boot ?? {};
     const update = state.update ?? {};
     const updateLabel = ({
       idle: '等待自动检查', checking: '正在检查…', current: '当前已是最新版本',
@@ -216,7 +217,7 @@ const Settings = {
         <div class="card-head"><div><div class="card-title">DeepSeek 桌面客户端</div><div class="card-sub">版本 ${esc(world.version || '0.1.0')}</div></div></div>
         <div class="kv">
           <div class="k">本地服务地址</div><div class="mono">${esc(state.baseUrl || '未启动')}</div>
-          <div class="k">服务来源</div><div>${boot.ownership === 'app' ? '由本应用启动' : boot.reused ? '复用已在运行的服务' : '未知'}</div>
+          <div class="k">服务来源</div><div><button class="about-link" data-action="service-source">${PROJECT_URL}</button></div>
           <div class="k">运行方式</div><div>${world.portable ? '便携版（绿色，数据在软件目录内）' : '安装版（数据在用户目录）'}</div>
           <div class="k">数据目录</div><div class="mono">${esc(world.dataDir || '')}</div>
           <div class="k">日志文件</div><div class="mono">${esc(world.logFile || '')}</div>
@@ -325,6 +326,10 @@ const Settings = {
       }
       case 'feedback-email': {
         await guard(api.app.openExternal('mailto:489583561@qq.com'), '打开邮件客户端失败');
+        return true;
+      }
+      case 'service-source': {
+        await guard(api.app.openExternal(PROJECT_URL), '打开项目主页失败');
         return true;
       }
       case 'reload-log':
