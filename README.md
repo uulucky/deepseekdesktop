@@ -6,9 +6,9 @@
 
 当前版本：**0.2.20 · Windows 10/11 x64 · 便携版**。
 
-[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.20-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-国内 OSS/CDN 镜像与软件内更新源尚待同步到本版，请先从 GitHub 下载。同步完成并校验后会恢复国内下载入口。
+GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.20-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.20-build-info.json)。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
