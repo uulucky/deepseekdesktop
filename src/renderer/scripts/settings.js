@@ -127,8 +127,8 @@ const Settings = {
       <div class="card">
         <div class="card-head"><div><div class="card-title">工作目录</div><div class="card-sub">DeepSeek 会在这里读取和修改文件</div></div></div>
         <div class="field">
-          <input class="input" id="ui-workdir" value="${esc(ui.workdir || '')}" placeholder="默认使用用户主目录" />
-          <div class="hint">留空表示使用系统主目录。修改后新建的对话生效。</div>
+          <input class="input" id="ui-workdir" value="${esc(ui.workdir || '')}" placeholder="默认使用 data/workspace 专用目录" />
+          <div class="hint">留空使用应用数据目录中的 workspace，不默认授权整个用户目录。修改后新建的对话生效。</div>
         </div>
       </div>
 

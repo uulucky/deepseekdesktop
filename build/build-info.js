@@ -13,6 +13,7 @@ const info = {
   sourceRepository: 'https://github.com/uulucky/deepseekdesktop',
   workflow: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
   builtAt: new Date().toISOString(), node: pins.nodeVersion, harness: pins.kernelVersion,
+  go: execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
   electron: pkg.devDependencies.electron, authenticode: 'unsigned',
   locks: { application: hash('package-lock.json'), harness: hash('build/kernel/package-lock.json') },
 };
