@@ -17,8 +17,11 @@ assert.equal(isPlatformUrl('https://platform.deepseek.com/usage'), true);
 for (const bad of ['https://deepseek.com.evil.test/', 'https://evil.test/?deepseek.com', 'https://platform.deepseek.com@evil.test/', 'http://platform.deepseek.com/']) assert.equal(isPlatformUrl(bad), false);
 assert.equal(externalUrl('file:///C:/Windows/cmd.exe'), null);
 assert.equal(externalUrl('ms-settings:privacy'), null);
-assert.equal(reusablePermission('danger-full-access'), 'read-only');
-assert.equal(reusablePermission(undefined), 'read-only');
+assert.equal(reusablePermission('danger-full-access'), 'danger-full-access');
+assert.equal(reusablePermission(undefined), 'danger-full-access');
+assert.equal(reusablePermission(null), 'danger-full-access');
+assert.equal(reusablePermission('read-only'), 'read-only');
+assert.equal(reusablePermission('invalid'), 'read-only');
 assert.equal(reusablePermission('workspace-write'), 'workspace-write');
 const result = normalize({ ads: [
   { url: 'https://www.deepseek.com', pic: 'https://img.uulucky.com/han/ad.png' },

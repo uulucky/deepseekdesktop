@@ -90,7 +90,7 @@ const sessions = [
   { sessionId: 'session-3', title: '整理接口文档', cwd: '/home/user/docs', agentPreset: 'standard', running: false, updatedAt: now - 86400e3, turns: 9 },
 ];
 let selection = { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' };
-let permissionMode = 'workspace-write';
+let permissionMode = 'danger-full-access';
 const catalog = {
   fetchedAt: now, day: '2026-09-11', source: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
   models: [
@@ -189,7 +189,7 @@ function registerStubIpc() {
   ipcMain.handle('credentials:set', () => ok({ configured: true, balance: world.platform.lastBalance }));
   ipcMain.handle('credentials:unset', () => ok(true));
   ipcMain.handle('settings:ui-get', () => ok(world.ui));
-  ipcMain.handle('settings:ui-set', (_event, patch) => ok({ ...world.ui, ...patch }));
+  ipcMain.handle('settings:ui-set', (_event, patch) => ok(Object.assign(world.ui, patch)));
   ipcMain.handle('settings:ad-get', () => ok(world.ad));
   ipcMain.handle('settings:ad-set', (_event, patch) => ok({ ...world.ad, ...patch }));
   ipcMain.handle('settings:describe', () => ok({ namespaces: [] }));
@@ -419,13 +419,19 @@ app.whenReady().then(async () => {
     slider.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
   await new Promise((resolve) => setTimeout(resolve, 120));
-  console.log('FULL ACCESS CONFIRMATION', JSON.stringify(await win.webContents.executeJavaScript(`(() => ({
-    visible: !document.getElementById('permission-confirm-backdrop').hidden,
-    title: document.getElementById('permission-confirm-title').textContent.trim(),
-    action: document.getElementById('permission-confirm-accept').textContent.trim(),
-  }))()`), null, 2));
-  fs.writeFileSync(shot('-permission-confirm'), (await capture(win)).toPNG());
-  await win.webContents.executeJavaScript('document.getElementById("permission-confirm-cancel").click()');
+  const permissionReminder = await win.webContents.executeJavaScript(`(() => ({
+    visible: !document.getElementById('permission-warning').hidden,
+    label: document.getElementById('permission-warning').textContent.trim(),
+    preset: state.permissionMode,
+    saved: state.ui.defaultPermission,
+    blocked: Boolean(document.querySelector('[role="alertdialog"]')),
+  }))()`);
+  require('node:assert/strict').equal(permissionReminder.visible, true);
+  require('node:assert/strict').equal(permissionReminder.preset, 'danger-full-access');
+  require('node:assert/strict').equal(permissionReminder.saved, 'danger-full-access');
+  require('node:assert/strict').equal(permissionReminder.blocked, false);
+  console.log('FULL ACCESS REMINDER', JSON.stringify(permissionReminder, null, 2));
+  fs.writeFileSync(shot('-permission-warning'), (await capture(win)).toPNG());
   const stopStarted = await win.webContents.executeJavaScript(`(async () => {
     state.activeSessionId = 'session-demo';
     state.streaming = true;

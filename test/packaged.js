@@ -54,16 +54,25 @@ async function main() {
   await page.locator('#input').fill('本地输入测试，不发送');
   assert.equal(await page.locator('#input').inputValue(), '本地输入测试，不发送');
   await page.locator('#input').fill('');
-  assert.equal(await page.locator('#permission-slider').inputValue(), '0');
+  assert.equal(await page.locator('#permission-slider').inputValue(), '2');
+  await page.locator('#permission-warning').waitFor({ state: 'visible' });
   await page.locator('#model-chip').click();
   await page.locator('#model-popover').waitFor({ state: 'visible' });
   await page.locator('#input').click();
   await page.locator('#model-popover').waitFor({ state: 'hidden' });
   await page.locator('#permission-slider').focus();
-  await page.locator('#permission-slider').press('End');
-  await page.locator('#permission-confirm-backdrop').waitFor({ state: 'visible' });
-  await page.locator('#permission-confirm-cancel').click();
+  await page.locator('#permission-slider').press('Home');
+  await page.locator('#permission-warning').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
+  await page.locator('#permission-slider').press('End');
+  await page.locator('#permission-warning').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
+  assert.equal(await page.locator('#permission-slider').inputValue(), '2');
+  assert.equal(await page.locator('[role="alertdialog"]').count(), 0, 'Reminder does not block the composer');
+  await page.evaluate(() => App.newSession());
+  const fullSession = await page.evaluate(() => state.activeSessionId);
+  assert.equal(await page.evaluate(id => api.sessions.permissions(id).then(value => value.currentValue), fullSession), 'danger-full-access');
   await page.locator('#open-profile').click();
   await page.locator('#manual-key-input').fill('sk-ui-fixture-not-submitted');
   assert.equal(await page.locator('#manual-key-input').inputValue(), 'sk-ui-fixture-not-submitted');
@@ -74,9 +83,22 @@ async function main() {
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
   page = await launch();
   assert.equal(await application.evaluate(({ app }) => app.getVersion()), version);
-  assert.equal(await page.locator('#permission-slider').inputValue(), '0');
+  await page.evaluate(id => App.openSession(id), fullSession);
+  assert.equal(await page.locator('#permission-slider').inputValue(), '2');
+  await page.locator('#permission-warning').waitFor({ state: 'visible' });
+  // A saved lower permission must survive both creating a session and restarting.
+  await page.locator('#permission-slider').focus();
+  await page.locator('#permission-slider').press('Home');
+  await page.locator('#permission-warning').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
+  await page.evaluate(() => App.newSession());
+  assert.equal(await page.evaluate(() => api.sessions.permissions(state.activeSessionId).then(value => value.currentValue)), 'read-only');
   await application.close(); application = null;
-  console.log('PASS packaged Windows: native extraction, real startup, input, model popover, Full Access cancellation, restart and data preservation');
+  page = await launch();
+  assert.equal(await page.locator('#permission-slider').inputValue(), '0');
+  await page.locator('#permission-warning').waitFor({ state: 'hidden' });
+  await application.close(); application = null;
+  console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
   console.error(error);

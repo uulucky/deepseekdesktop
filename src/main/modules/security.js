@@ -32,7 +32,8 @@ function isPlatformUrl(value) {
 }
 
 function reusablePermission(value) {
-  return ['read-only', 'workspace-write'].includes(value) ? value : 'read-only';
+  if (value == null) return 'danger-full-access';
+  return ['read-only', 'workspace-write', 'danger-full-access'].includes(value) ? value : 'read-only';
 }
 
 module.exports = { isLocalShell, isTrustedIpc, externalUrl, isPlatformUrl, reusablePermission };

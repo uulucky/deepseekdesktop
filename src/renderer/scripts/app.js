@@ -14,9 +14,7 @@ const App = {
       state.ui = state.world.ui ?? {};
       state.credentials = state.world.credential?.refs ?? {};
     }
-    state.permissionMode = ['read-only', 'workspace-write'].includes(state.ui.defaultPermission)
-      ? state.ui.defaultPermission
-      : 'read-only';
+    state.permissionMode = defaultPermission(state.ui.defaultPermission);
     state.account.summary = state.platform.lastBalance ?? null;
     state.account.usage = state.platform.lastUsage ?? null;
     state.account.keys = state.platform.lastKeys?.keys ?? null;
@@ -128,26 +126,13 @@ const App = {
       event.stopPropagation();
       this.stop();
     });
-    document.getElementById('permission-confirm-cancel').addEventListener('click', () => {
-      this.settleFullAccessConfirmation(false);
-    });
-    document.getElementById('permission-confirm-accept').addEventListener('click', () => {
-      this.settleFullAccessConfirmation(true);
-    });
-    document.getElementById('permission-confirm-backdrop').addEventListener('mousedown', (event) => {
-      if (event.target.id === 'permission-confirm-backdrop') this.settleFullAccessConfirmation(false);
-    });
     document.getElementById('reasoning-slider').addEventListener('input', (event) => this.previewReasoning(event.target));
     document.getElementById('reasoning-slider').addEventListener('change', (event) => this.setReasoning(event.target));
     document.getElementById('permission-slider').addEventListener('input', (event) => this.previewPermission(event.target));
     document.getElementById('permission-slider').addEventListener('change', (event) => this.setPermission(event.target));
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
-        if (!document.getElementById('permission-confirm-backdrop').hidden) {
-          this.settleFullAccessConfirmation(false);
-        } else {
-          this.hidePopover();
-        }
+        this.hidePopover();
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); this.newSession(); }
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); Settings.open('general'); }
@@ -213,7 +198,7 @@ const App = {
   async newSession() {
     const intended = state.pendingSelection ?? state.selection ?? this.localDefaultSelection();
     const intendedPermission = state.pendingPermission
-      ?? (['read-only', 'workspace-write'].includes(state.ui.defaultPermission) ? state.ui.defaultPermission : 'read-only');
+      ?? defaultPermission(state.ui.defaultPermission);
     const created = await guard(api.sessions.create(), '新建对话');
     if (!created?.sessionId) return;
     state.activeSessionId = created.sessionId;
@@ -428,7 +413,7 @@ const App = {
   async loadPermission() {
     if (!state.activeSessionId) {
       state.permissionMode = state.pendingPermission
-        ?? (['read-only', 'workspace-write'].includes(state.ui.defaultPermission) ? state.ui.defaultPermission : 'read-only');
+        ?? defaultPermission(state.ui.defaultPermission);
       this.renderPermissionControl();
       return state.permissionMode;
     }
@@ -452,6 +437,10 @@ const App = {
     slider.disabled = Boolean(state.permissionBusy || (state.activeSessionId && (state.streaming || state.stopping)));
     value.textContent = permissionLabel(mode);
     slider.title = `权限：${permissionTitle(mode)}`;
+    slider.setAttribute('aria-valuetext', permissionTitle(mode));
+    const warning = document.getElementById('permission-warning');
+    if (warning) warning.hidden = mode !== 'danger-full-access';
+    document.getElementById('permission-control')?.classList.toggle('full-access', mode === 'danger-full-access');
   },
 
   previewPermission(slider) {
@@ -468,13 +457,6 @@ const App = {
       this.renderPermissionControl();
       return;
     }
-    if (mode === 'danger-full-access') {
-      const accepted = await this.confirmFullAccess();
-      if (!accepted) {
-        this.renderPermissionControl();
-        return;
-      }
-    }
     state.permissionBusy = true;
     this.renderPermissionControl();
     let applied = null;
@@ -490,31 +472,13 @@ const App = {
       applied = { currentValue: mode };
     }
     if (applied?.currentValue === mode) {
-      api.settings.setUi({ defaultPermission: mode === 'danger-full-access' ? 'read-only' : mode })
-        .then((ui) => { state.ui = ui; })
-        .catch(() => {});
+      state.ui.defaultPermission = mode;
+      const ui = await guard(api.settings.setUi({ defaultPermission: mode }), '保存默认权限');
+      if (ui) state.ui = ui;
       toast(`权限已设为${permissionTitle(mode)}`, 'ok');
     }
     state.permissionBusy = false;
     this.renderPermissionControl();
-  },
-
-  confirmFullAccess() {
-    this.settleFullAccessConfirmation(false);
-    const backdrop = document.getElementById('permission-confirm-backdrop');
-    backdrop.hidden = false;
-    return new Promise((resolve) => {
-      this.fullAccessConfirmation = resolve;
-      requestAnimationFrame(() => document.getElementById('permission-confirm-cancel').focus());
-    });
-  },
-
-  settleFullAccessConfirmation(accepted) {
-    const backdrop = document.getElementById('permission-confirm-backdrop');
-    if (backdrop) backdrop.hidden = true;
-    const resolve = this.fullAccessConfirmation;
-    this.fullAccessConfirmation = null;
-    if (resolve) resolve(Boolean(accepted));
   },
 
   focusComposer() {

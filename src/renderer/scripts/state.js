@@ -24,7 +24,7 @@ const state = {
   selection: null,
   selectionRoutable: false,
   pendingSelection: null,
-  permissionMode: 'read-only',
+  permissionMode: 'danger-full-access',
   permissionBusy: false,
   pendingPermission: null,
   transcript: null,
@@ -71,6 +71,11 @@ function reasoningLabel(id) {
 }
 
 const PERMISSION_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
+
+function defaultPermission(value) {
+  if (value == null) return 'danger-full-access';
+  return PERMISSION_MODES.includes(value) ? value : 'read-only';
+}
 
 function permissionLabel(id) {
   return ({

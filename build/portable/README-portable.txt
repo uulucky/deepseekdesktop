@@ -5,10 +5,10 @@ DeepSeek Desktop · Windows x64 便携版
 这是第三方客户端，不是 DeepSeek 官方产品。
 
 权限
-Read Only：新用户默认只读。
+Read Only：只读，不允许直接修改文件。
 Workspace Write：允许修改所选工作目录。
-Full Access：移除 Harness 沙箱限制；需要确认，不绕过 Windows UAC。
-Full Access 不作为新会话默认值保存，重启后旧会话再次打开/发送前会降为只读。
+Full Access：无已保存偏好时的默认档位。移除 Harness 沙箱限制，直接执行命令与修改文件，不逐次请求批准，不绕过 Windows UAC。
+输入区持续显示 Full Access 风险提醒。三个档位都会记住，重启不会自动降级；已有的只读/工作区偏好保留。
 新用户的默认工作目录为 data/workspace；设置中可以选择自己的文件夹。
 
 数据与广告

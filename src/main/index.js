@@ -43,7 +43,6 @@ const ctx = {
   platformStore: null,
   catalog: { snapshot: readSnapshot(), changed: false },
   credentialState: null,
-  fullAccessSessions: new Set(),
   domMirror: null,
   dataDir: DIRS.root,
   logFile: logFilePath(),

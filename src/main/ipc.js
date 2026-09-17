@@ -35,13 +35,6 @@ function registerIpc(services) {
   // Never snapshot late-created services here. The kernel, chat controller and window-backed
   // platform client come online at different points during startup.
   const service = (name) => getContext()?.[name] ?? services[name];
-  const resetUnconfirmedFullAccess = async (sessionId) => {
-    const ctx = getContext();
-    const permission = await ctx.client.permissions(sessionId);
-    if (permission?.currentValue === 'danger-full-access' && !ctx.fullAccessSessions?.has(sessionId)) {
-      await ctx.client.selectPermission(sessionId, 'read-only');
-    }
-  };
 
   // ------------------------------------------------------------------ lifecycle
   handle('app:info', () => {
@@ -97,16 +90,13 @@ function registerIpc(services) {
       }))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
   });
-  handle('sessions:open', async (sessionId) => {
-    await resetUnconfirmedFullAccess(sessionId);
-    return service('chat').open(sessionId);
-  });
+  handle('sessions:open', (sessionId) => service('chat').open(sessionId));
   handle('sessions:refresh', (sessionId) => service('chat').refresh(sessionId));
   handle('sessions:create', async () => {
     const ctx = getContext();
     const created = await service('chat').createSession(ctx.defaultSessionOptions());
     // The renderer alone must not be responsible for initial tool permissions.
-    await ctx.client.selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', 'read-only')));
+    await ctx.client.selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', null)));
     return created;
   });
   handle('sessions:rename', async (sessionId, title) => {
@@ -114,10 +104,7 @@ function registerIpc(services) {
     return result;
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  handle('sessions:prompt', async (sessionId, text) => {
-    await resetUnconfirmedFullAccess(sessionId);
-    return service('chat').send(sessionId, text);
-  });
+  handle('sessions:prompt', (sessionId, text) => service('chat').send(sessionId, text));
   handle('sessions:cancel', (sessionId) => service('chat').cancel(sessionId));
   handle('sessions:answer-approval', (sessionId, eventId, outcome) => (
     service('chat').answerApproval(sessionId, eventId, outcome)
@@ -128,13 +115,7 @@ function registerIpc(services) {
     return { current: models.current ?? null, routable: models.routable, failures: models.failures ?? [] };
   });
   handle('sessions:permissions', (sessionId) => getContext().client.permissions(sessionId));
-  handle('sessions:select-permission', async (sessionId, preset) => {
-    const ctx = getContext();
-    const result = await ctx.client.selectPermission(sessionId, preset);
-    if (result.currentValue === 'danger-full-access') ctx.fullAccessSessions.add(sessionId);
-    else ctx.fullAccessSessions.delete(sessionId);
-    return result;
-  });
+  handle('sessions:select-permission', (sessionId, preset) => getContext().client.selectPermission(sessionId, preset));
 
   // ----------------------------------------------------------------------- llm
   handle('llm:catalog', async () => {

@@ -43,7 +43,7 @@ async function main() {
     await assert.rejects(new DeepSeekHarnessClient(client.baseUrl).ping(), /认证|unauthorized/i);
     const created = await client.createSession({ agentPreset: 'standard', cwd: path.join(temporary, 'workspace') });
     assert(created.sessionId);
-    for (const permission of ['read-only', 'workspace-write', 'read-only']) {
+    for (const permission of ['read-only', 'workspace-write', 'danger-full-access', 'read-only']) {
       assert.equal((await client.selectPermission(created.sessionId, permission)).currentValue, permission);
     }
     assert(Array.isArray((await client.history(created.sessionId)).events));

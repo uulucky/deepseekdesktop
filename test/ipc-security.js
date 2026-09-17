@@ -21,9 +21,12 @@ const untrustedFrame = { url: 'https://platform.deepseek.com' };
 const untrusted = { senderFrame: untrustedFrame, sender: { mainFrame: untrustedFrame } };
 const permissions = new Map([['old', 'danger-full-access']]);
 let promptPermission;
+let savedDefault;
 const ctx = {
-  fullAccessSessions: new Set(),
-  uiStore: { get: () => 'danger-full-access' },
+  uiStore: {
+    get: () => savedDefault,
+    merge: patch => { savedDefault = patch.defaultPermission; return patch; },
+  },
   defaultSessionOptions: () => ({}),
   client: {
     permissions: async id => ({ currentValue: permissions.get(id) }),
@@ -45,15 +48,21 @@ async function main() {
   assert.equal((await handlers.get('sessions:create')(untrusted)).ok, false);
   assert.equal(permissions.has('new'), false, 'Rejected sender did not create a session');
   await call('sessions:create');
-  assert.equal(permissions.get('new'), 'read-only', 'Legacy full-access preference is not inherited');
+  assert.equal(permissions.get('new'), 'danger-full-access', 'New users default to Full Access in the kernel, not only the UI');
   await call('sessions:prompt', 'old', 'fixture');
-  assert.equal(promptPermission, 'read-only', 'Old full access resets before sending');
-  await call('sessions:select-permission', 'old', 'danger-full-access');
-  await call('sessions:prompt', 'old', 'fixture');
-  assert.equal(promptPermission, 'danger-full-access', 'Explicit current-session selection survives');
-  ctx.fullAccessSessions.clear(); // New process has no remembered consent.
+  assert.equal(promptPermission, 'danger-full-access', 'Sending does not silently downgrade existing Full Access');
   await call('sessions:open', 'old');
-  assert.equal(permissions.get('old'), 'read-only');
-  console.log('PASS main-process IPC rejects remote senders and enforces permission reset/create policy');
+  assert.equal(permissions.get('old'), 'danger-full-access', 'Opening old sessions preserves the actual permission');
+  for (const preset of ['read-only', 'workspace-write', 'danger-full-access']) {
+    await call('settings:ui-set', { defaultPermission: preset });
+    assert.equal(savedDefault, preset, 'All three permission preferences are saved');
+    await call('sessions:create');
+    assert.equal(permissions.get('new'), preset, 'New sessions inherit the saved preference');
+    await call('sessions:select-permission', 'old', preset);
+    await call('sessions:open', 'old');
+    await call('sessions:prompt', 'old', 'fixture');
+    assert.equal(promptPermission, preset, 'Open/send must not override explicit session permissions');
+  }
+  console.log('PASS main-process IPC rejects remote senders, defaults to Full Access and preserves explicit permission choices');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => fs.rmSync(temporary, { recursive: true, force: true }));
