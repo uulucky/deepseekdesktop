@@ -17,9 +17,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
-const HOME = path.join(os.tmpdir(), 'dsdesk-boot-contract');
-process.env.DEEPSEEK_DESKTOP_HOME = HOME;
-fs.rmSync(HOME, { recursive: true, force: true });
+const TEST_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'dsdesk-boot-contract-'));
+process.env.DEEPSEEK_DESKTOP_HOME = TEST_ROOT;
 
 const { Bootstrap, dshSpec } = require(path.join(ROOT, 'src', 'main', 'modules', 'bootstrap.js'));
 const { DeepSeekHarnessClient } = require(path.join(ROOT, 'src', 'main', 'modules', 'api.js'));
@@ -149,12 +148,12 @@ async function main() {
   // ------------------------------------------------------------- 2. install contract
   check('npm spec floats a bare name to @latest', dshSpec() === '@deepseek-ai/dsh@latest', dshSpec());
 
-  const stubDir = path.join(HOME, 'stub-package');
+  const stubDir = path.join(TEST_ROOT, 'stub-package');
   fs.mkdirSync(path.join(stubDir, 'lib'), { recursive: true });
   fs.writeFileSync(path.join(stubDir, 'package.json'), JSON.stringify({ name: 'dsh-install-stub', version: '0.0.1', bin: { dsh: 'lib/bin.js' } }));
   fs.writeFileSync(path.join(stubDir, 'lib', 'bin.js'), 'console.log("stub dsh 0.0.1");\n');
 
-  const installHome = path.join(HOME, 'install-home');
+  const installHome = path.join(TEST_ROOT, 'install-home');
   const realHome = process.env.DEEPSEEK_DESKTOP_HOME;
   process.env.DEEPSEEK_DESKTOP_HOME = installHome;
   process.env.DEEPSEEK_DESKTOP_DSH_PACKAGE = `file:${stubDir}`;
@@ -207,14 +206,18 @@ async function main() {
   // --------------------------------------------------------------- 4. catalog guard
   process.env.DEEPSEEK_DESKTOP_HOME = realHome;
   const { syncCatalog } = require(path.join(ROOT, 'src', 'main', 'modules', 'catalog.js'));
-  const first = await syncCatalog().catch(() => null);
-  const second = await syncCatalog().catch(() => null);
-  if (first?.snapshot) {
-    check('catalog syncs on the first call of the day', first.skipped !== true, `${first.snapshot.models.length} models`);
-    check('catalog is cached for the rest of the day', second?.skipped === true);
-  } else {
-    console.log('SKIP catalog checks (no network)');
-  }
+  const originalFetch = global.fetch;
+  let fetchCount = 0;
+  global.fetch = async () => {
+    fetchCount += 1;
+    return { ok: true, text: async () => '<table><tr><th>模型</th><th>deepseek-fixture (1)</th></tr><tr><td>模型版本</td><td>fixture</td></tr><tr><td>上下文长度</td><td>128K</td></tr><tr><td>输出长度</td><td>8K</td></tr></table>' };
+  };
+  try {
+    const first = await syncCatalog();
+    const second = await syncCatalog();
+    check('catalog syncs on the first call of the day', first.snapshot?.models.length === 1 && first.skipped !== true);
+    check('catalog is cached for the rest of the day', second.skipped === true && fetchCount === 1);
+  } finally { global.fetch = originalFetch; }
 
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
   process.exit(failures === 0 ? 0 : 1);

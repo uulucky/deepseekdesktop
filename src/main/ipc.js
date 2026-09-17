@@ -7,7 +7,7 @@
 const { ipcMain, shell, dialog, app, clipboard } = require('electron');
 const { log } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
-const { isTrustedIpc, reusablePermission } = require('./modules/security');
+const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
 
 /** Wrap a handler so a thrown error becomes a structured failure instead of a rejection. */
 function handle(channel, fn) {
@@ -66,7 +66,7 @@ function registerIpc(services) {
     return bootstrap.state;
   });
   handle('app:open-external', async (url) => {
-    const webUrl = typeof url === 'string' && /^https?:\/\//.test(url);
+    const webUrl = typeof url === 'string' && externalUrl(url);
     const emailUrl = typeof url === 'string'
       && /^mailto:[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(url);
     if (!webUrl && !emailUrl) throw new Error('无效链接');

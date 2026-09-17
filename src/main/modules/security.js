@@ -27,7 +27,7 @@ function externalUrl(value) {
 function isPlatformUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'platform.deepseek.com' && !url.username && !url.password;
+    return url.origin === 'https://platform.deepseek.com' && !url.username && !url.password;
   } catch { return false; }
 }
 

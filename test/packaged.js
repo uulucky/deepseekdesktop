@@ -14,7 +14,7 @@ const target = path.join(temporary, 'application');
 const archive = path.join(root, 'dist', `DeepSeekDesktop-${version}-portable.zip`);
 const bootstrap = path.join(root, 'dist', `DeepSeekDesktop-${version}-update-bootstrap.exe`);
 const exe = path.join(target, 'DeepSeek Desktop.exe');
-const env = { ...process.env, DEEPSEEK_DESKTOP_PORTABLE_ROOT: target, DEEPSEEK_DESKTOP_PORT: '0' };
+const env = { ...process.env, DEEPSEEK_DESKTOP_PORTABLE_ROOT: target };
 delete env.DEEPSEEK_API_KEY;
 delete env.DEEPSEEK_DESKTOP_HOME;
 delete env.DEEPSEEK_DESKTOP_DSH_BIN;
@@ -26,6 +26,10 @@ function extract() {
   assert(fs.existsSync(exe));
 }
 async function launch() {
+  const server = require('node:net').createServer();
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  env.DEEPSEEK_DESKTOP_PORT = String(server.address().port);
+  await new Promise(resolve => server.close(resolve));
   application = await electron.launch({ executablePath: exe, env, timeout: 120000 });
   let page;
   for (let count = 0; count < 120; count += 1) {
@@ -76,6 +80,10 @@ async function main() {
 }
 main().catch(async error => {
   console.error(error);
+  if (process.env.GITHUB_ACTIONS) {
+    const annotation = String(error.stack || error).slice(0, 6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.log(`::error title=Packaged Windows smoke::${annotation}`);
+  }
   const page = application?.windows().find(window => /index\.html/.test(window.url()));
   await page?.screenshot({ path: path.join(results, 'failure.png') }).catch(() => {});
   const logs = path.join(target, 'data/logs');
