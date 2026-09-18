@@ -53,7 +53,13 @@ async function crashRendererAndRecover(page) {
   await application.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find(item => /\/index\.html$/.test(item.webContents.getURL()));
     if (!win) throw new Error('Main window not found for renderer recovery test');
-    win.webContents.forcefullyCrashRenderer();
+    // Return over Playwright's main-process control channel before killing the target. If the
+    // crash happens synchronously, Chromium can tear down the inspected target before the
+    // evaluation acknowledgement is delivered and leave the test driver waiting forever.
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.webContents.forcefullyCrashRenderer();
+    }, 100);
+    return true;
   });
   let recovered = null;
   for (let count = 0; count < 120; count += 1) {
