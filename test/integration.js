@@ -62,6 +62,7 @@ async function main() {
     assert(ready, 'Authenticated approval event stream becomes ready');
     chat = new ChatController(client);
     const options = { agentPreset: 'standard', cwd: path.join(temporary, 'workspace') };
+    fs.mkdirSync(options.cwd, { recursive: true });
     const a = (await chat.createSession(options)).sessionId;
     const group = catalog.groups.find(item => item.id === 'deepseek-official');
     assert(group, 'Pinned official provider is available');
@@ -87,7 +88,26 @@ async function main() {
     await eventually(() => !chat.transcripts.get(b).running, 'Background B settles without reopening the session');
     assert(chat.transcripts.get(b).items.some(item => item.parts?.some(part => part.text === 'B partial B final')));
     assert.equal((await client.listSessions()).find(item => item.sessionId === b).running, false);
-    console.log('PASS isolated real Harness: authentication, permissions, credentials, models, approvals, concurrent local-fixture streams and targeted cancellation; no paid prompts');
+    await client.renameSession(b, '可搜索的多任务对话');
+    const renamed = (await client.listSessions()).find(item => item.sessionId === b);
+    assert.equal(renamed.projections?.values?.title, '可搜索的多任务对话');
+    const searched = await client.searchSessions('multitask-fixture-B');
+    assert(searched.items.some(item => item.sessionId === b), 'Harness full-text search finds durable user content');
+    const forked = await client.forkSession(b);
+    const forkSummary = (await client.listSessions()).find(item => item.sessionId === forked.sessionId);
+    assert.equal(forkSummary.parentSessionId, b, 'Copied conversation records its source without altering it');
+    assert((await client.history(forked.sessionId, undefined, 8)).events.length > 0, 'Copied conversation retains completed history');
+
+    await client.listWorkspaces();
+    const registered = await client.createWorkspace(options.cwd);
+    const inWorkspace = await client.createSession({ agentPreset: 'standard', workspaceId: registered.workspace.workspaceId });
+    await eventually(async () => (await client.listWorkspaces()).items
+      .find(item => item.workspaceId === registered.workspace.workspaceId)?.sessionIds.includes(inWorkspace.sessionId),
+    'Workspace stream reflects a newly attached conversation');
+    await client.archiveSession(b);
+    assert((await client.listWorkspaces()).archivedSessionIds.includes(b), 'Archive state is durable and non-destructive');
+    assert((await client.listSessions()).some(item => item.sessionId === b), 'Archived conversation remains in persistence');
+    console.log('PASS isolated real Harness: authentication, permissions, credentials, models, approvals, concurrent tasks, search, rename, workspace, conversation copy and archive; no paid prompts');
   } finally {
     chat?.dispose();
     client?.dispose();

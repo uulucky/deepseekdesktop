@@ -238,6 +238,75 @@ async function permissionContract() {
   client.dispose();
 }
 
+async function conversationManagementContract() {
+  const client = new DeepSeekHarnessClient('http://127.0.0.1:1');
+  const writes = [];
+  client.mux = { readyState: WebSocket.OPEN, send: (text) => writes.push(JSON.parse(text)) };
+  client.openWorkspaceStream();
+  const opened = writes[0];
+  check('workspace registry uses the persistent workspace/follow stream', opened?.endpoint === 'workspace/follow'
+    && JSON.stringify(opened.payload) === JSON.stringify({ args: {} }), JSON.stringify(opened));
+  const snapshotPromise = client.listWorkspaces();
+  client.handleMuxFrame({ type: 'item', streamId: opened.streamId, value: {
+    type: 'baseline',
+    value: {
+      items: [{ workspaceId: 'workspace-a', path: '/tmp/a', title: 'A', sessionIds: ['session-a'], createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
+      archivedSessionIds: [],
+    },
+  } });
+  const snapshot = await snapshotPromise;
+  check('workspace baseline exposes groups and archive state', snapshot.items[0]?.workspaceId === 'workspace-a'
+    && snapshot.items[0]?.sessionIds[0] === 'session-a' && snapshot.archivedSessionIds.length === 0);
+  client.handleMuxFrame({ type: 'item', streamId: opened.streamId, value: {
+    type: 'archived', archivedSessionIds: ['session-a'],
+  } });
+  check('archive increments update the shared projection', (await client.listWorkspaces()).archivedSessionIds[0] === 'session-a');
+
+  const calls = [];
+  client.call = async (method, args) => {
+    calls.push({ method, args });
+    if (method === 'workspace/create') return {
+      created: true,
+      workspace: { workspaceId: 'workspace-b', path: '/tmp/b', title: 'B', sessionIds: [], createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+    };
+    if (method === 'workspace/archiveSession') return { archivedSessionIds: ['session-a', 'session-b'] };
+    if (method === 'session/search') return { items: [{ sessionId: 'session-b', snippet: '命中的内容' }], hasMore: false };
+    if (method === 'session/fork') return { sessionId: 'session-copy' };
+    throw new Error(`unexpected method ${method}`);
+  };
+  await client.createWorkspace('/tmp/b');
+  await client.archiveSession('session-b');
+  await client.searchSessions('内容');
+  const forked = await client.forkSession('session-b');
+  check('workspace create sends an existing directory request', calls.some(({ method, args }) => method === 'workspace/create' && args.request.path === '/tmp/b'));
+  check('archive uses the non-destructive Harness registry command', calls.some(({ method, args }) => method === 'workspace/archiveSession' && args.request.sessionId === 'session-b'));
+  check('conversation search preserves the literal query', calls.some(({ method, args }) => method === 'session/search' && args.request.query === '内容'));
+  check('conversation copy uses session/fork while the UI can use a clearer label', forked.sessionId === 'session-copy'
+    && calls.some(({ method }) => method === 'session/fork'));
+  client.dispose();
+
+  const fallback = new DeepSeekHarnessClient('http://127.0.0.1:1');
+  fallback.call = async (method) => {
+    if (method === 'session/search') {
+      const error = new Error('session search is disabled');
+      error.code = 'gateway/internal';
+      throw error;
+    }
+    if (method === 'session/list') return { items: [{
+      sessionId: 'session-local-search', blank: false, projections: { asOfSeq: 2, values: {} },
+    }] };
+    if (method === 'session/page') return {
+      records: [{ event: { seq: 1, data: { content: [{ type: 'text', text: '仅保存在本地的搜索目标' }] } } }],
+      hasMore: false,
+    };
+    throw new Error(`unexpected fallback method ${method}`);
+  };
+  const local = await fallback.searchSessions('搜索目标');
+  check('disabled Harness index falls back to a local-only history scan', local.items[0]?.sessionId === 'session-local-search'
+    && local.items[0]?.snippet.includes('搜索目标'));
+  fallback.dispose();
+}
+
 async function main() {
   await hydrationContract();
   await toolLifecycleContract();
@@ -246,6 +315,7 @@ async function main() {
   await approvalContract();
   await modelContract();
   await permissionContract();
+  await conversationManagementContract();
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -28,7 +28,8 @@ const App = {
     await this.refreshSessions();
     await this.refreshCredentials();
     // The account card is refreshed lazily: only when it is actually visible.
-    if (state.sessions.length) await this.openSession(state.sessions[0].sessionId);
+    const firstSession = state.sessions.find((session) => !session.archived);
+    if (firstSession) await this.openSession(firstSession.sessionId);
     else {
       await this.loadSelection();
       ChatView.render(null);
@@ -88,8 +89,14 @@ const App = {
     });
 
     // Rails and header wiring
-    document.getElementById('new-chat').addEventListener('click', () => this.newSession());
+    document.getElementById('new-chat').addEventListener('click', () => this.newSession(state.preferredWorkspaceId));
     document.getElementById('refresh-sessions').addEventListener('click', () => this.refreshSessions());
+    document.getElementById('toggle-archived').addEventListener('click', () => {
+      state.showArchived = !state.showArchived;
+      Sidebar.renderSessions();
+    });
+    document.getElementById('add-workspace').addEventListener('click', () => this.addWorkspace());
+    document.getElementById('session-search').addEventListener('input', (event) => this.queueSessionSearch(event.target.value));
     document.getElementById('rail-collapse').addEventListener('click', () => this.toggleRail(false));
     document.getElementById('rail-toggle').addEventListener('click', () => this.toggleRail(true));
     document.getElementById('open-settings').addEventListener('click', () => Settings.open('general'));
@@ -100,8 +107,31 @@ const App = {
       if (event.target.id === 'modal-backdrop') Settings.close();
     });
     document.getElementById('session-list').addEventListener('click', (event) => {
+      const menu = event.target.closest('[data-session-menu]');
+      if (menu) {
+        event.stopPropagation();
+        this.toggleSessionPopover(menu, menu.getAttribute('data-session-menu'));
+        return;
+      }
+      const workspaceNew = event.target.closest('[data-workspace-new]');
+      if (workspaceNew) {
+        this.newSession(workspaceNew.getAttribute('data-workspace-new'));
+        return;
+      }
       const button = event.target.closest('[data-session]');
       if (button) this.openSession(button.getAttribute('data-session'));
+    });
+    document.getElementById('session-popover').addEventListener('click', (event) => {
+      const action = event.target.closest('[data-session-action]')?.getAttribute('data-session-action');
+      if (action) this.runSessionAction(action);
+    });
+    document.getElementById('action-cancel').addEventListener('click', () => this.closeActionDialog(null));
+    document.getElementById('action-confirm').addEventListener('click', () => this.confirmActionDialog());
+    document.getElementById('action-backdrop').addEventListener('mousedown', (event) => {
+      if (event.target.id === 'action-backdrop') this.closeActionDialog(null);
+    });
+    document.getElementById('action-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); this.confirmActionDialog(); }
     });
     document.getElementById('balance-chip').addEventListener('click', () => Settings.open('account'));
     document.getElementById('model-chip').addEventListener('click', () => this.toggleModelPopover());
@@ -129,12 +159,15 @@ const App = {
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         this.hidePopover();
+        this.hideSessionPopover();
+        if (this.actionDialog) this.closeActionDialog(null);
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); this.newSession(); }
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); Settings.open('general'); }
     });
     document.addEventListener('click', (event) => {
       this.closeModelPopoverFromOutside(event.target);
+      this.closeSessionPopoverFromOutside(event.target);
       this.routeClick(event);
     });
     document.addEventListener('pointerdown', (event) => {
@@ -148,7 +181,7 @@ const App = {
     }, true);
     document.addEventListener('change', (event) => Settings.onGeneralChange(event.target));
     document.getElementById('ad-slot').addEventListener('click', () => Sidebar.openCurrentAd());
-    window.addEventListener('resize', () => this.hidePopover());
+    window.addEventListener('resize', () => { this.hidePopover(); this.hideSessionPopover(); });
   },
 
   async installUpdate() {
@@ -185,6 +218,7 @@ const App = {
     input.value = view.draft;
     this.autoGrow(input);
     this.hidePopover();
+    this.hideSessionPopover();
     this.paintSession();
     Sidebar.renderSessions();
     return state.navigation;
@@ -231,14 +265,24 @@ const App = {
 
   async refreshSessions() {
     const request = this.sessionListRequest = (this.sessionListRequest ?? 0) + 1;
-    const sessions = await guard(api.sessions.list(), '加载对话列表');
+    const [sessions, workspaces] = await Promise.all([
+      guard(api.sessions.list(), '加载对话列表'),
+      typeof api.workspaces?.list === 'function'
+        ? guard(api.workspaces.list(), '加载工作区')
+        : Promise.resolve({ items: [], archivedSessionIds: [] }),
+    ]);
     if (!sessions || request !== this.sessionListRequest) return;
+    if (workspaces) {
+      state.workspaces = workspaces.items ?? [];
+      state.archivedSessionIds = workspaces.archivedSessionIds ?? [];
+    }
     // Harness hides blank sessions. Keep locally created drafts navigable until first send.
     const known = new Set(sessions.map((session) => session.sessionId));
     const drafts = state.sessions.filter((session) => !known.has(session.sessionId)
       && state.sessionViews.has(session.sessionId));
     state.sessions = [...drafts, ...sessions];
     Sidebar.renderSessions();
+    if (state.sessionQuery.trim()) this.searchSessions(state.sessionQuery);
   },
 
   refreshSessionsThrottled() {
@@ -251,6 +295,8 @@ const App = {
 
   async openSession(sessionId) {
     if (!sessionId) return;
+    const summary = state.sessions.find((session) => session.sessionId === sessionId);
+    state.preferredWorkspaceId = summary?.workspaceId ?? null;
     const view = this.sessionView(sessionId);
     view.loading = true;
     const navigation = this.activateSession(sessionId);
@@ -265,7 +311,7 @@ const App = {
     ChatView.scrollToEnd();
   },
 
-  async newSession() {
+  async newSession(workspaceId = state.preferredWorkspaceId) {
     if (state.creatingSession) return null;
     state.creatingSession = true;
     this.renderStreamingState();
@@ -274,7 +320,7 @@ const App = {
     const intendedPermission = state.pendingPermission
       ?? defaultPermission(state.ui.defaultPermission);
     try {
-      const created = await guard(api.sessions.create(), '新建对话');
+      const created = await guard(api.sessions.create(workspaceId ? { workspaceId } : {}), '新建对话');
       if (!created?.sessionId) return null;
       const sessionId = created.sessionId;
       const view = this.sessionView(sessionId);
@@ -283,7 +329,7 @@ const App = {
       view.permissionMode = intendedPermission;
       if (!view.transcript) view.transcript = { sessionId, items: [], title: null, usage: {}, running: false };
       if (!state.sessions.some((session) => session.sessionId === sessionId)) {
-        state.sessions.unshift({ sessionId, title: null, updatedAt: Date.now() });
+        state.sessions.unshift({ sessionId, title: null, updatedAt: Date.now(), workspaceId: workspaceId ?? null, archived: false });
       }
       // Do not pull the user back if they deliberately navigated while creation was pending.
       const activated = navigation === state.navigation;
@@ -308,6 +354,192 @@ const App = {
     } finally {
       state.creatingSession = false;
       this.renderStreamingState();
+    }
+  },
+
+  queueSessionSearch(value) {
+    const query = String(value ?? '').trim();
+    state.sessionQuery = query;
+    clearTimeout(this.sessionSearchTimer);
+    if (!query) {
+      this.sessionSearchRequest = (this.sessionSearchRequest ?? 0) + 1;
+      state.sessionSearchResults = null;
+      state.sessionSearchHasMore = false;
+      state.sessionSearchBusy = false;
+      Sidebar.renderSessions();
+      return;
+    }
+    state.sessionSearchBusy = true;
+    Sidebar.renderSessions();
+    this.sessionSearchTimer = setTimeout(() => this.searchSessions(query), 260);
+  },
+
+  async searchSessions(query) {
+    const request = this.sessionSearchRequest = (this.sessionSearchRequest ?? 0) + 1;
+    const result = await guard(api.sessions.search(query), '搜索对话');
+    if (request !== this.sessionSearchRequest || query !== state.sessionQuery) return;
+    state.sessionSearchBusy = false;
+    state.sessionSearchResults = result?.items ?? [];
+    state.sessionSearchHasMore = Boolean(result?.hasMore);
+    Sidebar.renderSessions();
+  },
+
+  async addWorkspace() {
+    if (this.addingWorkspace || typeof api.workspaces?.add !== 'function') return;
+    this.addingWorkspace = true;
+    const button = document.getElementById('add-workspace');
+    button.disabled = true;
+    try {
+      const result = await guard(api.workspaces.add(), '添加工作区');
+      if (!result?.workspace) return;
+      state.preferredWorkspaceId = result.workspace.workspaceId;
+      await this.refreshSessions();
+      toast(result.created ? `已添加工作区“${result.workspace.title}”` : `工作区“${result.workspace.title}”已存在`, 'ok');
+    } finally {
+      this.addingWorkspace = false;
+      button.disabled = false;
+    }
+  },
+
+  toggleSessionPopover(button, sessionId) {
+    const popover = document.getElementById('session-popover');
+    if (!popover.hidden && state.sessionMenuId === sessionId) {
+      this.hideSessionPopover();
+      return;
+    }
+    state.sessionMenuId = sessionId;
+    const session = state.sessions.find((item) => item.sessionId === sessionId)
+      ?? state.sessionSearchResults?.find((item) => item.sessionId === sessionId);
+    popover.querySelector('[data-session-action="archive"]').hidden = Boolean(session?.archived);
+    popover.hidden = false;
+    const rect = button.getBoundingClientRect();
+    const width = 218;
+    popover.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width))}px`;
+    const height = popover.offsetHeight || 126;
+    popover.style.top = `${Math.max(8, Math.min(window.innerHeight - height - 8, rect.bottom + 5))}px`;
+  },
+
+  hideSessionPopover() {
+    const popover = document.getElementById('session-popover');
+    if (popover) popover.hidden = true;
+    state.sessionMenuId = null;
+  },
+
+  closeSessionPopoverFromOutside(target) {
+    const popover = document.getElementById('session-popover');
+    if (!popover || popover.hidden) return;
+    if (popover.contains(target) || target.closest?.('[data-session-menu]')) return;
+    this.hideSessionPopover();
+  },
+
+  openActionDialog({ title, message, confirmLabel = '确定', inputValue, danger = false }) {
+    if (this.actionDialog) this.closeActionDialog(null);
+    const backdrop = document.getElementById('action-backdrop');
+    const dialog = backdrop.querySelector('.action-dialog');
+    const input = document.getElementById('action-input');
+    document.getElementById('action-title').textContent = title;
+    document.getElementById('action-message').textContent = message;
+    document.getElementById('action-icon').textContent = danger ? '!' : '✎';
+    document.getElementById('action-confirm').textContent = confirmLabel;
+    document.getElementById('action-confirm').classList.toggle('danger', danger);
+    dialog.classList.toggle('danger', danger);
+    input.hidden = inputValue === undefined;
+    input.value = inputValue ?? '';
+    backdrop.hidden = false;
+    return new Promise((resolve) => {
+      this.actionDialog = { resolve, expectsInput: inputValue !== undefined };
+      requestAnimationFrame(() => (input.hidden ? document.getElementById('action-confirm') : input).focus());
+    });
+  },
+
+  confirmActionDialog() {
+    if (!this.actionDialog) return;
+    if (this.actionDialog.expectsInput) {
+      const value = document.getElementById('action-input').value.trim();
+      if (!value) { toast('对话名称不能为空', 'err'); return; }
+      this.closeActionDialog(value);
+      return;
+    }
+    this.closeActionDialog(true);
+  },
+
+  closeActionDialog(value) {
+    const pending = this.actionDialog;
+    this.actionDialog = null;
+    document.getElementById('action-backdrop').hidden = true;
+    pending?.resolve(value);
+  },
+
+  async runSessionAction(action) {
+    const sessionId = state.sessionMenuId;
+    const session = state.sessions.find((item) => item.sessionId === sessionId)
+      ?? state.sessionSearchResults?.find((item) => item.sessionId === sessionId);
+    this.hideSessionPopover();
+    if (!sessionId || !session) return;
+    if (action === 'rename') {
+      const title = await this.openActionDialog({
+        title: '重命名对话',
+        message: '输入一个便于以后查找的名称。',
+        confirmLabel: '保存',
+        inputValue: session.title || this.sessionView(sessionId).transcript?.title || '新对话',
+      });
+      if (!title) return;
+      const renamed = await guard(api.sessions.rename(sessionId, title), '重命名失败');
+      if (!renamed) return;
+      session.title = renamed.title ?? title;
+      const view = this.sessionView(sessionId);
+      if (view.transcript) view.transcript = { ...view.transcript, title: session.title };
+      Sidebar.renderAll();
+      toast('对话已重命名', 'ok');
+      this.refreshSessionsThrottled();
+      return;
+    }
+    if (action === 'fork') {
+      toast('正在从最近一次完整交互创建新对话…');
+      const created = await guard(api.sessions.fork(sessionId), '创建新对话失败');
+      if (!created?.sessionId) return;
+      state.sessions.unshift({
+        sessionId: created.sessionId,
+        title: session.title ? `${session.title}（副本）` : '新对话',
+        updatedAt: Date.now(),
+        workspaceId: session.workspaceId ?? null,
+        parentSessionId: sessionId,
+        archived: false,
+      });
+      await this.openSession(created.sessionId);
+      this.refreshSessionsThrottled();
+      toast(created.warnings?.length
+        ? `已创建新对话；${created.warnings.join('；')}`
+        : '已创建独立新对话，原对话保持不变', created.warnings?.length ? 'err' : 'ok');
+      return;
+    }
+    if (action === 'archive' && !session.archived) {
+      const view = this.sessionView(sessionId);
+      if (view.sending || view.transcript?.running || session.running) {
+        toast('任务运行中，请先停止后再归档', 'err');
+        return;
+      }
+      const confirmed = await this.openActionDialog({
+        title: '归档此对话？',
+        message: '归档只会从当前列表隐藏对话，不会删除本地聊天记录。之后可在“已归档”中查看。',
+        confirmLabel: '归档',
+        danger: true,
+      });
+      if (!confirmed) return;
+      const result = await guard(api.sessions.archive(sessionId), '归档失败');
+      if (!result) return;
+      const wasActive = state.activeSessionId === sessionId;
+      await this.refreshSessions();
+      if (wasActive) {
+        const next = state.sessions.find((item) => !item.archived && item.sessionId !== sessionId);
+        if (next) await this.openSession(next.sessionId);
+        else {
+          this.activateSession(null);
+          await this.loadSelection(null);
+          this.paintSession();
+        }
+      }
+      toast('对话已归档', 'ok');
     }
   },
 

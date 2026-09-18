@@ -14,25 +14,72 @@ const Sidebar = {
     };
     const activeCount = sessions.filter((session) => taskState(session).running || taskState(session).waiting).length;
     const heading = document.getElementById('sessions-status');
-    if (heading) heading.textContent = activeCount ? `对话 · ${activeCount} 个任务进行中` : '对话';
-    if (!sessions.length) {
-      list.innerHTML = '<div class="session-empty">还没有对话，点击“新建对话”开始。</div>';
-      return;
+    const query = state.sessionQuery.trim();
+    if (heading) heading.textContent = query
+      ? (state.sessionSearchBusy ? '正在搜索…' : `搜索结果 · ${(state.sessionSearchResults ?? []).length}`)
+      : state.showArchived ? '已归档'
+        : activeCount ? `对话 · ${activeCount} 个任务进行中` : '对话';
+    const archivedToggle = document.getElementById('toggle-archived');
+    if (archivedToggle) {
+      archivedToggle.classList.toggle('active', state.showArchived);
+      archivedToggle.title = state.showArchived ? '返回当前对话' : '查看已归档对话';
+      archivedToggle.setAttribute('aria-label', archivedToggle.title);
     }
-    list.innerHTML = sessions.map((session) => {
+    const preferred = (state.workspaces ?? []).find((workspace) => workspace.workspaceId === state.preferredWorkspaceId);
+    const newLabel = document.getElementById('new-chat-label');
+    if (newLabel) newLabel.textContent = preferred ? `在 ${preferred.title} 新建对话` : '新建对话';
+
+    const row = (session) => {
       const { view, waiting, running } = taskState(session);
       const title = esc(view?.transcript?.title || session.title || '新对话');
       const active = session.sessionId === state.activeSessionId ? ' active' : '';
       const label = waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
       const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
+      const snippet = session.snippet ? `<span class="session-snippet">${esc(session.snippet)}</span>` : '';
       return (
-        `<button class="session-item${active}" data-session="${esc(session.sessionId)}" title="${title}">` +
-        (running ? '<span class="s-run" aria-hidden="true"></span>' : '') +
-        `<span class="s-title">${title}</span>` +
-        `<span class="s-meta${statusClass}">${esc(label)}</span>` +
-        '</button>'
+        `<div class="session-row${active}" data-session-row="${esc(session.sessionId)}">` +
+          `<button class="session-item" data-session="${esc(session.sessionId)}" title="${title}">` +
+            (running ? '<span class="s-run" aria-hidden="true"></span>' : '') +
+            `<span class="session-title-wrap"><span class="s-title">${title}</span>${snippet}</span>` +
+            (session.archived ? '<span class="archived-badge">归档</span>' : `<span class="s-meta${statusClass}">${esc(label)}</span>`) +
+          '</button>' +
+          `<button class="session-menu" data-session-menu="${esc(session.sessionId)}" title="对话操作" aria-label="${title}的操作">` +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>' +
+          '</button>' +
+        '</div>'
       );
+    };
+
+    if (query) {
+      const results = state.sessionSearchResults ?? [];
+      list.innerHTML = results.length
+        ? results.map(row).join('') + (state.sessionSearchHasMore ? '<div class="session-empty">仅显示前 20 个内容匹配结果，请输入更具体的关键词。</div>' : '')
+        : `<div class="session-empty">${state.sessionSearchBusy ? '正在搜索对话内容…' : '没有找到相关对话。'}</div>`;
+      return;
+    }
+
+    const visible = sessions.filter((session) => Boolean(session.archived) === Boolean(state.showArchived));
+    if (!visible.length && state.showArchived) {
+      list.innerHTML = '<div class="session-empty">还没有已归档的对话。</div>';
+      return;
+    }
+    const workspaceMarkup = (state.workspaces ?? []).map((workspace) => {
+      const members = visible.filter((session) => session.workspaceId === workspace.workspaceId);
+      if (state.showArchived && !members.length) return '';
+      return `<section class="workspace-group" data-workspace="${esc(workspace.workspaceId)}">` +
+        `<div class="workspace-head" title="${esc(workspace.path)}">` +
+          '<svg class="workspace-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /></svg>' +
+          `<span class="workspace-name">${esc(workspace.title)}</span>` +
+          (state.showArchived ? '' : `<button class="workspace-new" data-workspace-new="${esc(workspace.workspaceId)}" title="在此工作区新建对话" aria-label="在${esc(workspace.title)}新建对话"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>`) +
+        '</div>' +
+        (members.length ? members.map(row).join('') : '<div class="workspace-empty">暂无对话</div>') +
+      '</section>';
     }).join('');
+    const loose = visible.filter((session) => !session.workspaceId);
+    const looseMarkup = loose.length
+      ? `<section class="workspace-group"><div class="workspace-head"><span class="workspace-name">${state.workspaces?.length ? '其他对话' : '最近对话'}</span></div>${loose.map(row).join('')}</section>`
+      : '';
+    list.innerHTML = workspaceMarkup + looseMarkup || '<div class="session-empty">还没有对话，点击“新建对话”开始。</div>';
   },
 
   /**

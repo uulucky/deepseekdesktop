@@ -85,10 +85,14 @@ const transcript = {
 };
 
 const sessions = [
-  { sessionId: 'session-demo', title: '把 README 改写成新手版本', cwd: '/home/user/deepseek', agentPreset: 'standard', running: false, updatedAt: now - 60000, turns: 4 },
-  { sessionId: 'session-2', title: '批量重命名脚本', cwd: '/home/user/deepseek', agentPreset: 'code', running: true, updatedAt: now - 3600e3, turns: 2 },
-  { sessionId: 'session-3', title: '整理接口文档', cwd: '/home/user/docs', agentPreset: 'standard', running: false, updatedAt: now - 86400e3, turns: 9 },
+  { sessionId: 'session-demo', title: '把 README 改写成新手版本', cwd: '/home/user/deepseek', workspaceId: 'workspace-deepseek', archived: false, agentPreset: 'standard', running: false, updatedAt: now - 60000, turns: 4 },
+  { sessionId: 'session-2', title: '批量重命名脚本', cwd: '/home/user/deepseek', workspaceId: 'workspace-deepseek', archived: false, agentPreset: 'code', running: true, updatedAt: now - 3600e3, turns: 2 },
+  { sessionId: 'session-3', title: '整理接口文档', cwd: '/home/user/docs', workspaceId: null, archived: false, agentPreset: 'standard', running: false, updatedAt: now - 86400e3, turns: 9 },
 ];
+const workspaces = {
+  items: [{ workspaceId: 'workspace-deepseek', path: '/home/user/deepseek', title: 'deepseek', sessionIds: ['session-demo', 'session-2'], createdAt: new Date(now - 86400e3 * 10).toISOString(), updatedAt: new Date(now).toISOString() }],
+  archivedSessionIds: [],
+};
 let selection = { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' };
 let permissionMode = 'danger-full-access';
 const catalog = {
@@ -157,9 +161,25 @@ function registerStubIpc() {
   ipcMain.handle('app:open-external', () => ok(true));
   ipcMain.handle('app:open-path', () => ok(true));
   ipcMain.handle('sessions:list', () => ok(sessions));
+  ipcMain.handle('sessions:search', (_event, query) => ok({
+    items: sessions.filter(item => item.title.includes(query)).map(item => ({ ...item, snippet: `标题匹配：${item.title}` })),
+    hasMore: false,
+  }));
   ipcMain.handle('sessions:open', () => ok(transcript));
   ipcMain.handle('sessions:refresh', () => ok(transcript));
   ipcMain.handle('sessions:create', () => ok({ sessionId: 'session-new' }));
+  ipcMain.handle('sessions:rename', (_event, sessionId, title) => {
+    const item = sessions.find(entry => entry.sessionId === sessionId);
+    if (item) item.title = title;
+    return ok({ title, seq: 1 });
+  });
+  ipcMain.handle('sessions:fork', (_event, sessionId) => ok({ sessionId: `${sessionId}-copy` }));
+  ipcMain.handle('sessions:archive', (_event, sessionId) => {
+    if (!workspaces.archivedSessionIds.includes(sessionId)) workspaces.archivedSessionIds.push(sessionId);
+    const item = sessions.find(entry => entry.sessionId === sessionId);
+    if (item) item.archived = true;
+    return ok({ archivedSessionIds: workspaces.archivedSessionIds });
+  });
   ipcMain.handle('sessions:model-selection', () => ok({ current: selection, routable: true }));
   ipcMain.handle('sessions:permissions', () => ok({
     currentValue: permissionMode,
@@ -179,6 +199,8 @@ function registerStubIpc() {
     return ok(true);
   });
   ipcMain.handle('sessions:answer-approval', () => ok({ accepted: true, outcome: 'allowed-once' }));
+  ipcMain.handle('workspaces:list', () => ok(workspaces));
+  ipcMain.handle('workspaces:add', () => ok({ created: false, workspace: workspaces.items[0] }));
   ipcMain.handle('llm:catalog', () => ok({ default: selection, registry, official: catalog, failures: [] }));
   ipcMain.handle('llm:select-model', (_event, _sessionId, provider, model, reasoningEffort) => {
     selection = { provider, model, reasoningEffort };
@@ -319,6 +341,47 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.log('PROBE_ERROR', String(error));
   }
+  const managementSearch = await win.webContents.executeJavaScript(`(async () => {
+    const input = document.getElementById('session-search');
+    input.value = '整理接口';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 450));
+    return {
+      rows: document.querySelectorAll('#session-list .session-row').length,
+      heading: document.getElementById('sessions-status').textContent,
+      snippet: document.querySelector('.session-snippet')?.textContent,
+    };
+  })()`);
+  require('node:assert/strict').equal(managementSearch.rows, 1);
+  await win.webContents.executeJavaScript(`(() => {
+    const input = document.getElementById('session-search');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  const managementMenu = await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('[data-session-menu="session-demo"]').click();
+    return {
+      workspaceGroups: document.querySelectorAll('.workspace-group').length,
+      newLabel: document.getElementById('new-chat-label').textContent,
+      menu: [...document.querySelectorAll('#session-popover [data-session-action]')]
+        .filter(button => !button.hidden).map(button => button.textContent.trim()),
+    };
+  })()`);
+  require('node:assert/strict').equal(managementMenu.menu.includes('从此处创建新对话'), true);
+  require('node:assert/strict').equal(managementMenu.menu.some(label => label.includes('分叉')), false);
+  const renameDialog = await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('[data-session-action="rename"]').click();
+    const value = {
+      visible: !document.getElementById('action-backdrop').hidden,
+      title: document.getElementById('action-title').textContent,
+      input: document.getElementById('action-input').value,
+    };
+    document.getElementById('action-cancel').click();
+    return value;
+  })()`);
+  require('node:assert/strict').equal(renameDialog.visible, true);
+  console.log('CONVERSATION MANAGEMENT', JSON.stringify({ search: managementSearch, menu: managementMenu, renameDialog }, null, 2));
   try {
     await win.webContents.executeJavaScript(`(() => {
       const slider = document.getElementById('reasoning-slider');

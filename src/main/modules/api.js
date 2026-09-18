@@ -35,6 +35,12 @@ class DeepSeekHarnessClient {
     this.logicalStreams = new Map();
     this.sessionStreamIds = new Map();
     this.remoteEventStreamId = null;
+    /** One persistent Workspace projection shared by list, archive and create commands. */
+    this.workspaceStreamId = null;
+    this.workspaceReady = false;
+    this.workspaceItems = [];
+    this.archivedSessionIds = [];
+    this.workspaceWaiters = new Set();
     /** Remote approval event id -> answerable request for the current stream generation. */
     this.pendingApprovals = new Map();
     this.frameListeners = new Set();
@@ -134,6 +140,7 @@ class DeepSeekHarnessClient {
       this.setState('connected');
       log('api', 'remote stream carrier open');
       this.openRemoteEventStream();
+      this.openWorkspaceStream();
       for (const sessionId of this.followedSessions) this.openSessionStream(sessionId);
     };
     socket.onmessage = (event) => {
@@ -148,6 +155,8 @@ class DeepSeekHarnessClient {
       this.logicalStreams.clear();
       this.sessionStreamIds.clear();
       this.remoteEventStreamId = null;
+      this.workspaceStreamId = null;
+      this.workspaceReady = false;
       if (this.closed) return;
       this.setState('reconnecting');
       this.scheduleReconnect();
@@ -169,6 +178,13 @@ class DeepSeekHarnessClient {
     this.logicalStreams.clear();
     this.sessionStreamIds.clear();
     this.remoteEventStreamId = null;
+    this.workspaceStreamId = null;
+    this.workspaceReady = false;
+    for (const waiter of this.workspaceWaiters) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new RpcError('workspace/follow', { code: 'disposed', message: '本地服务连接已关闭' }));
+    }
+    this.workspaceWaiters.clear();
     this.clearRemoteApprovals('disposed');
     this.frameListeners.clear();
     this.hostListeners.clear();
@@ -200,6 +216,76 @@ class DeepSeekHarnessClient {
   retryRemoteEventStream() {
     if (this.closed) return;
     setTimeout(() => this.openRemoteEventStream(), 500);
+  }
+
+  /** Keep the Harness Workspace registry and global archive set current. */
+  openWorkspaceStream() {
+    if (this.workspaceStreamId || !this.mux || this.mux.readyState !== WebSocketClient.OPEN) return;
+    const streamId = rid('workspaces');
+    this.workspaceStreamId = streamId;
+    this.logicalStreams.set(streamId, { kind: 'workspaces', streamId });
+    this.mux.send(JSON.stringify({ type: 'open', streamId, endpoint: 'workspace/follow', payload: { args: {} } }));
+  }
+
+  retryWorkspaceStream() {
+    if (this.closed) return;
+    setTimeout(() => this.openWorkspaceStream(), 500);
+  }
+
+  workspaceSnapshot() {
+    return {
+      items: this.workspaceItems.map((item) => ({ ...item, sessionIds: [...(item.sessionIds ?? [])] })),
+      archivedSessionIds: [...this.archivedSessionIds],
+    };
+  }
+
+  resolveWorkspaceWaiters() {
+    if (!this.workspaceReady) return;
+    const value = this.workspaceSnapshot();
+    for (const waiter of this.workspaceWaiters) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(value);
+    }
+    this.workspaceWaiters.clear();
+  }
+
+  handleWorkspaceFrame(full, stream) {
+    if (full.type === 'error' || full.type === 'end') {
+      this.logicalStreams.delete(stream.streamId);
+      if (this.workspaceStreamId === stream.streamId) this.workspaceStreamId = null;
+      this.workspaceReady = false;
+      if (full.type === 'error') log('api', 'workspace follow stream failed', {
+        code: full.error?.code ?? 'unknown', message: full.error?.message ?? 'stream error',
+      });
+      this.retryWorkspaceStream();
+      return;
+    }
+    if (full.type !== 'item' || !full.value) return;
+    const frame = full.value;
+    if (frame.type === 'baseline') {
+      this.workspaceItems = [...(frame.value?.items ?? [])];
+      this.archivedSessionIds = [...(frame.value?.archivedSessionIds ?? [])];
+      this.workspaceReady = true;
+      this.resolveWorkspaceWaiters();
+      return;
+    }
+    if (!this.workspaceReady) return;
+    if (frame.type === 'upsert') {
+      const index = this.workspaceItems.findIndex((item) => item.workspaceId === frame.workspace?.workspaceId);
+      this.workspaceItems = index < 0
+        ? [frame.workspace, ...this.workspaceItems]
+        : this.workspaceItems.map((item, at) => at === index ? frame.workspace : item);
+    } else if (frame.type === 'remove') {
+      this.workspaceItems = this.workspaceItems.filter((item) => item.workspaceId !== frame.workspaceId);
+    } else if (frame.type === 'order') {
+      const rank = new Map((frame.workspaceIds ?? []).map((id, index) => [id, index]));
+      this.workspaceItems = [...this.workspaceItems].sort((left, right) => (
+        (rank.get(left.workspaceId) ?? Number.MAX_SAFE_INTEGER)
+        - (rank.get(right.workspaceId) ?? Number.MAX_SAFE_INTEGER)
+      ));
+    } else if (frame.type === 'archived') {
+      this.archivedSessionIds = [...(frame.archivedSessionIds ?? [])];
+    }
   }
 
   /** Drop UI state owned by a dead Remote-event generation. Pending Host asks are redelivered. */
@@ -331,6 +417,10 @@ class DeepSeekHarnessClient {
       this.handleRemoteEventFrame(full, stream);
       return;
     }
+    if (stream.kind === 'workspaces') {
+      this.handleWorkspaceFrame(full, stream);
+      return;
+    }
     if (full.type === 'error' || full.type === 'end') {
       this.logicalStreams.delete(stream.streamId);
       this.sessionStreamIds.delete(stream.sessionId);
@@ -414,7 +504,65 @@ class DeepSeekHarnessClient {
     }
     return items;
   }
-  searchSessions(query) { return this.call('session/search', { request: { query } }); }
+  async searchSessions(query) {
+    const text = typeof query === 'string' ? query.trim() : '';
+    if (!text) return { items: [], hasMore: false };
+    try {
+      return await this.call('session/search', { request: { query: text } });
+    } catch (error) {
+      // The pinned `dsh web` currently exposes session/search while its optional query index
+      // may be configured with openAt="never". Keep search useful by reading local history;
+      // this never sends conversation content off the machine.
+      if (['unauthorized', 'forbidden'].includes(error?.code)) throw error;
+      log('api', 'indexed session search unavailable; using local history scan', {
+        code: error?.code ?? 'unknown', message: error?.message ?? String(error),
+      });
+      return this.searchSessionHistory(text);
+    }
+  }
+
+  async searchSessionHistory(query) {
+    const summaries = (await this.listSessions()).filter((item) => !item.blank);
+    const items = [];
+    let hasMore = false;
+    for (const summary of summaries) {
+      const snippet = await this.findInSession(summary.sessionId, query);
+      if (snippet === null) continue;
+      if (items.length < 20) items.push({ sessionId: summary.sessionId, snippet });
+      else { hasMore = true; break; }
+    }
+    return { items, hasMore };
+  }
+
+  async findInSession(sessionId, query) {
+    const needle = query.toLocaleLowerCase('zh-CN');
+    let beforeSeq;
+    // Bound one query so a corrupt or enormous transcript cannot hold the renderer forever.
+    for (let page = 0; page < 25; page += 1) {
+      const value = await this.history(sessionId, beforeSeq, 40);
+      const records = value.events ?? [];
+      for (const record of records) {
+        const strings = [];
+        const visit = (entry) => {
+          if (typeof entry === 'string') strings.push(entry);
+          else if (Array.isArray(entry)) entry.forEach(visit);
+          else if (entry && typeof entry === 'object') Object.values(entry).forEach(visit);
+        };
+        visit(record?.event?.data);
+        const content = strings.join(' ').replace(/\s+/g, ' ').trim();
+        const index = content.toLocaleLowerCase('zh-CN').indexOf(needle);
+        if (index >= 0) {
+          const start = Math.max(0, index - 80);
+          const end = Math.min(content.length, index + query.length + 120);
+          return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
+        }
+      }
+      if (!value.hasMore || !records.length) break;
+      beforeSeq = records[0]?.event?.seq;
+      if (!Number.isSafeInteger(beforeSeq)) break;
+    }
+    return null;
+  }
   createSession(payload) { return this.call('session/create', { request: payload }); }
   async history(sessionId, beforeSeq, maxMessages = 1) {
     if (beforeSeq === undefined || !this.sessionCursors.has(sessionId)) await this.listSessions();
@@ -511,7 +659,35 @@ class DeepSeekHarnessClient {
     return this.call('session/attachment', { request: { sessionId, attachmentId } });
   }
 
-  listWorkspaces() { return Promise.resolve([]); }
+  async listWorkspaces({ timeoutMs = 10000 } = {}) {
+    if (this.workspaceReady) return this.workspaceSnapshot();
+    this.openWorkspaceStream();
+    return new Promise((resolve, reject) => {
+      const waiter = { resolve, reject, timer: null };
+      waiter.timer = setTimeout(() => {
+        this.workspaceWaiters.delete(waiter);
+        reject(new RpcError('workspace/follow', { code: 'timeout', message: '读取工作区超时' }));
+      }, timeoutMs);
+      this.workspaceWaiters.add(waiter);
+      this.resolveWorkspaceWaiters();
+    });
+  }
+  async createWorkspace(path) {
+    const value = await this.call('workspace/create', { request: { path } });
+    const workspace = value.workspace;
+    if (workspace) {
+      const index = this.workspaceItems.findIndex((item) => item.workspaceId === workspace.workspaceId);
+      this.workspaceItems = index < 0
+        ? [workspace, ...this.workspaceItems]
+        : this.workspaceItems.map((item, at) => at === index ? workspace : item);
+    }
+    return value;
+  }
+  async archiveSession(sessionId) {
+    const value = await this.call('workspace/archiveSession', { request: { sessionId } });
+    this.archivedSessionIds = [...(value.archivedSessionIds ?? [])];
+    return value;
+  }
   listAgentPresets() { return this.call('agentPresets/list', {}); }
   listSkills(sessionId) {
     return this.call('skills/list', { request: {

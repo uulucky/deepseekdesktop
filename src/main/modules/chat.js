@@ -536,9 +536,10 @@ class ChatController {
   }
 
   /** Create a session and return its id (+ the preset that actually bound). */
-  async createSession({ cwd, agentPreset } = {}) {
+  async createSession({ cwd, workspaceId, agentPreset } = {}) {
     const payload = {};
-    if (cwd) payload.cwd = cwd;
+    if (workspaceId) payload.workspaceId = workspaceId;
+    else if (cwd) payload.cwd = cwd;
     if (agentPreset) payload.agentPreset = agentPreset;
     const created = await this.client.createSession(payload);
     const transcript = new Transcript(created.sessionId);

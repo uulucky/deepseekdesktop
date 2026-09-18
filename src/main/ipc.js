@@ -71,6 +71,38 @@ function registerIpc(services) {
     restored.add(sessionId);
     return current;
   };
+  const workspaceState = async (client) => client.listWorkspaces().catch((error) => {
+    log('ipc', 'workspace projection unavailable', String(error));
+    return { items: [], archivedSessionIds: [] };
+  });
+  const sessionRows = async () => {
+    const ctx = getContext();
+    const [items, workspaces] = await Promise.all([
+      ctx.client.listSessions(),
+      workspaceState(ctx.client),
+    ]);
+    service('chat')?.observeRunning?.(items);
+    const membership = new Map();
+    for (const workspace of workspaces.items ?? []) {
+      for (const sessionId of workspace.sessionIds ?? []) membership.set(sessionId, workspace.workspaceId);
+    }
+    const archived = new Set(workspaces.archivedSessionIds ?? []);
+    return items
+      .filter((item) => !item.blank)
+      .map((item) => ({
+        sessionId: item.sessionId,
+        title: item.projections?.values?.title ?? null,
+        cwd: item.cwd,
+        agentPreset: item.agentPreset,
+        parentSessionId: item.parentSessionId ?? null,
+        workspaceId: membership.get(item.sessionId) ?? null,
+        archived: archived.has(item.sessionId),
+        running: Boolean(item.running),
+        updatedAt: item.updatedAt,
+        turns: item.projections?.values?.sessionStats?.turns ?? 0,
+      }))
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  };
 
   // ------------------------------------------------------------------ lifecycle
   handle('app:info', () => {
@@ -110,38 +142,79 @@ function registerIpc(services) {
   });
 
   // ------------------------------------------------------------------- sessions
-  handle('sessions:list', async () => {
+  handle('sessions:list', sessionRows);
+  handle('sessions:search', async (query) => {
+    const text = typeof query === 'string' ? query.trim() : '';
+    if (!text) return { items: [], hasMore: false };
     const ctx = getContext();
-    const items = await ctx.client.listSessions();
-    service('chat')?.observeRunning?.(items);
-    return items
-      .filter((item) => !item.blank)
-      .map((item) => ({
-        sessionId: item.sessionId,
-        title: item.projections?.values?.title ?? null,
-        cwd: item.cwd,
-        agentPreset: item.agentPreset,
-        running: Boolean(item.running),
-        updatedAt: item.updatedAt,
-        turns: item.projections?.values?.sessionStats?.turns ?? 0,
-      }))
-      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    const [searched, rows] = await Promise.all([
+      ctx.client.searchSessions(text),
+      sessionRows(),
+    ]);
+    const snippets = new Map((searched.items ?? []).map((item) => [item.sessionId, item.snippet]));
+    const folded = text.toLocaleLowerCase('zh-CN');
+    const items = rows
+      .filter((row) => snippets.has(row.sessionId)
+        || String(row.title ?? '').toLocaleLowerCase('zh-CN').includes(folded))
+      .map((row) => ({ ...row, snippet: snippets.get(row.sessionId) ?? '' }));
+    return { items, hasMore: Boolean(searched.hasMore) };
   });
   handle('sessions:open', async (sessionId) => {
     await restorePermission(sessionId);
     return service('chat').open(sessionId);
   });
   handle('sessions:refresh', (sessionId) => service('chat').refresh(sessionId));
-  handle('sessions:create', async () => {
+  handle('sessions:create', async (request = {}) => {
     const ctx = getContext();
-    const created = await service('chat').createSession(ctx.defaultSessionOptions());
+    const options = ctx.defaultSessionOptions();
+    const workspaceId = typeof request?.workspaceId === 'string' ? request.workspaceId.trim() : '';
+    if (workspaceId) {
+      delete options.cwd;
+      options.workspaceId = workspaceId;
+    }
+    const created = await service('chat').createSession(options);
     // The renderer alone must not be responsible for initial tool permissions.
     await selectPermission(created.sessionId, reusablePermission(ctx.uiStore?.get('defaultPermission', null)));
     return created;
   });
   handle('sessions:rename', async (sessionId, title) => {
-    const result = await getContext().client.renameSession(sessionId, title);
+    const normalized = typeof title === 'string' ? title.trim() : '';
+    if (!normalized) throw new Error('对话名称不能为空');
+    const result = await getContext().client.renameSession(sessionId, normalized);
     return result;
+  });
+  handle('sessions:archive', async (sessionId) => {
+    const ctx = getContext();
+    const summary = (await ctx.client.listSessions()).find((item) => item.sessionId === sessionId);
+    if (summary?.running) throw new Error('任务运行中，请先停止后再归档');
+    const result = await ctx.client.archiveSession(sessionId);
+    service('chat').close(sessionId);
+    return result;
+  });
+  handle('sessions:fork', async (sessionId) => {
+    const ctx = getContext();
+    const [models, permissions] = await Promise.all([
+      ctx.client.sessionModels(sessionId).catch(() => null),
+      restorePermission(sessionId).catch(() => null),
+    ]);
+    const created = await ctx.client.forkSession(sessionId);
+    const warnings = [];
+    if (permissions?.currentValue) {
+      try { await selectPermission(created.sessionId, permissions.currentValue); }
+      catch (error) { warnings.push(`权限未复制：${String(error?.message ?? error)}`); }
+    }
+    if (models?.current?.provider && models.current.model) {
+      try {
+        await ctx.client.selectModel(
+          created.sessionId,
+          models.current.provider,
+          models.current.model,
+          models.current.reasoningEffort,
+        );
+      } catch (error) { warnings.push(`模型未复制：${String(error?.message ?? error)}`); }
+    }
+    if (warnings.length) log('ipc', 'session copied with fallback settings', { sessionId: created.sessionId, warnings });
+    return { ...created, warnings };
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
   handle('sessions:prompt', async (sessionId, text) => {
@@ -159,6 +232,21 @@ function registerIpc(services) {
   });
   handle('sessions:permissions', (sessionId) => getContext().client.permissions(sessionId));
   handle('sessions:select-permission', selectPermission);
+
+  // ---------------------------------------------------------------- workspaces
+  handle('workspaces:list', () => getContext().client.listWorkspaces());
+  handle('workspaces:add', async () => {
+    const ctx = getContext();
+    const owner = ctx.windows.main && !ctx.windows.main.isDestroyed() ? ctx.windows.main : undefined;
+    const options = {
+      title: '添加工作区',
+      buttonLabel: '添加此文件夹',
+      properties: ['openDirectory', 'createDirectory'],
+    };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    return ctx.client.createWorkspace(result.filePaths[0]);
+  });
 
   // ----------------------------------------------------------------------- llm
   handle('llm:catalog', async () => {

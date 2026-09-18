@@ -27,15 +27,30 @@
 
       <button class="new-chat" id="new-chat">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-        <span>新建对话</span>
+        <span id="new-chat-label">新建对话</span>
       </button>
+
+      <div class="session-toolbar">
+        <label class="session-search" for="session-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M16 16l4 4" /></svg>
+          <input id="session-search" type="search" autocomplete="off" placeholder="搜索对话内容" />
+        </label>
+        <button class="workspace-add" id="add-workspace" title="添加工作区" aria-label="添加工作区">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M16 12v5M13.5 14.5h5" /></svg>
+        </button>
+      </div>
 
       <div class="rail-section">
         <div class="rail-section-head">
           <span id="sessions-status" aria-live="polite">对话</span>
-          <button class="ghost-icon" id="refresh-sessions" title="刷新列表" aria-label="刷新列表">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
-          </button>
+          <span class="rail-section-actions">
+            <button class="ghost-icon" id="toggle-archived" title="查看已归档对话" aria-label="查看已归档对话">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6" /></svg>
+            </button>
+            <button class="ghost-icon" id="refresh-sessions" title="刷新列表" aria-label="刷新列表">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
+            </button>
+          </span>
         </div>
         <div class="session-list" id="session-list"></div>
       </div>
@@ -131,6 +146,38 @@
     <div class="popover-head">选择模型</div>
     <div class="popover-body" id="model-list"></div>
     <div class="popover-foot" id="model-foot"></div>
+  </div>
+
+  <!-- ── Conversation actions ───────────────────────────────────────────── -->
+  <div class="session-popover" id="session-popover" role="menu" hidden>
+    <button role="menuitem" data-session-action="rename">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /></svg>
+      <span>重命名</span>
+    </button>
+    <button role="menuitem" data-session-action="fork">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v6a4 4 0 0 0 4 4h6M14 11l3 3-3 3M7 4l-3 3 3 3" /></svg>
+      <span>从此处创建新对话</span>
+    </button>
+    <button class="danger" role="menuitem" data-session-action="archive">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6" /></svg>
+      <span>归档</span>
+    </button>
+  </div>
+
+  <!-- ── Small action dialog (rename / archive confirmation) ───────────── -->
+  <div class="action-backdrop" id="action-backdrop" hidden>
+    <div class="action-dialog" role="dialog" aria-modal="true" aria-labelledby="action-title">
+      <div class="action-icon" id="action-icon"></div>
+      <div class="action-content">
+        <h2 id="action-title"></h2>
+        <p id="action-message"></p>
+        <input class="input" id="action-input" type="text" maxlength="120" hidden />
+        <div class="action-buttons">
+          <button class="btn" id="action-cancel">取消</button>
+          <button class="btn primary" id="action-confirm">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Modal host (settings / account) ─────────────────────────────────── -->
