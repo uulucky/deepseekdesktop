@@ -22,14 +22,26 @@ delete env.DEEPSEEK_DESKTOP_HOME;
 delete env.DEEPSEEK_DESKTOP_DSH_BIN;
 delete env.ELECTRON_RUN_AS_NODE;
 let application, provider;
-async function closeApplication({ allowForce = false } = {}) {
+async function closeApplication({ allowForce = false, page = null } = {}) {
   if (!application) return;
   const current = application;
   const child = current.process();
+  let onExit;
+  const exited = new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) resolve();
+    else {
+      onExit = resolve;
+      child.once('exit', onExit);
+    }
+  });
   let timer;
   try {
     await Promise.race([
-      current.close(),
+      Promise.resolve(page && !page.isClosed()
+        // Exercise the same path as a user clicking the main-window close button. Electron's
+        // closed handler then quits the hidden Harness windows and the application process.
+        ? page.close({ runBeforeUnload: true })
+        : current.evaluate(({ app }) => app.quit())).then(() => exited),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('Electron app close timed out after 30 seconds')), 30_000);
       }),
@@ -40,6 +52,7 @@ async function closeApplication({ allowForce = false } = {}) {
     child.kill();
   } finally {
     clearTimeout(timer);
+    if (onExit) child.removeListener('exit', onExit);
     application = null;
   }
 }
@@ -143,7 +156,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
-  await application.close(); application = null;
+  await closeApplication({ page });
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
   page = await launch();
@@ -162,7 +175,7 @@ async function main() {
   await page.evaluate(id => api.sessions.rename(id, 'Read-only restart fixture'), readOnlySession);
   // Harness persists on a tick. A just-created empty session can otherwise disappear.
   await page.waitForTimeout(1200);
-  await application.close(); application = null;
+  await closeApplication({ page });
   page = await launch();
   assert.equal(await page.evaluate(() => state.ui.defaultPermission), 'read-only');
   await page.evaluate(id => App.openSession(id), readOnlySession);
@@ -172,7 +185,7 @@ async function main() {
   page = await crashRendererAndRecover(page);
   await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
-  await closeApplication({ allowForce: true });
+  await closeApplication({ allowForce: true, page });
   console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
