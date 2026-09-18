@@ -107,7 +107,9 @@ function renderItem(item, approvals = []) {
   }
 
   if (item.kind === 'turn-end' && item.reason && item.reason !== 'stop' && item.reason !== 'completed') {
-    return `<div class="usage-line">回合结束：${esc(String(item.reason))}</div>`;
+    const reason = ({ complete: '完成', aborted: '已停止', cancelled: '已停止', interrupted: '已中断',
+      blocked: '已阻塞', error: '执行失败', 'max-tokens': '已达到输出上限' })[item.reason] ?? String(item.reason);
+    return `<div class="usage-line">回合结束：${esc(reason)}${item.error ? ' · ' + esc(item.error) : ''}</div>`;
   }
   return '';
 }

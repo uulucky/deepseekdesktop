@@ -118,6 +118,8 @@ a { color: var(--brand); }
 .session-item.active { background: var(--panel-2); color: var(--text); }
 .session-item .s-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-item .s-meta { font-size: 11px; color: var(--text-muted); flex: 0 0 auto; }
+.session-item .s-meta.running, .session-item .s-meta.unread { color: var(--ok); }
+.session-item .s-meta.waiting { color: #eab765; }
 .session-item .s-run { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
 .session-empty { padding: 10px; font-size: 12.5px; color: var(--text-muted); }
 

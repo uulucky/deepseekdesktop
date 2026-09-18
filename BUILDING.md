@@ -25,6 +25,8 @@ npm run test:packaged
 
 公开内容包括 Windows 构建日志、契约测试、全新临时 Harness 的真实接口测试、打包后 UI 冒烟截图、原生更新器测试、`SHA256SUMS.txt`、`build-info.json` 与 `sbom.cdx.json`。测试不访问维护者的真实 Key、对话或支付账号。
 
+多任务回归使用回环地址上的可控 SSE 模拟模型：保持 A 流未结束时新建并运行 B，交错接收响应，停止 A 后确认 B 继续完成。真实 Harness 集成和 Windows 打包 UI 都执行这个场景；另有乱序 RPC、快速切换、草稿恢复、后台批准与消息去重契约测试。没有向真实模型发送测试问题或产生 API 费用。
+
 打包测试覆盖本版完整 ZIP 的本地更新解包、文件替换和数据保留；**不是所有旧版本升级链路、杀毒软件和 Windows 配置的认证**。需要真实账户的登录、充值和付费响应不在无人值守 CI 中执行。
 
 ## 本地测试
@@ -43,7 +45,7 @@ npm run test:integration
 Release ZIP 与自动更新分发的是同一 CI 构建文件。可执行：
 
 ```sh
-gh attestation verify DeepSeekDesktop-0.2.20-portable.zip --repo uulucky/deepseekdesktop
+gh attestation verify DeepSeekDesktop-0.2.21-portable.zip --repo uulucky/deepseekdesktop
 node build/verify-update.js latest.json
 ```
 

@@ -14,6 +14,8 @@ delete process.env.DSH_HOME;
 const { Bootstrap } = require('../src/main/modules/bootstrap');
 const { DeepSeekHarnessClient } = require('../src/main/modules/api');
 const { applyHarnessCredential } = require('../src/main/modules/credentials');
+const { ChatController } = require('../src/main/modules/chat');
+const { startModelServer, eventually } = require('./fixtures/model-server');
 const pins = require('../build/runtime-pins.json');
 const entry = process.env.DSH_TEST_KERNEL_ENTRY || [
   path.join(root, 'vendor/kernel/node_modules/@deepseek-ai/dsh/lib/bin.js'),
@@ -31,8 +33,10 @@ async function main() {
   assert(entry, 'Stage the runtime first: npm run runtime:stage (Windows), or npm ci --prefix build/kernel (native)');
   assert.equal(require(path.resolve(entry, '../../package.json')).version, pins.kernelVersion);
   const port = await freePort();
+  const provider = await startModelServer();
+  process.env.DEEPSEEK_BASE_URL = provider.baseUrl;
   const boot = new Bootstrap({ port, emit: () => {} });
-  let client;
+  let client, chat;
   try {
     boot.dshBin = entry;
     await boot.spawnServer(port);
@@ -56,10 +60,39 @@ async function main() {
     client.connect();
     for (let count = 0; count < 100 && !ready; count += 1) await delay(100);
     assert(ready, 'Authenticated approval event stream becomes ready');
-    console.log('PASS isolated real Harness: authentication, session API, permissions, credential persistence, model catalog, approval stream; no paid prompts');
+    chat = new ChatController(client);
+    const options = { agentPreset: 'standard', cwd: path.join(temporary, 'workspace') };
+    const a = (await chat.createSession(options)).sessionId;
+    const group = catalog.groups.find(item => item.id === 'deepseek-official');
+    assert(group, 'Pinned official provider is available');
+    const model = group.models[0].id;
+    await client.selectModel(a, group.id, model, 'off');
+    await chat.send(a, 'multitask-fixture-A');
+    const responseA = await provider.waitFor('multitask-fixture-A');
+    responseA.delta('A partial');
+    await eventually(() => chat.transcripts.get(a)?.items.some(item => item.parts?.some(part => part.text === 'A partial')), 'A streams live');
+    // A remains deliberately unfinished while we create and send B through the real kernel.
+    const b = (await chat.createSession(options)).sessionId;
+    await client.selectModel(b, group.id, model, 'off');
+    await chat.send(b, 'multitask-fixture-B');
+    const responseB = await provider.waitFor('multitask-fixture-B');
+    responseB.delta('B partial');
+    assert(chat.transcripts.get(a).running && chat.transcripts.get(b).running, 'Both sessions run concurrently');
+    assert(client.followedSessions.has(a) && client.followedSessions.has(b));
+    await chat.open(a);
+    await chat.cancel(a);
+    await eventually(() => responseA.closed, 'Cancelling A aborts only its provider stream');
+    assert.equal(responseB.closed, false, 'B stream survives A cancellation');
+    responseB.finish(' B final');
+    await eventually(() => !chat.transcripts.get(b).running, 'Background B settles without reopening the session');
+    assert(chat.transcripts.get(b).items.some(item => item.parts?.some(part => part.text === 'B partial B final')));
+    assert.equal((await client.listSessions()).find(item => item.sessionId === b).running, false);
+    console.log('PASS isolated real Harness: authentication, permissions, credentials, models, approvals, concurrent local-fixture streams and targeted cancellation; no paid prompts');
   } finally {
+    chat?.dispose();
     client?.dispose();
     await boot.stop();
+    await provider.close();
     await delay(500);
     fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }

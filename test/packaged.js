@@ -1,10 +1,12 @@
 'use strict';
-// Real Windows packaged-app smoke. No account login, payment or model prompts.
+// Real Windows packaged-app smoke. Model prompts go only to a loopback SSE fixture.
 const { _electron: electron } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const assert = require('node:assert/strict');
+const { startModelServer } = require('./fixtures/model-server');
+const { multitaskUi } = require('./fixtures/multitask-ui');
 const { spawnSync } = require('node:child_process');
 const version = require('../package.json').version;
 const root = path.resolve(__dirname, '..');
@@ -19,7 +21,7 @@ delete env.DEEPSEEK_API_KEY;
 delete env.DEEPSEEK_DESKTOP_HOME;
 delete env.DEEPSEEK_DESKTOP_DSH_BIN;
 delete env.ELECTRON_RUN_AS_NODE;
-let application;
+let application, provider;
 function extract() {
   const result = spawnSync(bootstrap, ['--app-root', target, '--payload', archive, '--extract-only'], { encoding: 'utf8', timeout: 180000 });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
@@ -45,6 +47,9 @@ async function launch() {
 }
 async function main() {
   assert.equal(process.platform, 'win32', 'Run packaged smoke on Windows');
+  provider = await startModelServer();
+  env.DEEPSEEK_BASE_URL = provider.baseUrl;
+  env.DEEPSEEK_API_KEY = 'sk-local-ui-fixture-not-a-real-key';
   fs.mkdirSync(results, { recursive: true });
   fs.mkdirSync(path.join(target, 'data'), { recursive: true });
   const sentinel = path.join(target, 'data', 'preserve-test.txt');
@@ -79,6 +84,8 @@ async function main() {
   assert.equal(await page.locator('#manual-key-input').inputValue(), 'sk-ui-fixture-not-submitted');
   await page.locator('#modal-close').click();
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
+  await multitaskUi(page, provider);
+  await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
   await application.close(); application = null;
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
@@ -114,5 +121,6 @@ main().catch(async error => {
   process.exitCode = 1;
 }).finally(async () => {
   await application?.close().catch(() => {});
+  await provider?.close();
   fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });

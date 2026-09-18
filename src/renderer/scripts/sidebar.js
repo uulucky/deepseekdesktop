@@ -6,19 +6,30 @@ const Sidebar = {
     const list = document.getElementById('session-list');
     if (!list) return;
     const sessions = state.sessions ?? [];
+    const taskState = (session) => {
+      const view = state.sessionViews.get(session.sessionId);
+      const waiting = Boolean(view?.transcript?.approvals?.length);
+      const running = Boolean(view?.sending || (view?.transcript ? view.transcript.running : session.running));
+      return { view, waiting, running };
+    };
+    const activeCount = sessions.filter((session) => taskState(session).running || taskState(session).waiting).length;
+    const heading = document.getElementById('sessions-status');
+    if (heading) heading.textContent = activeCount ? `对话 · ${activeCount} 个任务进行中` : '对话';
     if (!sessions.length) {
       list.innerHTML = '<div class="session-empty">还没有对话，点击“新建对话”开始。</div>';
       return;
     }
     list.innerHTML = sessions.map((session) => {
-      const title = esc(session.title || '未命名对话');
+      const { view, waiting, running } = taskState(session);
+      const title = esc(view?.transcript?.title || session.title || '新对话');
       const active = session.sessionId === state.activeSessionId ? ' active' : '';
-      const running = session.running ? '<span class="s-run" title="正在运行"></span>' : '';
+      const label = waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
+      const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
       return (
         `<button class="session-item${active}" data-session="${esc(session.sessionId)}" title="${title}">` +
-        running +
+        (running ? '<span class="s-run" aria-hidden="true"></span>' : '') +
         `<span class="s-title">${title}</span>` +
-        `<span class="s-meta">${esc(relativeTime(session.updatedAt))}</span>` +
+        `<span class="s-meta${statusClass}">${esc(label)}</span>` +
         '</button>'
       );
     }).join('');
@@ -170,7 +181,10 @@ const Sidebar = {
     title.textContent = transcript.title || state.sessions.find((s) => s.sessionId === transcript.sessionId)?.title || '未命名对话';
     const usage = transcript.usage ?? {};
     const total = (usage.uncachedInputTokens ?? 0) + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0) + (usage.outputTokens ?? 0);
-    sub.textContent = total ? `本会话约 ${compact(total)} tokens` : '';
+    sub.textContent = state.sessionLoading ? '正在准备对话…' : [
+      transcript.approvals?.length ? '等待你的批准' : state.streaming ? '任务运行中 · 可新建其他对话' : '',
+      total ? `本会话约 ${compact(total)} tokens` : '',
+    ].filter(Boolean).join(' · ');
   },
 
   renderAll() {

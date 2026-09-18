@@ -133,6 +133,8 @@ class Transcript {
   apply(event) {
     if (!event || typeof event !== 'object') return null;
     const { type, seq, time, data } = event;
+    // History reconciliation and the live stream can deliver the same durable event.
+    if (typeof seq === 'number' && seq <= this.lastSeq) return null;
     if (typeof seq === 'number') this.lastSeq = Math.max(this.lastSeq, seq);
     switch (type) {
       case 'user/message': {
@@ -226,11 +228,14 @@ class Transcript {
       case 'turn/start':
         this.running = true;
         return this.pushItem(seq, { kind: 'turn-start', time, turn: data?.turn });
-      case 'turn/end':
+      case 'turn/end': {
+        const reason = typeof data?.reason === 'string' ? data.reason : data?.reason?.kind;
         this.running = false;
         this.finalizeStreaming();
-        this.finalizeTools(data?.reason);
-        return this.pushItem(seq, { kind: 'turn-end', time, turn: data?.turn, reason: data?.reason });
+        this.finalizeTools(reason);
+        return this.pushItem(seq, { kind: 'turn-end', time, turn: data?.turn, reason,
+          error: typeof data?.reason === 'object' ? clip(data.reason.error?.message ?? '', 2000) : '' });
+      }
       case 'session/title': {
         this.title = typeof data === 'string' ? data : data?.title ?? null;
         return null;
@@ -357,7 +362,8 @@ class ChatController {
     /** @type {Map<string, Transcript>} */
     this.transcripts = new Map();
     this.pollers = new Map();
-    this.activeSessionId = null;
+    this.opening = new Map();
+    this.disposed = false;
     this.unsubscribe = this.client.onFrame((frame) => this.handleFrame(frame));
     this.hostUnsubscribe = this.client.onHostFrame?.((frame) => this.handleHostFrame(frame));
   }
@@ -365,7 +371,7 @@ class ChatController {
   handleHostFrame(frame) {
     if (!frame || typeof frame !== 'object') return;
     if (frame.type === 'session/removed' && frame.sessionId) {
-      this.transcripts.delete(frame.sessionId);
+      this.close(frame.sessionId);
       return;
     }
     const transcript = this.transcripts.get(frame.sessionId);
@@ -393,6 +399,10 @@ class ChatController {
       const transcript = this.transcripts.get(frame.sessionId);
       if (!transcript) return;
       transcript.apply(frame.event);
+      if (frame.event?.type === 'turn/end' && !transcript.running) {
+        clearTimeout(this.pollers.get(frame.sessionId));
+        this.pollers.delete(frame.sessionId);
+      }
       if (frame.view?.for === 'call' || frame.view?.for === 'result') {
         // Host-computed presentation views ride along; keep the raw card but let the
         // renderer show a friendlier title when one is present.
@@ -421,7 +431,9 @@ class ChatController {
     if (frame.type === 'session/streaming') {
       const transcript = this.transcripts.get(frame.sessionId);
       if (!transcript) return;
-      transcript.running = Boolean(frame.running);
+      // An assistant attempt ends before tools/approvals and the next reasoning step.
+      // Only turn/end or a successful cancellation ends the whole task.
+      if (frame.running) transcript.running = true;
       if (!frame.running) {
         // Keep buffers indexed until the durable assistant/message arrives so it can replace
         // them; only remove the visual "生成中" marker at logical-stream end.
@@ -445,16 +457,31 @@ class ChatController {
 
   /** Ensure a transcript exists (hydrated from history) and return its snapshot. */
   async open(sessionId, options) {
+    if (this.opening.has(sessionId)) return this.opening.get(sessionId);
     let transcript = this.transcripts.get(sessionId);
     if (!transcript) {
       transcript = new Transcript(sessionId);
       this.transcripts.set(sessionId, transcript);
-      await transcript.hydrate(this.client, options);
+      const pending = (async () => {
+        try {
+          await transcript.hydrate(this.client, options);
+          if (!this.disposed && this.transcripts.get(sessionId) === transcript) {
+            this.client.followSession?.(sessionId);
+            this.syncPendingApprovals(transcript);
+            if (transcript.running) this.watchUntilSettled(sessionId);
+          }
+          return transcript.snapshot();
+        } catch (error) {
+          this.transcripts.delete(sessionId);
+          throw error;
+        } finally {
+          this.opening.delete(sessionId);
+        }
+      })();
+      this.opening.set(sessionId, pending);
+      return pending;
     }
-    if (this.activeSessionId && this.activeSessionId !== sessionId) {
-      this.client.unfollowSession?.(this.activeSessionId);
-    }
-    this.activeSessionId = sessionId;
+    // Navigation is renderer-only. Keep every opened task subscribed independently.
     this.client.followSession?.(sessionId);
     this.syncPendingApprovals(transcript);
     return transcript.snapshot();
@@ -464,7 +491,9 @@ class ChatController {
     // Refresh the inclusive cursor before paging; the cursor cached at startup is otherwise
     // stale and a manual refresh cannot see an answer that just finished.
     await this.client.listSessions();
-    const transcript = new Transcript(sessionId);
+    await this.open(sessionId);
+    const transcript = this.transcripts.get(sessionId);
+    if (!transcript) return null;
     // A refresh must see the newest events: the API only returns the newest window, with
     // the highest seq loaded last, so we keep the highest-seq snapshot of each page.
     let beforeSeq;
@@ -483,13 +512,8 @@ class ChatController {
     }
     collected.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
     for (const event of collected) transcript.apply(event);
-    transcript.finalizeStreaming();
-    this.transcripts.set(sessionId, transcript);
-    if (this.activeSessionId && this.activeSessionId !== sessionId) {
-      this.client.unfollowSession?.(this.activeSessionId);
-    }
-    this.activeSessionId = sessionId;
-    this.client.followSession?.(sessionId);
+    // Merge into the live transcript; replacing it here discards in-flight chunks and
+    // optimistic messages received while history was loading in another conversation.
     this.syncPendingApprovals(transcript);
     return transcript.snapshot();
   }
@@ -501,6 +525,16 @@ class ChatController {
     this.transcripts.delete(sessionId);
   }
 
+  /** Reconnect to tasks already running when the shell opens, without navigating to them. */
+  observeRunning(sessions) {
+    for (const session of sessions) {
+      if (!session.running || this.transcripts.has(session.sessionId)) continue;
+      this.open(session.sessionId).then((transcript) => {
+        if (!this.disposed) this.onUpdate({ sessionId: session.sessionId, transcript });
+      }).catch((error) => log('chat', 'background session subscription failed', String(error)));
+    }
+  }
+
   /** Create a session and return its id (+ the preset that actually bound). */
   async createSession({ cwd, agentPreset } = {}) {
     const payload = {};
@@ -509,10 +543,6 @@ class ChatController {
     const created = await this.client.createSession(payload);
     const transcript = new Transcript(created.sessionId);
     this.transcripts.set(created.sessionId, transcript);
-    if (this.activeSessionId && this.activeSessionId !== created.sessionId) {
-      this.client.unfollowSession?.(this.activeSessionId);
-    }
-    this.activeSessionId = created.sessionId;
     this.client.followSession?.(created.sessionId);
     return created;
   }
@@ -534,13 +564,16 @@ class ChatController {
       seq: undefined,
     };
     transcript.items.push(optimistic);
+    this.client.followSession?.(sessionId);
     this.onUpdate({ sessionId, event: { type: 'optimistic' }, transcript: transcript.snapshot() });
+    this.watchUntilSettled(sessionId);
     try {
       await this.client.prompt(sessionId, text, mode, undefined, requestId);
-      this.watchUntilSettled(sessionId);
     } catch (error) {
       optimistic.pending = false;
       optimistic.failed = String(error?.message ?? error);
+      // A rejected request must not leave an otherwise idle conversation disabled.
+      if (transcript.items.includes(optimistic)) transcript.running = false;
       this.onUpdate({ sessionId, event: { type: 'prompt-failed' }, transcript: transcript.snapshot() });
       throw error;
     }
@@ -572,6 +605,7 @@ class ChatController {
       try {
         await this.client.listSessions();
         const page = await this.client.history(sessionId, undefined, 8);
+        if (this.disposed || this.transcripts.get(sessionId) !== transcript) return;
         const events = (page?.events ?? [])
           .map((entry) => entry?.event ?? entry)
           .filter((event) => event && typeof event.seq === 'number' && event.seq > transcript.lastSeq)
@@ -581,28 +615,29 @@ class ChatController {
       } catch (error) {
         if (attempt === 0) log('chat', 'durable answer reconciliation failed', String(error));
       }
-      if (transcript.running && attempt < 79) this.watchUntilSettled(sessionId, attempt + 1);
-      else if (attempt >= 79 && transcript.running) {
-        transcript.running = false;
-        this.onUpdate({ sessionId, timeout: true, transcript: transcript.snapshot() });
+      if (!this.disposed && this.transcripts.get(sessionId) === transcript && transcript.running) {
+        this.watchUntilSettled(sessionId, attempt + 1);
       }
-    }, 1500);
+    }, Math.min(15000, 1500 + Math.floor(attempt / 20) * 1500));
     this.pollers.set(sessionId, timer);
   }
 
   async cancel(sessionId) {
+    await this.client.cancel(sessionId);
     clearTimeout(this.pollers.get(sessionId));
     this.pollers.delete(sessionId);
-    await this.client.cancel(sessionId);
     const transcript = this.transcripts.get(sessionId);
     if (transcript) {
       transcript.running = false;
+      transcript.finalizeStreaming();
+      transcript.finalizeTools('cancelled');
       this.onUpdate({ sessionId, event: { type: 'cancelled' }, transcript: transcript.snapshot() });
     }
   }
 
   dispose() {
-    if (this.activeSessionId) this.client.unfollowSession?.(this.activeSessionId);
+    this.disposed = true;
+    for (const sessionId of this.transcripts.keys()) this.client.unfollowSession?.(sessionId);
     this.unsubscribe?.();
     this.hostUnsubscribe?.();
     for (const timer of this.pollers.values()) clearTimeout(timer);

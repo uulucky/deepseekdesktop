@@ -48,16 +48,10 @@ const App = {
     api.events.onBootState((boot) => { state.boot = boot; Sidebar.renderProfile(); });
     api.events.onTranscript((payload) => {
       if (!payload?.transcript) return;
-      if (state.activeSessionId && payload.sessionId !== state.activeSessionId) {
+      this.receiveTranscript(payload.sessionId, payload.transcript);
+      if (['optimistic', 'turn/start', 'turn/end'].includes(payload.event?.type) || payload.projection === 'title') {
         this.refreshSessionsThrottled();
-        return;
       }
-      state.transcript = payload.transcript;
-      state.streaming = Boolean(payload.transcript.running);
-      this.renderStreamingState();
-      ChatView.render(state.transcript);
-      Sidebar.renderChatHeader();
-      if (payload.event?.type === 'turn/end') this.refreshSessionsThrottled();
     });
     api.events.onPlatformState((world) => {
       const incoming = world.platform ?? {};
@@ -171,86 +165,169 @@ const App = {
   },
 
   // ------------------------------------------------------------------ sessions
+  sessionView(sessionId = state.activeSessionId) {
+    if (!state.sessionViews.has(sessionId)) state.sessionViews.set(sessionId, {
+      transcript: null, revision: 0, draft: '', loading: false, sending: false,
+      stopping: false, permissionBusy: false, modelBusy: false, unread: false,
+      selection: null, selectionRoutable: false,
+      permissionMode: defaultPermission(state.ui.defaultPermission),
+    });
+    return state.sessionViews.get(sessionId);
+  },
+
+  activateSession(sessionId) {
+    this.sessionView().draft = document.getElementById('input').value;
+    state.navigation += 1;
+    state.activeSessionId = sessionId;
+    const view = this.sessionView();
+    view.unread = false;
+    const input = document.getElementById('input');
+    input.value = view.draft;
+    this.autoGrow(input);
+    this.hidePopover();
+    this.paintSession();
+    Sidebar.renderSessions();
+    return state.navigation;
+  },
+
+  syncSessionControls() {
+    const view = this.sessionView();
+    state.transcript = view.transcript;
+    state.streaming = Boolean(view.sending || view.transcript?.running);
+    state.stopping = view.stopping;
+    state.sessionLoading = Boolean(view.loading || view.initializing);
+    state.selection = view.selection;
+    state.selectionRoutable = view.selectionRoutable;
+    state.permissionMode = view.permissionMode;
+    state.permissionBusy = view.permissionBusy;
+    this.renderStreamingState();
+    Sidebar.renderChatHeader();
+    Sidebar.renderModelChip();
+  },
+
+  paintSession() {
+    this.syncSessionControls();
+    ChatView.render(state.transcript);
+  },
+
+  receiveTranscript(sessionId, transcript, expectedRevision) {
+    if (!sessionId || transcript?.sessionId !== sessionId) return;
+    const view = this.sessionView(sessionId);
+    // A slow open/prompt response must not roll back newer live events for this task.
+    if (expectedRevision !== undefined && view.revision !== expectedRevision) return;
+    const before = view.transcript;
+    view.transcript = transcript;
+    view.revision += 1;
+    if (before?.running && !transcript.running && state.activeSessionId !== sessionId) view.unread = true;
+    if (!state.sessions.some((session) => session.sessionId === sessionId)) {
+      state.sessions.unshift({ sessionId, title: transcript.title, updatedAt: Date.now() });
+    }
+    if (state.activeSessionId === sessionId) this.paintSession();
+    if (!before || before.running !== transcript.running || before.title !== transcript.title
+      || JSON.stringify(before.approvals ?? []) !== JSON.stringify(transcript.approvals ?? [])) {
+      Sidebar.renderSessions();
+    }
+  },
+
   async refreshSessions() {
+    const request = this.sessionListRequest = (this.sessionListRequest ?? 0) + 1;
     const sessions = await guard(api.sessions.list(), '加载对话列表');
-    if (sessions) { state.sessions = sessions; Sidebar.renderSessions(); }
+    if (!sessions || request !== this.sessionListRequest) return;
+    // Harness hides blank sessions. Keep locally created drafts navigable until first send.
+    const known = new Set(sessions.map((session) => session.sessionId));
+    const drafts = state.sessions.filter((session) => !known.has(session.sessionId)
+      && state.sessionViews.has(session.sessionId));
+    state.sessions = [...drafts, ...sessions];
+    Sidebar.renderSessions();
   },
 
   refreshSessionsThrottled() {
-    clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => this.refreshSessions(), 1200);
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      this.refreshSessions();
+    }, 1200);
   },
 
   async openSession(sessionId) {
     if (!sessionId) return;
-    state.activeSessionId = sessionId;
-    Sidebar.renderSessions();
+    const view = this.sessionView(sessionId);
+    view.loading = true;
+    const navigation = this.activateSession(sessionId);
+    const revision = view.revision;
     const transcript = await guard(api.sessions.open(sessionId), '打开对话');
-    if (transcript) {
-      state.transcript = transcript;
-      state.streaming = Boolean(transcript.running);
-      ChatView.render(transcript);
-    }
-    this.renderStreamingState();
-    await Promise.all([this.loadSelection(), this.loadPermission()]);
+    if (transcript) this.receiveTranscript(sessionId, transcript, revision);
+    await Promise.all([this.loadSelection(sessionId), this.loadPermission(sessionId)]);
+    view.loading = false;
+    if (navigation !== state.navigation) return;
+    this.paintSession();
     Sidebar.renderAll();
     ChatView.scrollToEnd();
   },
 
   async newSession() {
+    if (state.creatingSession) return null;
+    state.creatingSession = true;
+    this.renderStreamingState();
+    const navigation = state.navigation;
     const intended = state.pendingSelection ?? state.selection ?? this.localDefaultSelection();
     const intendedPermission = state.pendingPermission
       ?? defaultPermission(state.ui.defaultPermission);
-    const created = await guard(api.sessions.create(), '新建对话');
-    if (!created?.sessionId) return;
-    state.activeSessionId = created.sessionId;
-    state.transcript = { sessionId: created.sessionId, items: [], title: null, usage: {} };
-    state.streaming = false;
-    ChatView.render(state.transcript);
-    Sidebar.renderAll();
-    const permissions = await guard(
-      api.sessions.selectPermission(created.sessionId, intendedPermission),
-      '设置新对话权限',
-    );
-    if (permissions?.currentValue) {
-      state.permissionMode = permissions.currentValue;
-      state.pendingPermission = null;
-    }
-    if (intended?.provider && intended?.model) {
-      const selected = await guard(api.llm.selectModel(
-        created.sessionId,
-        intended.provider,
-        intended.model,
-        intended.reasoningEffort,
-      ), '设置新对话模型');
-      if (selected) {
-        state.selection = selected;
-        state.pendingSelection = null;
+    try {
+      const created = await guard(api.sessions.create(), '新建对话');
+      if (!created?.sessionId) return null;
+      const sessionId = created.sessionId;
+      const view = this.sessionView(sessionId);
+      view.initializing = true;
+      view.selection = intended;
+      view.permissionMode = intendedPermission;
+      if (!view.transcript) view.transcript = { sessionId, items: [], title: null, usage: {}, running: false };
+      if (!state.sessions.some((session) => session.sessionId === sessionId)) {
+        state.sessions.unshift({ sessionId, title: null, updatedAt: Date.now() });
       }
+      // Do not pull the user back if they deliberately navigated while creation was pending.
+      const activated = navigation === state.navigation;
+      if (activated) this.activateSession(sessionId);
+      Sidebar.renderSessions();
+      const permissions = await guard(api.sessions.selectPermission(sessionId, intendedPermission), '设置新对话权限');
+      if (permissions?.currentValue) view.permissionMode = permissions.currentValue;
+      if (intended?.provider && intended?.model) {
+        const selected = await guard(api.llm.selectModel(sessionId, intended.provider, intended.model,
+          intended.reasoningEffort), '设置新对话模型');
+        if (selected) view.selection = selected;
+      }
+      await Promise.all([this.loadSelection(sessionId), this.loadPermission(sessionId)]);
+      view.initializing = false;
+      if (state.activeSessionId === sessionId) {
+        state.pendingSelection = null;
+        state.pendingPermission = null;
+        this.paintSession();
+        this.focusComposer();
+      }
+      return created;
+    } finally {
+      state.creatingSession = false;
+      this.renderStreamingState();
     }
-    await Promise.all([this.loadSelection(), this.loadPermission()]);
-    this.renderStreamingState();
-    this.focusComposer();
   },
 
   /** Current model + effort for the active session (session.models → selection). */
-  async loadSelection() {
-    if (!state.activeSessionId) {
-      state.selection = state.pendingSelection ?? this.localDefaultSelection() ?? state.selection;
-      state.selectionRoutable = Boolean((state.registry?.registry ?? []).length);
-      this.renderReasoningControl();
-      return null;
+  async loadSelection(sessionId = state.activeSessionId) {
+    const view = this.sessionView(sessionId);
+    const request = view.selectionRequest = (view.selectionRequest ?? 0) + 1;
+    if (!sessionId) {
+      view.selection = state.pendingSelection ?? this.localDefaultSelection() ?? state.selection;
+      view.selectionRoutable = Boolean((state.registry?.registry ?? []).length);
+    } else {
+      const models = await guard(api.sessions.modelSelection(sessionId), '读取模型');
+      if (request !== view.selectionRequest) return view.selection;
+      if (models?.current) {
+        view.selection = models.current;
+        view.selectionRoutable = models.routable;
+      } else if (!view.selection) view.selection = this.localDefaultSelection();
     }
-    const models = await guard(api.sessions.modelSelection(state.activeSessionId), '读取模型');
-    if (models?.current) {
-      state.selection = models.current;
-      state.selectionRoutable = models.routable;
-      state.pendingSelection = null;
-    } else if (state.ui.defaultModel) {
-      state.selection = { provider: state.ui.defaultProvider ?? 'deepseek-official', model: state.ui.defaultModel };
-    }
-    this.renderReasoningControl();
-    return state.selection ?? null;
+    if (state.activeSessionId === sessionId) this.syncSessionControls();
+    return view.selection;
   },
 
   localDefaultSelection() {
@@ -268,6 +345,7 @@ const App = {
   },
 
   rememberPendingSelection(selection) {
+    Object.assign(this.sessionView(), { selection: { ...selection }, selectionRoutable: true });
     state.selection = { ...selection };
     state.pendingSelection = { ...selection };
     state.selectionRoutable = true;
@@ -283,19 +361,25 @@ const App = {
   /** Apply a selection to a real session, or remember it for the first/new conversation. */
   async chooseSelection(provider, model, reasoningEffort, context = '切换模型') {
     if (!provider || !model) return false;
+    if (state.streaming || state.stopping || state.sessionLoading || this.sessionView().modelBusy) return false;
     const request = { provider, model, ...(reasoningEffort ? { reasoningEffort } : {}) };
     if (!state.activeSessionId) {
       this.rememberPendingSelection(request);
       return true;
     }
+    const sessionId = state.activeSessionId;
+    const view = this.sessionView(sessionId);
+    view.modelBusy = true;
+    view.selectionRequest = (view.selectionRequest ?? 0) + 1;
+    this.renderReasoningControl();
     const selected = await guard(api.llm.selectModel(
-      state.activeSessionId, provider, model, reasoningEffort,
+      sessionId, provider, model, reasoningEffort,
     ), context);
+    view.modelBusy = false;
+    if (selected) view.selection = selected;
+    await this.loadSelection(sessionId);
+    if (state.activeSessionId === sessionId) this.syncSessionControls();
     if (!selected) return false;
-    state.selection = selected;
-    await this.loadSelection();
-    this.renderStreamingState();
-    Sidebar.renderModelChip();
     return true;
   },
 
@@ -306,38 +390,52 @@ const App = {
 
   // ------------------------------------------------------------------- sending
   async send() {
+    if (state.streaming || state.stopping || state.sessionLoading || (state.creatingSession && !state.activeSessionId)) return;
     const input = document.getElementById('input');
     const text = input.value.trim();
     if (!text) return;
     if (!state.activeSessionId) {
-      await this.newSession();
-      if (!state.activeSessionId) return;
+      const created = await this.newSession();
+      if (!created || created.sessionId !== state.activeSessionId) return;
     }
+    const sessionId = state.activeSessionId;
+    const view = this.sessionView(sessionId);
+    const revision = view.revision;
     input.value = '';
+    view.draft = '';
+    view.sending = true;
     this.autoGrow(input);
-    state.streaming = true;
-    this.renderStreamingState();
-    const transcript = await guard(api.sessions.prompt(state.activeSessionId, text), '发送失败');
+    this.syncSessionControls();
+    const transcript = await guard(api.sessions.prompt(sessionId, text), '发送失败');
+    view.sending = false;
     if (transcript) {
-      state.transcript = transcript;
-      ChatView.render(transcript);
-      ChatView.scrollToEnd();
-    } else {
-      state.streaming = false;
-      this.renderStreamingState();
+      this.receiveTranscript(sessionId, transcript, revision);
+    } else if (!view.draft) {
+      view.draft = text;
+      if (state.activeSessionId === sessionId && !input.value) input.value = text;
     }
+    if (state.activeSessionId === sessionId) {
+      this.paintSession();
+      ChatView.scrollToEnd();
+    }
+    Sidebar.renderSessions();
     this.refreshSessionsThrottled();
   },
 
   async stop() {
     if (!state.activeSessionId || !state.streaming || state.stopping) return;
     const sessionId = state.activeSessionId;
-    state.stopping = true;
-    this.renderStreamingState();
+    const view = this.sessionView(sessionId);
+    view.stopping = true;
+    this.syncSessionControls();
     const cancelled = await guard(api.sessions.cancel(sessionId), '停止失败');
-    state.stopping = false;
-    if (cancelled !== null && state.activeSessionId === sessionId) state.streaming = false;
-    this.renderStreamingState();
+    view.stopping = false;
+    if (cancelled !== null) {
+      view.sending = false;
+      if (view.transcript) view.transcript = { ...view.transcript, running: false };
+    }
+    if (state.activeSessionId === sessionId) this.syncSessionControls();
+    Sidebar.renderSessions();
   },
 
   renderStreamingState() {
@@ -350,7 +448,13 @@ const App = {
       stop.textContent = state.stopping ? '停止中…' : '停止';
       stop.setAttribute('aria-busy', state.stopping ? 'true' : 'false');
     }
-    if (send) send.disabled = state.streaming;
+    if (send) send.disabled = state.streaming || state.stopping || state.sessionLoading || (state.creatingSession && !state.activeSessionId);
+    const newChat = document.getElementById('new-chat');
+    if (newChat) {
+      newChat.disabled = state.creatingSession;
+      newChat.setAttribute('aria-busy', String(state.creatingSession));
+      newChat.title = state.creatingSession ? '正在新建对话…' : '新建独立对话，其他任务继续运行（Ctrl/Cmd+N）';
+    }
     if (hint) {
       hint.textContent = state.selection ? modelLabel(state.selection.model) : '';
     }
@@ -382,7 +486,7 @@ const App = {
     slider.max = String(Math.max(0, ids.length - 1));
     slider.value = String(Math.max(0, ids.indexOf(active)));
     slider.dataset.efforts = JSON.stringify(ids);
-    slider.disabled = Boolean(state.activeSessionId && (state.streaming || state.stopping));
+    slider.disabled = Boolean(state.sessionLoading || this.sessionView().modelBusy || (state.activeSessionId && (state.streaming || state.stopping)));
     value.textContent = reasoningLabel(active);
     slider.title = `推理等级：${reasoningLabel(active)}`;
   },
@@ -412,20 +516,21 @@ const App = {
     this.renderStreamingState();
   },
 
-  async loadPermission() {
-    if (!state.activeSessionId) {
-      state.permissionMode = state.pendingPermission
+  async loadPermission(sessionId = state.activeSessionId) {
+    const view = this.sessionView(sessionId);
+    const request = view.permissionRequest = (view.permissionRequest ?? 0) + 1;
+    if (!sessionId) {
+      view.permissionMode = state.pendingPermission
         ?? defaultPermission(state.ui.defaultPermission);
-      this.renderPermissionControl();
-      return state.permissionMode;
+    } else {
+      const permissions = await guard(api.sessions.permissions(sessionId), '读取权限模式');
+      if (request !== view.permissionRequest) return view.permissionMode;
+      if (permissions?.currentValue && PERMISSION_MODES.includes(permissions.currentValue)) {
+        view.permissionMode = permissions.currentValue;
+      }
     }
-    const permissions = await guard(api.sessions.permissions(state.activeSessionId), '读取权限模式');
-    if (permissions?.currentValue && PERMISSION_MODES.includes(permissions.currentValue)) {
-      state.permissionMode = permissions.currentValue;
-      state.pendingPermission = null;
-    }
-    this.renderPermissionControl();
-    return state.permissionMode;
+    if (state.activeSessionId === sessionId) this.syncSessionControls();
+    return view.permissionMode;
   },
 
   renderPermissionControl() {
@@ -436,7 +541,7 @@ const App = {
       ? state.permissionMode
       : 'read-only';
     slider.value = String(PERMISSION_MODES.indexOf(mode));
-    slider.disabled = Boolean(state.permissionBusy || (state.activeSessionId && (state.streaming || state.stopping)));
+    slider.disabled = Boolean(state.sessionLoading || state.permissionBusy || (state.activeSessionId && (state.streaming || state.stopping)));
     value.textContent = permissionLabel(mode);
     slider.title = `权限：${permissionTitle(mode)}`;
     slider.setAttribute('aria-valuetext', permissionTitle(mode));
@@ -459,17 +564,20 @@ const App = {
       this.renderPermissionControl();
       return;
     }
-    state.permissionBusy = true;
-    this.renderPermissionControl();
+    const sessionId = state.activeSessionId;
+    const view = this.sessionView(sessionId);
+    view.permissionRequest = (view.permissionRequest ?? 0) + 1;
+    view.permissionBusy = true;
+    this.syncSessionControls();
     let applied = null;
-    if (state.activeSessionId) {
+    if (sessionId) {
       applied = await guard(
-        api.sessions.selectPermission(state.activeSessionId, mode),
+        api.sessions.selectPermission(sessionId, mode),
         '设置权限模式',
       );
-      if (applied?.currentValue === mode) state.permissionMode = mode;
+      if (applied?.currentValue === mode) view.permissionMode = mode;
     } else {
-      state.permissionMode = mode;
+      view.permissionMode = mode;
       state.pendingPermission = mode;
       applied = { currentValue: mode };
     }
@@ -479,8 +587,8 @@ const App = {
       if (ui) state.ui = ui;
       toast(`权限已设为${permissionTitle(mode)}`, 'ok');
     }
-    state.permissionBusy = false;
-    this.renderPermissionControl();
+    view.permissionBusy = false;
+    if (state.activeSessionId === sessionId) this.syncSessionControls();
   },
 
   focusComposer() {

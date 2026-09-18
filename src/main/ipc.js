@@ -113,6 +113,7 @@ function registerIpc(services) {
   handle('sessions:list', async () => {
     const ctx = getContext();
     const items = await ctx.client.listSessions();
+    service('chat')?.observeRunning?.(items);
     return items
       .filter((item) => !item.blank)
       .map((item) => ({

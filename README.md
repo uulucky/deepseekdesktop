@@ -4,11 +4,11 @@
 
 面向 Windows 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.2.20 · Windows 10/11 x64 · 便携版**。
+本分支版本：**0.2.21 · Windows 10/11 x64 · 便携版**（发布验证中，以 Releases 为准）。
 
-[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.20-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.20-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.20-build-info.json)。
+GitHub 与国内 OSS/CDN 镜像使用同一份公开 CI 产物；新版只有完成构建与校验后才发布软件内更新。国内新版下载入口会在镜像验证后补充。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -18,6 +18,7 @@ GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更
 - **软件内充值**：在应用内打开 DeepSeek 官方充值页面，由官方及其支付服务处理付款；客户端维护者不代收款。
 - **推理滑块**：按当前模型支持的档位选择推理等级。
 - **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；默认 Full Access，输入区持续显示风险提醒，记住你选择的档位。
+- **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
 - **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
 - **本地记录与更新**：便携模式数据保存在 `data/`，每小时检查更新，用户确认后安装并重启。
 
@@ -51,7 +52,15 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 ## 当前版本改进
 
-0.2.20 恢复默认 Full Access，以持续可见的风险提醒代替阻塞确认；修正权限保存与重启、新建对话的一致性。保留签名更新清单、公开 Windows 源码构建与隔离测试、IPC 来源校验，以及隐私、广告与网络连接说明。
+0.2.21 增加多会话并行运行，修复运行中不能正常新建/切换会话、旧请求覆盖新会话界面的问题；后台回复继续接收，侧栏显示运行中、待批准和未读完成状态，停止按钮只取消当前会话。模型单步输出结束不再误判整个任务结束，长任务不再因等待两分钟被显示为已停止。
+
+### 如何同时运行多个任务
+
+1. 在一个会话中发送任务后，点击左侧“新建对话”（或 Ctrl/Cmd+N），继续发送另一个任务，无需等待前一个结束。
+2. 点击侧栏会话查看进度；“待批准”表示需要进入该会话处理权限请求。任务在后台完成后显示“已完成”，查看后清除该提示。
+3. “停止”只停止当前显示的会话，其他任务继续。切换时会保留各自的未发送草稿；草稿仅保留到本次软件关闭。
+
+并行任务分别消耗 API 用量，共享本机资源；如果多个任务可能修改同一批文件，请避免同时写入。各会话的 Full Access 风险提醒和独立权限选择仍然有效。关闭软件或安装更新会结束本地运行服务，不是后台常驻任务模式。
 
 项目仍处于早期阶段。CI 不使用真实账号充值或付费推理，不能覆盖所有 Windows/杀毒软件组合；欢迎提交可复现问题，而非把 Star 或下载量当作质量认证。
 
