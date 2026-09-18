@@ -4,11 +4,11 @@
 
 面向 Windows 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-本分支版本：**0.2.21 · Windows 10/11 x64 · 便携版**（发布验证中，以 Releases 为准）。
+当前版本：**0.2.21 · Windows 10/11 x64 · 便携版**。
 
-[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.21-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像使用同一份公开 CI 产物；新版只有完成构建与校验后才发布软件内更新。国内新版下载入口会在镜像验证后补充。
+GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.21-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.21-build-info.json)。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
