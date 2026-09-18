@@ -16,6 +16,8 @@ async function multitaskUi(page, provider) {
     await page.waitForFunction(id => state.activeSessionId === id && !state.sessionLoading, id);
   };
   const a = await create();
+  const permissionA = await page.locator('#permission-slider').inputValue();
+  const effortA = await page.locator('#reasoning-slider').inputValue();
   await page.locator('#input').fill('multitask-ui-fixture-A');
   await page.locator('#send-btn').click();
   const responseA = await provider.waitFor('multitask-ui-fixture-A');
@@ -26,6 +28,13 @@ async function multitaskUi(page, provider) {
   const b = await create();
   assert.equal(await page.locator('#input').inputValue(), '');
   assert.equal(await page.locator('#send-btn').isEnabled(), true);
+  await page.locator('#permission-slider').focus();
+  await page.locator('#permission-slider').press('Home');
+  await page.waitForFunction(() => state.permissionMode === 'read-only' && !state.permissionBusy);
+  await page.locator('#reasoning-slider').focus();
+  await page.locator('#reasoning-slider').press('Home');
+  await page.waitForFunction(() => state.selection?.reasoningEffort === 'off'
+    && !document.getElementById('reasoning-slider').disabled);
   await page.locator('#input').fill('multitask-ui-fixture-B');
   await page.locator('#send-btn').click();
   const responseB = await provider.waitFor('multitask-ui-fixture-B');
@@ -35,6 +44,8 @@ async function multitaskUi(page, provider) {
   await page.locator('#input').fill('B 未发送草稿');
   await open(a);
   assert.equal(await page.locator('#input').inputValue(), 'A 未发送草稿');
+  assert.equal(await page.locator('#permission-slider').inputValue(), permissionA, 'B permission change cannot alter A');
+  assert.equal(await page.locator('#reasoning-slider').inputValue(), effortA, 'B effort change cannot alter A');
   await page.locator('#stop-btn').click();
   await page.waitForFunction(() => !state.streaming && !state.stopping);
   await eventually(() => responseA.closed, 'A stream was cancelled');
@@ -44,6 +55,8 @@ async function multitaskUi(page, provider) {
   assert.equal(await page.evaluate(() => state.activeSessionId), a, 'Background completion never changes the selected conversation');
   await open(b);
   assert.equal(await page.locator('#input').inputValue(), 'B 未发送草稿');
+  assert.equal(await page.locator('#permission-slider').inputValue(), '0');
+  assert.equal(await page.locator('#reasoning-slider').inputValue(), '0');
   await page.waitForFunction(() => !state.streaming && state.transcript?.items.some(item => item.parts?.some(part => part.text?.includes('B 已完成'))));
   assert.equal(await page.locator('#send-btn').isEnabled(), true);
   assert.equal(await page.locator('#stop-btn').isVisible(), false);

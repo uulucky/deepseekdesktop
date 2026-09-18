@@ -433,9 +433,8 @@ app.whenReady().then(async () => {
   console.log('FULL ACCESS REMINDER', JSON.stringify(permissionReminder, null, 2));
   fs.writeFileSync(shot('-permission-warning'), (await capture(win)).toPNG());
   const stopStarted = await win.webContents.executeJavaScript(`(async () => {
-    state.activeSessionId = 'session-demo';
-    state.streaming = true;
-    App.renderStreamingState();
+    App.activateSession('session-demo');
+    App.receiveTranscript('session-demo', { ...state.transcript, sessionId: 'session-demo', running: true });
     document.getElementById('stop-btn').click();
     await new Promise((resolve) => setTimeout(resolve, 20));
     return {

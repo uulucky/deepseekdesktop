@@ -100,9 +100,15 @@ async function main() {
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
   await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   await page.evaluate(() => App.newSession());
+  const readOnlySession = await page.evaluate(() => state.activeSessionId);
   assert.equal(await page.evaluate(() => api.sessions.permissions(state.activeSessionId).then(value => value.currentValue)), 'read-only');
+  await page.evaluate(id => api.sessions.rename(id, 'Read-only restart fixture'), readOnlySession);
+  // Harness persists on a tick. A just-created empty session can otherwise disappear.
+  await page.waitForTimeout(1200);
   await application.close(); application = null;
   page = await launch();
+  assert.equal(await page.evaluate(() => state.ui.defaultPermission), 'read-only');
+  await page.evaluate(id => App.openSession(id), readOnlySession);
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
   await application.close(); application = null;
