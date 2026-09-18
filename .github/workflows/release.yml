@@ -11,6 +11,13 @@ on:
 permissions:
   contents: read
 
+# A superseded main build can keep a packaged Electron process alive until the job timeout.
+# Only the newest commit on one branch/ref is useful; tags use a different ref and keep their
+# own formal release run.
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
     runs-on: windows-latest
