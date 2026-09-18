@@ -3,16 +3,26 @@
 
 const streamEl = () => document.getElementById('stream');
 const innerEl = () => document.getElementById('stream-inner');
+const MAX_VISIBLE_ITEMS = 240;
+const MAX_TEXT_CHARS = 48_000;
+const MAX_REASONING_CHARS = 24_000;
+const MAX_TOOL_CHARS = 12_000;
+
+function displayText(value, limit) {
+  const text = String(value ?? '');
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n\n…（超长内容已折叠，完整记录仍保存在本地对话中）`;
+}
 
 /** Render one content part. */
 function renderPart(part) {
   if (!part) return '';
-  if (part.kind === 'text') return `<div class="content">${window.Markdown.render(part.text)}</div>`;
+  if (part.kind === 'text') return `<div class="content">${window.Markdown.render(displayText(part.text, MAX_TEXT_CHARS))}</div>`;
   if (part.kind === 'reasoning') {
-    return fold('思考过程', '', `<pre>${esc(part.text)}</pre>`, false);
+    return fold('思考过程', '', `<pre>${esc(displayText(part.text, MAX_REASONING_CHARS))}</pre>`, false);
   }
   if (part.kind === 'tool-call') {
-    return fold('调用工具 ' + esc(part.name || ''), esc(part.summary || ''), `<pre>${esc(part.arguments || '')}</pre>`, false);
+    return fold('调用工具 ' + esc(part.name || ''), esc(part.summary || ''), `<pre>${esc(displayText(part.arguments, MAX_TOOL_CHARS))}</pre>`, false);
   }
   if (part.kind === 'image') return '<div class="hint">[图片]</div>';
   return '';
@@ -57,8 +67,8 @@ function renderItem(item, approvals = []) {
     const pending = item.pending ? ' pending' : '';
     const failed = item.failed ? ' failed' : '';
     const body = item.parts?.length
-      ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(part.text)}</div>` : renderPart(part))).join('')
-      : `<div class="bubble">${esc(item.text || '')}</div>`;
+      ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(displayText(part.text, MAX_TEXT_CHARS))}</div>` : renderPart(part))).join('')
+      : `<div class="bubble">${esc(displayText(item.text, MAX_TEXT_CHARS))}</div>`;
     return (
       `<div class="msg user${pending}${failed}">` +
         '<div class="msg-avatar">你</div>' +
@@ -101,7 +111,7 @@ function renderItem(item, approvals = []) {
         `<div class="fold-head"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
         `<span class="fold-title">${esc(item.name || '工具')}</span><span class="fold-sub">${sub}</span>` +
         `<span class="badge ${item.isError || approval ? 'warn' : item.running ? '' : 'ok'}" style="margin-left:auto">${status}</span></div>` +
-        `<div class="fold-body">${item.arguments ? `<pre>${esc(item.arguments)}</pre>` : ''}${item.output ? `<pre>${esc(item.output)}</pre>` : ''}</div>` +
+        `<div class="fold-body">${item.arguments ? `<pre>${esc(displayText(item.arguments, MAX_TOOL_CHARS))}</pre>` : ''}${item.output ? `<pre>${esc(displayText(item.output, MAX_TOOL_CHARS))}</pre>` : ''}</div>` +
       '</div>'
     );
   }
@@ -144,8 +154,13 @@ const ChatView = {
       inner.innerHTML = renderEmpty();
       return;
     }
-    const items = transcript.items.filter((item) => item.kind !== 'turn-start');
-    inner.innerHTML = items.map((item) => renderItem(item, approvals)).join('')
+    const allItems = transcript.items.filter((item) => item.kind !== 'turn-start');
+    const hiddenCount = Math.max(0, allItems.length - MAX_VISIBLE_ITEMS);
+    const items = hiddenCount ? allItems.slice(-MAX_VISIBLE_ITEMS) : allItems;
+    const historyNotice = hiddenCount
+      ? `<div class="history-window-note">为保证长对话稳定，当前显示最近 ${MAX_VISIBLE_ITEMS} 条记录；更早的 ${hiddenCount} 条仍保存在本地。</div>`
+      : '';
+    inner.innerHTML = historyNotice + items.map((item) => renderItem(item, approvals)).join('')
       + approvals.map(renderApproval).join('');
     this.scrollToBottom();
   },

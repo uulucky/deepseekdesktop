@@ -45,6 +45,31 @@ async function launch() {
   await page.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
   return page;
 }
+async function crashRendererAndRecover(page) {
+  const activeSessionId = await page.evaluate(async () => {
+    await api.settings.setUi({ activeSessionId: state.activeSessionId });
+    return state.activeSessionId;
+  });
+  await application.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find(item => /\/index\.html$/.test(item.webContents.getURL()));
+    if (!win) throw new Error('Main window not found for renderer recovery test');
+    win.webContents.forcefullyCrashRenderer();
+  });
+  let recovered = null;
+  for (let count = 0; count < 120; count += 1) {
+    recovered = application.windows().find(window => /\/index\.html$/.test(window.url())) ?? recovered;
+    try {
+      if (recovered && await recovered.evaluate(() => typeof App !== 'undefined' && App.ready === true)) break;
+    } catch { /* renderer is between crash and reload */ }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  assert(recovered, 'Main page exists after renderer crash');
+  await recovered.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
+  assert.equal(await recovered.evaluate(() => state.activeSessionId), activeSessionId,
+    'Renderer recovery returns to the selected conversation');
+  assert.equal(await recovered.evaluate(() => state.world?.rendererRecovery?.status), 'recovering');
+  return recovered;
+}
 async function main() {
   assert.equal(process.platform, 'win32', 'Run packaged smoke on Windows');
   provider = await startModelServer();
@@ -86,6 +111,8 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
+  page = await crashRendererAndRecover(page);
+  await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   await application.close(); application = null;
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
@@ -112,7 +139,7 @@ async function main() {
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
   await application.close(); application = null;
-  console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, restart, saved lower preferences and data preservation');
+  console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
   console.error(error);

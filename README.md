@@ -4,11 +4,11 @@
 
 面向 Windows 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.2.21 · Windows 10/11 x64 · 便携版**。
+当前版本：**0.2.22 · Windows 10/11 x64 · 便携版**。
 
-[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.21-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.22-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.21-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.21-build-info.json)。
+GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.22-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.22-build-info.json)。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -19,6 +19,7 @@ GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更
 - **推理滑块**：按当前模型支持的档位选择推理等级。
 - **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；默认 Full Access，输入区持续显示风险提醒，记住你选择的档位。
 - **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
+- **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
 - **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
 - **本地记录与更新**：便携模式数据保存在 `data/`，每小时检查更新，用户确认后安装并重启。
 
@@ -52,7 +53,9 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 ## 当前版本改进
 
-0.2.21 增加多会话并行运行，修复运行中不能正常新建/切换会话、旧请求覆盖新会话界面的问题；后台回复继续接收，侧栏显示运行中、待批准和未读完成状态，停止按钮只取消当前会话。模型单步输出结束不再误判整个任务结束，长任务不再因等待两分钟被显示为已停止。
+0.2.22 修复部分 Windows 电脑在对话进行中界面突然全黑的问题：流式快照改为合并刷新，长对话和超长工具输出采用有界显示；Windows 默认使用更稳定的软件合成。若渲染进程仍异常退出或长时间无响应，客户端会自动重载界面、回到原会话，正在运行的本地任务继续接收结果。完整记录仍由 Harness 保存在本地；界面为稳定性只挂载最近 240 条记录。
+
+本版也加入对话重命名、搜索、归档、文件夹工作区和“从此处创建新对话”。搜索优先使用 Harness 索引；当前内核未启用索引时，会在本机扫描有限范围的历史记录，不把搜索内容发给维护者。
 
 ### 如何同时运行多个任务
 

@@ -98,19 +98,20 @@ function rendererFixture() {
   };
   const timers = new Set();
   const context = vm.createContext({
-    window: { deepseek: api, Markdown: { escapeHtml: String } },
+    window: { deepseek: api, Markdown: { escapeHtml: String }, addEventListener() {} },
     document: { getElementById: element, addEventListener() {} },
     requestAnimationFrame: fn => fn(),
     setTimeout(fn, delay) { const timer = setTimeout(fn, delay); timers.add(timer); return timer; },
     clearTimeout,
-    ChatView: { render(value) { context.painted = value; }, scrollToEnd() {} },
+    paintCount: 0,
+    ChatView: { render(value) { context.painted = value; context.paintCount += 1; }, scrollToEnd() {} },
     Sidebar: { renderAll() {}, renderSessions() {}, renderChatHeader() {}, renderModelChip() {} },
     console,
   });
   for (const file of ['state.js', 'app.js']) vm.runInContext(
     fs.readFileSync(path.join(__dirname, '../src/renderer/scripts', file), 'utf8'), context, { filename: file });
   vm.runInContext('globalThis.state = state; globalThis.App = App; globalThis.toast = () => {};', context);
-  return { ...context, element, api, open, prompt, cancel,
+  return { ...context, get paintCount() { return context.paintCount; }, element, api, open, prompt, cancel,
     delayCreate(value) { createPending = value; },
     dispose() { for (const timer of timers) clearTimeout(timer); } };
 }
@@ -180,6 +181,14 @@ async function rendererContract() {
     assert.equal(App.sessionView('a').unread, true, 'Background completions remain visible in the sidebar');
     await App.refreshSessions();
     assert(state.sessions.some(s => s.sessionId === b), 'A list refresh retains unsent drafts');
+    await App.openSession('paint-budget');
+    const paintsBeforeBurst = f.paintCount;
+    for (let index = 0; index < 100; index += 1) {
+      App.receiveTranscript('paint-budget', snapshot('paint-budget', true, `chunk-${index}`));
+    }
+    assert.equal(f.paintCount, paintsBeforeBurst, 'stream snapshots do not rebuild the DOM synchronously');
+    await new Promise(resolve => setTimeout(resolve, 110));
+    assert.equal(f.paintCount, paintsBeforeBurst + 1, 'a stream burst causes one renderer paint');
     console.log('PASS multi-task renderer: simultaneous sends, drafts, targeted stop, late replies, navigation races and background completion');
   } finally { f.dispose(); }
 }

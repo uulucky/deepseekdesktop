@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('deepseek', {
     openExternal: (url) => invoke('app:open-external', url),
     openPath: (target) => invoke('app:open-path', target),
     copy: (text) => invoke('app:copy', text),
+    reportRendererError: (detail) => invoke('app:renderer-error', detail),
   },
   sessions: {
     list: () => invoke('sessions:list'),

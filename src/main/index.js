@@ -23,6 +23,8 @@ const { syncCatalog, readSnapshot } = require('./modules/catalog');
 const { AdSlot } = require('./modules/ad');
 const { PortableUpdater, UPDATE_INTERVAL_MS } = require('./modules/updater');
 const { Store } = require('./modules/store');
+const { TranscriptDispatcher } = require('./modules/transcript-dispatcher');
+const { attachWindowRecovery } = require('./modules/window-recovery');
 const { registerIpc } = require('./ipc');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
 
@@ -52,6 +54,13 @@ const ctx = {
 
 // Portable (green) mode must claim Chromium's storage paths before the app is ready.
 const PORTABLE_ROOT = adoptPortablePaths();
+
+// This client renders text, forms and a hidden local Harness page; it does not need WebGL.
+// Software compositing avoids a class of Windows driver resets that leave an otherwise live
+// Electron window completely black. Advanced users can explicitly opt back into GPU rendering.
+if (process.platform === 'win32' && process.env.DEEPSEEK_DESKTOP_ENABLE_GPU !== '1') {
+  app.disableHardwareAcceleration();
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -94,6 +103,7 @@ function main() {
       if (ctx.updateTimer) clearInterval(ctx.updateTimer);
       if (ctx.updateKickTimer) clearTimeout(ctx.updateKickTimer);
       ctx.chat?.dispose();
+      ctx.transcriptDispatcher?.dispose();
       ctx.client?.dispose();
       await ctx.bootstrap?.stop();
     } catch (error) {
@@ -194,8 +204,15 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
   ctx.baseUrl = baseUrl;
   ctx.client = new DeepSeekHarnessClient(baseUrl, { cookie: authCookie });
   ctx.client.connect();
+  ctx.transcriptDispatcher?.dispose();
+  ctx.transcriptDispatcher = new TranscriptDispatcher((payload) => {
+    const win = ctx.windows.main;
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send('chat:transcript', payload);
+    }
+  });
   ctx.chat = new ChatController(ctx.client, {
-    onUpdate: (payload) => ctx.windows.main?.webContents.send('chat:transcript', payload),
+    onUpdate: (payload) => ctx.transcriptDispatcher.push(payload),
   });
   ctx.client.onState((state) => {
     if (state === 'reconnecting') log('app', 'harness connection reconnecting');
@@ -382,6 +399,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
+      backgroundThrottling: false,
     },
   });
   win.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -402,6 +420,14 @@ function createMainWindow() {
       phase: 'error', percent: 100, label: '界面加载失败', error: `${description} (${code})`,
     });
   });
+  win.webContents.on('preload-error', (_event, preloadPath, error) => {
+    log('app', 'main preload failed', { preloadPath, error: String(error) });
+  });
+  const recovery = attachWindowRecovery(win, {
+    log: (message, detail) => log('renderer', message, detail),
+    shouldRecover: () => !ctx.quitting && !win.isDestroyed(),
+    onRecovery: (detail) => { ctx.rendererRecovery = detail; },
+  });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html')).catch((error) => {
     log('app', 'main shell load rejected', String(error));
   });
@@ -412,6 +438,7 @@ function createMainWindow() {
   win.on('resized', persistBounds);
   win.on('moved', persistBounds);
   win.on('closed', () => {
+    recovery.dispose();
     ctx.windows.main = null;
     // Hidden worker/platform windows otherwise keep the Windows portable app alive forever.
     if (process.platform !== 'darwin') app.quit();
@@ -573,6 +600,7 @@ function worldSnapshot() {
     ad: ctx.ad?.get() ?? null,
     update: ctx.updater?.get() ?? null,
     ui: ctx.uiStore?.all() ?? {},
+    rendererRecovery: ctx.rendererRecovery ?? null,
     dataDir: ctx.dataDir,
     logFile: ctx.logFile,
     portable: isPortable(),

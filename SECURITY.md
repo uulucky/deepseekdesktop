@@ -26,14 +26,14 @@ Windows EXE **目前没有 Authenticode 代码签名**，“已验证的发布�
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.2.20-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.2.20-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.2.22-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.2.22-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。
 
 ## 支持范围与未覆盖事项
 
-优先修复当前发行版的问题。CI 覆盖契约、隔离内核、打包启动、输入、权限提醒与保存、模型菜单、原生解包与数据保留。它不登录真实账户、不充值、不调用付费模型；真实支付、不同杀毒软件、企业组策略和所有 Windows 机器仍需要真实用户验证。Star、下载数和测试通过都不是安全认证。
+优先修复当前发行版的问题。CI 覆盖契约、隔离内核、打包启动、输入、权限提醒与保存、模型菜单、渲染进程崩溃后自动恢复原会话、原生解包与数据保留。它不登录真实账户、不充值、不调用付费模型；真实支付、不同显卡驱动、杀毒软件、企业组策略和所有 Windows 机器仍需要真实用户验证。Star、下载数和测试通过都不是安全认证。
 
 分支保护、签名发布者证书、独立安全审计、维护者账户安全同样重要；未配置的项目不能宣传为已启用。

@@ -28,7 +28,10 @@ const App = {
     await this.refreshSessions();
     await this.refreshCredentials();
     // The account card is refreshed lazily: only when it is actually visible.
-    const firstSession = state.sessions.find((session) => !session.archived);
+    const rememberedSession = state.sessions.find((session) => (
+      session.sessionId === state.ui.activeSessionId && !session.archived
+    ));
+    const firstSession = rememberedSession ?? state.sessions.find((session) => !session.archived);
     if (firstSession) await this.openSession(firstSession.sessionId);
     else {
       await this.loadSelection();
@@ -37,6 +40,9 @@ const App = {
     }
     Sidebar.renderAll();
     this.ready = true;
+    if (state.world?.rendererRecovery?.status === 'recovering') {
+      toast('界面已自动恢复，对话仍在继续', 'ok');
+    }
   },
 
   applyAppearance() {
@@ -210,6 +216,7 @@ const App = {
 
   activateSession(sessionId) {
     this.sessionView().draft = document.getElementById('input').value;
+    this.cancelTranscriptPaint();
     state.navigation += 1;
     state.activeSessionId = sessionId;
     const view = this.sessionView();
@@ -221,6 +228,10 @@ const App = {
     this.hideSessionPopover();
     this.paintSession();
     Sidebar.renderSessions();
+    if (state.ui.activeSessionId !== sessionId) {
+      state.ui.activeSessionId = sessionId;
+      api.settings.setUi({ activeSessionId: sessionId }).then((ui) => { state.ui = ui; }).catch(() => {});
+    }
     return state.navigation;
   },
 
@@ -240,8 +251,30 @@ const App = {
   },
 
   paintSession() {
+    this.cancelTranscriptPaint();
     this.syncSessionControls();
     ChatView.render(state.transcript);
+  },
+
+  scheduleTranscriptPaint(sessionId, immediate = false) {
+    if (state.activeSessionId !== sessionId) return;
+    if (immediate) {
+      this.paintSession();
+      return;
+    }
+    if (this.transcriptPaintTimer) return;
+    this.transcriptPaintTimer = setTimeout(() => {
+      this.transcriptPaintTimer = null;
+      if (state.activeSessionId !== sessionId) return;
+      this.syncSessionControls();
+      ChatView.render(state.transcript);
+    }, 80);
+  },
+
+  cancelTranscriptPaint() {
+    if (!this.transcriptPaintTimer) return;
+    clearTimeout(this.transcriptPaintTimer);
+    this.transcriptPaintTimer = null;
   },
 
   receiveTranscript(sessionId, transcript, expectedRevision) {
@@ -256,7 +289,15 @@ const App = {
     if (!state.sessions.some((session) => session.sessionId === sessionId)) {
       state.sessions.unshift({ sessionId, title: transcript.title, updatedAt: Date.now() });
     }
-    if (state.activeSessionId === sessionId) this.paintSession();
+    if (state.activeSessionId === sessionId) {
+      // Keep Stop / task state accurate immediately, but coalesce expensive Markdown and DOM
+      // rebuilding while tokens stream. Terminal and approval transitions paint at once.
+      this.syncSessionControls();
+      const approvalsChanged = JSON.stringify(before?.approvals ?? []) !== JSON.stringify(transcript.approvals ?? []);
+      this.scheduleTranscriptPaint(sessionId, Boolean(
+        (before?.running && !transcript.running) || approvalsChanged,
+      ));
+    }
     if (!before || before.running !== transcript.running || before.title !== transcript.title
       || JSON.stringify(before.approvals ?? []) !== JSON.stringify(transcript.approvals ?? [])) {
       Sidebar.renderSessions();
@@ -932,7 +973,32 @@ const App = {
 window.App = App;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await App.ensureModelData();
-  await App.init();
-  App.renderStreamingState();
+  try {
+    await App.ensureModelData();
+    await App.init();
+    App.renderStreamingState();
+  } catch (error) {
+    const message = error?.message || String(error);
+    api.app?.reportRendererError?.({ phase: 'startup', message, stack: String(error?.stack ?? '') }).catch(() => {});
+    const panel = document.getElementById('renderer-error');
+    const detail = document.getElementById('renderer-error-detail');
+    if (detail) detail.textContent = message;
+    if (panel) panel.hidden = false;
+  }
+});
+
+window.addEventListener('error', (event) => {
+  api.app?.reportRendererError?.({
+    phase: App.ready ? 'runtime' : 'startup',
+    message: event.message || '未知界面错误',
+    stack: String(event.error?.stack ?? ''),
+  }).catch(() => {});
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const error = event.reason;
+  api.app?.reportRendererError?.({
+    phase: App.ready ? 'runtime' : 'startup',
+    message: error?.message || String(error),
+    stack: String(error?.stack ?? ''),
+  }).catch(() => {});
 });

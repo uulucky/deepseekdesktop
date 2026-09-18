@@ -136,6 +136,15 @@ function registerIpc(services) {
   });
   handle('app:open-path', async (target) => shell.openPath(String(target)));
   handle('app:copy', (text) => { clipboard.writeText(String(text ?? '')); return true; });
+  handle('app:renderer-error', (detail) => {
+    const safe = detail && typeof detail === 'object' ? {
+      phase: String(detail.phase ?? 'runtime').slice(0, 40),
+      message: String(detail.message ?? 'unknown').slice(0, 2000),
+      stack: String(detail.stack ?? '').slice(0, 6000),
+    } : { phase: 'runtime', message: String(detail ?? 'unknown').slice(0, 2000), stack: '' };
+    log('renderer', 'uncaught renderer error', safe);
+    return true;
+  });
   handle('app:world', () => {
     const ctx = getContext();
     return ctx.worldSnapshot ? ctx.worldSnapshot() : null;
