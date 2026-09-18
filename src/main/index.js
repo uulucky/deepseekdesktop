@@ -55,10 +55,9 @@ const ctx = {
 // Portable (green) mode must claim Chromium's storage paths before the app is ready.
 const PORTABLE_ROOT = adoptPortablePaths();
 
-// This client renders text, forms and a hidden local Harness page; it does not need WebGL.
-// Software compositing avoids a class of Windows driver resets that leave an otherwise live
-// Electron window completely black. Advanced users can explicitly opt back into GPU rendering.
-if (process.platform === 'win32' && process.env.DEEPSEEK_DESKTOP_ENABLE_GPU !== '1') {
+// Optional diagnostic fallback for machines with a persistently broken graphics driver. Do not
+// disable GPU by default: doing so can prevent clean Electron shutdown on some Windows builds.
+if (process.platform === 'win32' && process.env.DEEPSEEK_DESKTOP_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
 }
 
@@ -122,6 +121,12 @@ function main() {
       if (safe) shell.openExternal(safe).catch(() => {});
       return { action: 'deny' };
     });
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    if (details?.type !== 'GPU' || ctx.quitting) return;
+    log('renderer', 'GPU process gone', details);
+    ctx.mainRecovery?.trigger({ kind: 'gpu-crashed', reason: details.reason ?? 'unknown' });
   });
 
   app.whenReady().then(async () => {
@@ -429,6 +434,7 @@ function createMainWindow() {
     reload: () => replaceMainWindow(win),
     onRecovery: (detail) => { ctx.rendererRecovery = detail; },
   });
+  ctx.mainRecovery = recovery;
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html')).catch((error) => {
     log('app', 'main shell load rejected', String(error));
   });
@@ -440,6 +446,7 @@ function createMainWindow() {
   win.on('moved', persistBounds);
   win.on('closed', () => {
     recovery.dispose();
+    if (ctx.mainRecovery === recovery) ctx.mainRecovery = null;
     if (ctx.windows.main === win) ctx.windows.main = null;
     // Hidden worker/platform windows otherwise keep the Windows portable app alive forever.
     if (process.platform !== 'darwin' && !win.replacedForRecovery) app.quit();
