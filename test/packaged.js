@@ -143,7 +143,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
-  await closeApplication();
+  await application.close(); application = null;
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
   page = await launch();
@@ -162,7 +162,7 @@ async function main() {
   await page.evaluate(id => api.sessions.rename(id, 'Read-only restart fixture'), readOnlySession);
   // Harness persists on a tick. A just-created empty session can otherwise disappear.
   await page.waitForTimeout(1200);
-  await closeApplication();
+  await application.close(); application = null;
   page = await launch();
   assert.equal(await page.evaluate(() => state.ui.defaultPermission), 'read-only');
   await page.evaluate(id => App.openSession(id), readOnlySession);
