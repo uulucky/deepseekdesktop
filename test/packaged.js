@@ -164,7 +164,7 @@ async function main() {
   page = await rendererRecovery(application, page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
-  await closeApplication({ allowForce: true });
+  await closeApplication();
   console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
