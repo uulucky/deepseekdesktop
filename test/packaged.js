@@ -22,6 +22,27 @@ delete env.DEEPSEEK_DESKTOP_HOME;
 delete env.DEEPSEEK_DESKTOP_DSH_BIN;
 delete env.ELECTRON_RUN_AS_NODE;
 let application, provider;
+async function closeApplication({ allowForce = false } = {}) {
+  if (!application) return;
+  const current = application;
+  const child = current.process();
+  let timer;
+  try {
+    await Promise.race([
+      current.close(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Electron app close timed out after 30 seconds')), 30_000);
+      }),
+    ]);
+  } catch (error) {
+    if (!allowForce) throw error;
+    console.warn('Forcing test app exit after renderer recovery:', error.message);
+    child.kill();
+  } finally {
+    clearTimeout(timer);
+    application = null;
+  }
+}
 function extract() {
   const result = spawnSync(bootstrap, ['--app-root', target, '--payload', archive, '--extract-only'], { encoding: 'utf8', timeout: 180000 });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
@@ -122,9 +143,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
-  page = await crashRendererAndRecover(page);
-  await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
-  await application.close(); application = null;
+  await closeApplication();
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
   page = await launch();
@@ -143,13 +162,17 @@ async function main() {
   await page.evaluate(id => api.sessions.rename(id, 'Read-only restart fixture'), readOnlySession);
   // Harness persists on a tick. A just-created empty session can otherwise disappear.
   await page.waitForTimeout(1200);
-  await application.close(); application = null;
+  await closeApplication();
   page = await launch();
   assert.equal(await page.evaluate(() => state.ui.defaultPermission), 'read-only');
   await page.evaluate(id => App.openSession(id), readOnlySession);
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
-  await application.close(); application = null;
+  console.log('Starting final packaged renderer crash recovery check');
+  page = await crashRendererAndRecover(page);
+  await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
+  console.log('PASS packaged renderer crash recovery returned to the selected conversation');
+  await closeApplication({ allowForce: true });
   console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
@@ -164,7 +187,7 @@ main().catch(async error => {
   if (fs.existsSync(logs)) fs.cpSync(logs, path.join(results, 'logs'), { recursive: true });
   process.exitCode = 1;
 }).finally(async () => {
-  await application?.close().catch(() => {});
+  await closeApplication({ allowForce: true }).catch(() => {});
   await provider?.close();
   fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
