@@ -53,7 +53,13 @@ async function closeApplication({ allowForce = false } = {}) {
   } catch (error) {
     if (!allowForce) throw error;
     console.warn('Forcing test app exit after renderer recovery:', error.message);
-    child.kill();
+    if (process.platform === 'win32' && child.pid) {
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true, encoding: 'utf8', timeout: 15_000,
+      });
+    } else {
+      child.kill();
+    }
     stopped = true;
   } finally {
     clearTimeout(timer);

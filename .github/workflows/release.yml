@@ -51,6 +51,7 @@ jobs:
       - name: Build portable artifacts from this source
         run: npm run dist:portable
       - name: Real packaged Windows UI and update extraction
+        timeout-minutes: 8
         run: npm run test:packaged
       - name: Preserve public test evidence
         if: always()
