@@ -98,6 +98,9 @@ async function crashRendererAndRecover(page) {
   let recovered = null;
   for (let count = 0; count < 120; count += 1) {
     for (const candidate of application.windows().filter(window => /\/index\.html$/.test(window.url()))) {
+      // The crash is scheduled just after the main-process evaluation acknowledges. Do not let
+      // the still-alive original renderer satisfy the recovery check during that short window.
+      if (candidate === page) continue;
       try {
         if (await candidate.evaluate(() => typeof App !== 'undefined' && App.ready === true)) {
           recovered = candidate;
