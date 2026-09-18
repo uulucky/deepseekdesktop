@@ -22,10 +22,11 @@ delete env.DEEPSEEK_DESKTOP_HOME;
 delete env.DEEPSEEK_DESKTOP_DSH_BIN;
 delete env.ELECTRON_RUN_AS_NODE;
 let application, provider;
-async function closeApplication({ allowForce = false, page = null } = {}) {
+async function closeApplication({ allowForce = false } = {}) {
   if (!application) return;
   const current = application;
   const child = current.process();
+  let stopped = false;
   let onExit;
   const exited = new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) resolve();
@@ -37,23 +38,29 @@ async function closeApplication({ allowForce = false, page = null } = {}) {
   let timer;
   try {
     await Promise.race([
-      Promise.resolve(page && !page.isClosed()
-        // Exercise the same path as a user clicking the main-window close button. Electron's
-        // closed handler then quits the hidden Harness windows and the application process.
-        ? page.close({ runBeforeUnload: true })
-        : current.evaluate(({ app }) => app.quit())).then(() => exited),
+      current.evaluate(({ BrowserWindow }) => {
+        // Exercise the same BrowserWindow path as a user clicking the main-window close button.
+        // Its closed handler must then quit the hidden Harness windows and application process.
+        const main = BrowserWindow.getAllWindows().find((win) => /\/index\.html$/.test(win.webContents.getURL()));
+        if (!main) throw new Error('Main window not found while closing packaged app');
+        main.close();
+      }).then(() => exited),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('Electron app close timed out after 30 seconds')), 30_000);
       }),
     ]);
+    stopped = true;
   } catch (error) {
     if (!allowForce) throw error;
     console.warn('Forcing test app exit after renderer recovery:', error.message);
     child.kill();
+    stopped = true;
   } finally {
     clearTimeout(timer);
     if (onExit) child.removeListener('exit', onExit);
-    application = null;
+    // Preserve the handle on a strict-close failure so main().finally can still terminate the
+    // process tree and release fixture connections before the CI step reports the error.
+    if (stopped) application = null;
   }
 }
 function extract() {
@@ -159,7 +166,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
-  await closeApplication({ page });
+  await closeApplication();
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
   page = await launch();
@@ -178,7 +185,7 @@ async function main() {
   await page.evaluate(id => api.sessions.rename(id, 'Read-only restart fixture'), readOnlySession);
   // Harness persists on a tick. A just-created empty session can otherwise disappear.
   await page.waitForTimeout(1200);
-  await closeApplication({ page });
+  await closeApplication();
   page = await launch();
   assert.equal(await page.evaluate(() => state.ui.defaultPermission), 'read-only');
   await page.evaluate(id => App.openSession(id), readOnlySession);
@@ -188,7 +195,7 @@ async function main() {
   page = await crashRendererAndRecover(page);
   await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
-  await closeApplication({ allowForce: true, page });
+  await closeApplication({ allowForce: true });
   console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
