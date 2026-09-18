@@ -63,10 +63,15 @@ async function crashRendererAndRecover(page) {
   });
   let recovered = null;
   for (let count = 0; count < 120; count += 1) {
-    recovered = application.windows().find(window => /\/index\.html$/.test(window.url())) ?? recovered;
-    try {
-      if (recovered && await recovered.evaluate(() => typeof App !== 'undefined' && App.ready === true)) break;
-    } catch { /* renderer is between crash and reload */ }
+    for (const candidate of application.windows().filter(window => /\/index\.html$/.test(window.url()))) {
+      try {
+        if (await candidate.evaluate(() => typeof App !== 'undefined' && App.ready === true)) {
+          recovered = candidate;
+          break;
+        }
+      } catch { /* old renderer is between crash and retirement */ }
+    }
+    if (recovered) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   assert(recovered, 'Main page exists after renderer crash');

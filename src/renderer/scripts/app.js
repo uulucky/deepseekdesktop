@@ -28,12 +28,17 @@ const App = {
     await this.refreshSessions();
     await this.refreshCredentials();
     // The account card is refreshed lazily: only when it is actually visible.
+    const rememberedId = typeof state.ui.activeSessionId === 'string' ? state.ui.activeSessionId : null;
     const rememberedSession = state.sessions.find((session) => (
-      session.sessionId === state.ui.activeSessionId && !session.archived
+      session.sessionId === rememberedId && !session.archived
     ));
-    const firstSession = rememberedSession ?? state.sessions.find((session) => !session.archived);
-    if (firstSession) await this.openSession(firstSession.sessionId);
-    else {
+    let opened = false;
+    // A brand-new/blank conversation may not be returned by session/list yet. During renderer
+    // recovery, try its remembered ID directly before falling back to the first listed item.
+    if (rememberedSession || rememberedId) opened = await this.openSession(rememberedSession?.sessionId ?? rememberedId);
+    const firstSession = state.sessions.find((session) => !session.archived);
+    if (!opened && firstSession) opened = await this.openSession(firstSession.sessionId);
+    if (!opened) {
       await this.loadSelection();
       ChatView.render(null);
       this.renderStreamingState();
@@ -335,7 +340,7 @@ const App = {
   },
 
   async openSession(sessionId) {
-    if (!sessionId) return;
+    if (!sessionId) return false;
     const summary = state.sessions.find((session) => session.sessionId === sessionId);
     state.preferredWorkspaceId = summary?.workspaceId ?? null;
     const view = this.sessionView(sessionId);
@@ -344,12 +349,18 @@ const App = {
     const revision = view.revision;
     const transcript = await guard(api.sessions.open(sessionId), '打开对话');
     if (transcript) this.receiveTranscript(sessionId, transcript, revision);
+    else {
+      view.loading = false;
+      if (navigation === state.navigation) this.paintSession();
+      return false;
+    }
     await Promise.all([this.loadSelection(sessionId), this.loadPermission(sessionId)]);
     view.loading = false;
     if (navigation !== state.navigation) return;
     this.paintSession();
     Sidebar.renderAll();
     ChatView.scrollToEnd();
+    return true;
   },
 
   async newSession(workspaceId = state.preferredWorkspaceId) {

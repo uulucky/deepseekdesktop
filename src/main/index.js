@@ -426,6 +426,7 @@ function createMainWindow() {
   const recovery = attachWindowRecovery(win, {
     log: (message, detail) => log('renderer', message, detail),
     shouldRecover: () => !ctx.quitting && !win.isDestroyed(),
+    reload: () => replaceMainWindow(win),
     onRecovery: (detail) => { ctx.rendererRecovery = detail; },
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html')).catch((error) => {
@@ -439,12 +440,33 @@ function createMainWindow() {
   win.on('moved', persistBounds);
   win.on('closed', () => {
     recovery.dispose();
-    ctx.windows.main = null;
+    if (ctx.windows.main === win) ctx.windows.main = null;
     // Hidden worker/platform windows otherwise keep the Windows portable app alive forever.
-    if (process.platform !== 'darwin') app.quit();
+    if (process.platform !== 'darwin' && !win.replacedForRecovery) app.quit();
   });
   ctx.windows.main = win;
   return win;
+}
+
+/**
+ * A crashed WebContents can accept reloadIgnoringCache without ever creating a new renderer on
+ * some Windows/macOS builds. Build a fresh BrowserWindow, then retire the black window only
+ * after the replacement document has loaded. The main process, Harness and running tasks stay
+ * alive throughout the hand-off.
+ */
+function replaceMainWindow(failedWindow) {
+  if (ctx.quitting || failedWindow.isDestroyed() || ctx.windows.main !== failedWindow) return false;
+  failedWindow.replacedForRecovery = true;
+  ctx.windows.main = null;
+  const replacement = createMainWindow();
+  const retireFailedWindow = () => {
+    if (!failedWindow.isDestroyed()) failedWindow.destroy();
+  };
+  replacement.webContents.once('did-finish-load', retireFailedWindow);
+  replacement.webContents.once('did-fail-load', retireFailedWindow);
+  // A failed replacement must not leave two windows around forever.
+  setTimeout(retireFailedWindow, 15_000).unref?.();
+  return true;
 }
 
 /** Return keyboard focus to the app shell after an account/recharge window closes. */
