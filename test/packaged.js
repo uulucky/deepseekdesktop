@@ -7,6 +7,7 @@ const os = require('node:os');
 const assert = require('node:assert/strict');
 const { startModelServer } = require('./fixtures/model-server');
 const { multitaskUi } = require('./fixtures/multitask-ui');
+const { rendererRecovery } = require('./fixtures/renderer-recovery');
 const { spawnSync } = require('node:child_process');
 const version = require('../package.json').version;
 const root = path.resolve(__dirname, '..');
@@ -43,7 +44,8 @@ async function closeApplication({ allowForce = false } = {}) {
         // Its closed handler must then quit the hidden Harness windows and application process.
         const main = BrowserWindow.getAllWindows().find((win) => /\/index\.html$/.test(win.webContents.getURL()));
         if (!main) throw new Error('Main window not found while closing packaged app');
-        main.close();
+        setTimeout(() => { if (!main.isDestroyed()) main.close(); }, 100);
+        return true;
       }).then(() => exited),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('Electron app close timed out after 30 seconds')), 30_000);
@@ -91,45 +93,6 @@ async function launch() {
   await page.locator('#input').waitFor();
   await page.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
   return page;
-}
-async function crashRendererAndRecover(page) {
-  const activeSessionId = await page.evaluate(async () => {
-    await api.settings.setUi({ activeSessionId: state.activeSessionId });
-    return state.activeSessionId;
-  });
-  await application.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find(item => /\/index\.html$/.test(item.webContents.getURL()));
-    if (!win) throw new Error('Main window not found for renderer recovery test');
-    // Return over Playwright's main-process control channel before killing the target. If the
-    // crash happens synchronously, Chromium can tear down the inspected target before the
-    // evaluation acknowledgement is delivered and leave the test driver waiting forever.
-    setTimeout(() => {
-      if (!win.isDestroyed()) win.webContents.forcefullyCrashRenderer();
-    }, 100);
-    return true;
-  });
-  let recovered = null;
-  for (let count = 0; count < 120; count += 1) {
-    for (const candidate of application.windows().filter(window => /\/index\.html$/.test(window.url()))) {
-      // The crash is scheduled just after the main-process evaluation acknowledges. Do not let
-      // the still-alive original renderer satisfy the recovery check during that short window.
-      if (candidate === page) continue;
-      try {
-        if (await candidate.evaluate(() => typeof App !== 'undefined' && App.ready === true)) {
-          recovered = candidate;
-          break;
-        }
-      } catch { /* old renderer is between crash and retirement */ }
-    }
-    if (recovered) break;
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
-  assert(recovered, 'Main page exists after renderer crash');
-  await recovered.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
-  assert.equal(await recovered.evaluate(() => state.activeSessionId), activeSessionId,
-    'Renderer recovery returns to the selected conversation');
-  assert.equal(await recovered.evaluate(() => state.world?.rendererRecovery?.status), 'recovering');
-  return recovered;
 }
 async function main() {
   assert.equal(process.platform, 'win32', 'Run packaged smoke on Windows');
@@ -198,7 +161,7 @@ async function main() {
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
   console.log('Starting final packaged renderer crash recovery check');
-  page = await crashRendererAndRecover(page);
+  page = await rendererRecovery(application, page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
   await closeApplication({ allowForce: true });
@@ -211,9 +174,9 @@ main().catch(async error => {
     console.log(`::error title=Packaged Windows smoke::${annotation}`);
   }
   const page = application?.windows().find(window => /index\.html/.test(window.url()));
-  await page?.screenshot({ path: path.join(results, 'failure.png') }).catch(() => {});
   const logs = path.join(target, 'data/logs');
   if (fs.existsSync(logs)) fs.cpSync(logs, path.join(results, 'logs'), { recursive: true });
+  await page?.screenshot({ path: path.join(results, 'failure.png'), timeout: 5000 }).catch(() => {});
   process.exitCode = 1;
 }).finally(async () => {
   await closeApplication({ allowForce: true }).catch(() => {});

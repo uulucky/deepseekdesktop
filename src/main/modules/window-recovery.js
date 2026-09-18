@@ -10,11 +10,14 @@ function attachWindowRecovery(win, {
   unresponsiveDelayMs = 8000,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
+  attempts = [],
 } = {}) {
+  // BrowserWindow.webContents throws after the native window has been destroyed. Cleanup is
+  // called from `closed`, so retain the EventEmitter while the window is still alive.
+  const contents = win.webContents;
   let recoveryTimer = null;
   let unresponsiveTimer = null;
   let disposed = false;
-  const attempts = [];
 
   const schedule = (detail, delay) => {
     if (disposed || !shouldRecover() || recoveryTimer) return;
@@ -57,7 +60,7 @@ function attachWindowRecovery(win, {
     log('main renderer responsive again');
   };
 
-  win.webContents.on('render-process-gone', onGone);
+  contents.on('render-process-gone', onGone);
   win.on('unresponsive', onUnresponsive);
   win.on('responsive', onResponsive);
 
@@ -69,7 +72,7 @@ function attachWindowRecovery(win, {
       if (unresponsiveTimer) clearTimer(unresponsiveTimer);
       recoveryTimer = null;
       unresponsiveTimer = null;
-      win.webContents.removeListener('render-process-gone', onGone);
+      contents.removeListener('render-process-gone', onGone);
       win.removeListener('unresponsive', onUnresponsive);
       win.removeListener('responsive', onResponsive);
     },

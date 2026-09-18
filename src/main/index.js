@@ -55,8 +55,7 @@ const ctx = {
 // Portable (green) mode must claim Chromium's storage paths before the app is ready.
 const PORTABLE_ROOT = adoptPortablePaths();
 
-// Optional diagnostic fallback for machines with a persistently broken graphics driver. Do not
-// disable GPU by default: doing so can prevent clean Electron shutdown on some Windows builds.
+// Optional diagnostic fallback for machines with a persistently broken graphics driver.
 if (process.platform === 'win32' && process.env.DEEPSEEK_DESKTOP_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
 }
@@ -433,6 +432,7 @@ function createMainWindow() {
     shouldRecover: () => !ctx.quitting && !win.isDestroyed(),
     reload: () => replaceMainWindow(win),
     onRecovery: (detail) => { ctx.rendererRecovery = detail; },
+    attempts: ctx.recoveryAttempts ??= [],
   });
   ctx.mainRecovery = recovery;
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html')).catch((error) => {

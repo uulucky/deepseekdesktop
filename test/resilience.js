@@ -54,6 +54,29 @@ async function recoveryContract() {
   await wait(20);
   assert.equal(win.reloads, 2, 'a persistently unresponsive renderer is reloaded');
   recovery.dispose();
+
+  const destroyedWin = new FakeWindow();
+  const contents = destroyedWin.webContents;
+  const destroyedRecovery = attachWindowRecovery(destroyedWin);
+  Object.defineProperty(destroyedWin, 'webContents', {
+    get() { throw new TypeError('Object has been destroyed'); },
+  });
+  assert.doesNotThrow(() => destroyedRecovery.dispose(), 'closed-window cleanup must not access native window properties');
+  assert.equal(contents.listenerCount('render-process-gone'), 0);
+
+  const attempts = [];
+  const failures = [];
+  for (let i = 0; i < 4; i += 1) {
+    const replacement = new FakeWindow();
+    const handler = attachWindowRecovery(replacement, {
+      attempts, crashDelayMs: 1, onRecovery: event => failures.push(event),
+    });
+    handler.trigger();
+    await wait(5);
+    assert.equal(replacement.reloads, i < 3 ? 1 : 0, 'replacement windows share the retry budget');
+    handler.dispose();
+  }
+  assert.equal(failures.at(-1).status, 'failed');
 }
 
 function chatRenderBudgetContract() {
