@@ -117,8 +117,11 @@ async function main() {
     const attachmentResponse = findAttachmentRequest();
     const requestJson = JSON.stringify(attachmentResponse.body.messages);
     assert(requestJson.includes('image_url'), 'Pasted image reaches the actual multimodal model request');
-    assert(requestJson.includes('notes.txt') && requestJson.includes('/attachments/v1/files/'),
-      'Selected file is staged and its readable Harness reference reaches the model context');
+    assert(
+      requestJson.includes('notes.txt') && requestJson.includes('sha256:')
+        && requestJson.includes('verbatim read-only copy saved at'),
+      'Selected file is staged and its platform-native readable Harness reference reaches the model context',
+    );
     attachmentResponse.finish('attachment ok');
     await eventually(() => !chat.transcripts.get(attachmentSession)?.running, 'Attachment turn settles');
     await eventually(() => {

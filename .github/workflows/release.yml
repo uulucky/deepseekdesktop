@@ -45,7 +45,10 @@ jobs:
       - name: Contract and security tests
         run: npm test
       - name: Real isolated Harness integration (no paid API calls)
-        run: npm run test:integration
+        run: |
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          npm run test:integration 2>&1 | Tee-Object -FilePath test-results/integration-console.log
+          exit $LASTEXITCODE
       - name: Native updater tests
         run: go test -v ./build/update-bootstrap
       - name: Build portable artifacts from this source
@@ -103,7 +106,11 @@ jobs:
       - name: Stage verified native Mac runtime
         run: npm run runtime:stage
       - run: npm test
-      - run: npm run test:integration
+      - name: Real isolated Harness integration (no paid API calls)
+        run: |
+          mkdir -p test-results
+          set -o pipefail
+          npm run test:integration 2>&1 | tee test-results/integration-console.log
       - name: Build ad-hoc signed DMG and ZIP (no Developer ID or notarization)
         run: npm run dist:mac
       - name: Real packaged Mac UI, replacement and data retention
