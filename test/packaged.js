@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const { startModelServer } = require('./fixtures/model-server');
 const { multitaskUi } = require('./fixtures/multitask-ui');
 const { rendererRecovery } = require('./fixtures/renderer-recovery');
+const { actionSummaryUi } = require('./fixtures/action-summary-ui');
 const { spawnSync } = require('node:child_process');
 const version = require('../package.json').version;
 const root = path.resolve(__dirname, '..');
@@ -135,6 +136,8 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
   await multitaskUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
+  await actionSummaryUi(page, provider);
+  await page.screenshot({ path: path.join(results, 'packaged-action-summary.png') });
   await closeApplication();
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');

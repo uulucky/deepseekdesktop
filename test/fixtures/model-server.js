@@ -26,6 +26,10 @@ async function startModelServer() {
         res.write(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk',
           model: body.model, choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }] })}\n\n`);
       },
+      reasoning(text) {
+        res.write(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk',
+          model: body.model, choices: [{ index: 0, delta: { role: 'assistant', reasoning_content: text }, finish_reason: null }] })}\n\n`);
+      },
       finish(text) {
         if (text) this.delta(text);
         res.end(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: body.model,

@@ -667,9 +667,19 @@ class Bootstrap {
       const useNodeEntry = Boolean(this.nodeBin) && Boolean(entry)
         && (IS_WINDOWS || /\.m?js$/i.test(this.dshBin ?? ''));
       const command = useNodeEntry ? this.nodeBin : this.dshBin;
+      // A separate insert preserves user persona, tool policy and profile patches. The
+      // normal Node runtime cannot read app.asar, so stage this app-owned plugin in data.
+      const presentationDir = path.join(DIRS.runtime, 'desktop-presentation');
+      fs.mkdirSync(presentationDir, { recursive: true });
+      const presentationPlugin = path.join(presentationDir, 'plugin.cjs');
+      fs.copyFileSync(path.join(__dirname, 'desktop-presentation.cjs'), presentationPlugin);
+      const presentationPatch = path.join(presentationDir, 'cordis.patch.json');
+      fs.writeFileSync(presentationPatch, JSON.stringify([{ insert: [{
+        id: 'desktop-action-summary', name: presentationPlugin,
+      }] }]), 'utf8');
       const args = useNodeEntry
-        ? [entry, 'web', '--port', String(port), '--no-open']
-        : ['web', '--port', String(port), '--no-open'];
+        ? [entry, 'web', '--patch', presentationPatch, '--port', String(port), '--no-open']
+        : ['web', '--patch', presentationPatch, '--port', String(port), '--no-open'];
 
       this.childResult = null;
       this.kernelOutput = [];

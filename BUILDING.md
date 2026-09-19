@@ -45,7 +45,7 @@ npm run test:integration
 Release ZIP 与自动更新分发的是同一 CI 构建文件。可执行：
 
 ```sh
-gh attestation verify DeepSeekDesktop-0.2.22-portable.zip --repo uulucky/deepseekdesktop
+gh attestation verify DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
 node build/verify-update.js latest.json
 ```
 

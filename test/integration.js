@@ -70,6 +70,8 @@ async function main() {
     await client.selectModel(a, group.id, model, 'off');
     await chat.send(a, 'multitask-fixture-A');
     const responseA = await provider.waitFor('multitask-fixture-A');
+    assert(responseA.body.messages.some(message => message.role === 'system'
+      && JSON.stringify(message.content).includes('<desktop-summary>')), 'Desktop action summary instruction reaches the actual model request');
     responseA.delta('A partial');
     await eventually(() => chat.transcripts.get(a)?.items.some(item => item.parts?.some(part => part.text === 'A partial')), 'A streams live');
     // A remains deliberately unfinished while we create and send B through the real kernel.

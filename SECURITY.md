@@ -26,8 +26,8 @@ Windows EXE **目前没有 Authenticode 代码签名**，“已验证的发布�
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.2.22-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.2.22-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.2.23-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。

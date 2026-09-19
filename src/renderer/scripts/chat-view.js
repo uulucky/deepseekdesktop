@@ -7,6 +7,40 @@ const MAX_VISIBLE_ITEMS = 240;
 const MAX_TEXT_CHARS = 48_000;
 const MAX_REASONING_CHARS = 24_000;
 const MAX_TOOL_CHARS = 12_000;
+const expandedDetails = new Set();
+let renderedSession = '';
+
+/** Only a leading, explicit presentation block is special; code/quoted examples stay intact. */
+function splitActionSummary(value, streaming = false) {
+  const text = String(value ?? '');
+  const start = '<desktop-summary>';
+  const end = '</desktop-summary>';
+  const trimmed = text.trimStart();
+  if (streaming && trimmed && start.startsWith(trimmed)) return { text: '', summary: '', pending: true };
+  if (!trimmed.startsWith(start)) return { text, summary: '' };
+  const body = trimmed.slice(start.length);
+  const close = body.indexOf(end);
+  if (close < 0 && (!streaming || body.length > 600)) return { text, summary: '' };
+  // Do not flash partial closing delimiters while tokens arrive.
+  let summary = close < 0 ? body : body.slice(0, close);
+  if (close < 0) {
+    for (let size = Math.min(end.length - 1, summary.length); size > 0; size -= 1) {
+      if (summary.endsWith(end.slice(0, size))) { summary = summary.slice(0, -size); break; }
+    }
+  }
+  return { text: close < 0 ? '' : body.slice(close + end.length), summary: summary.trim(), pending: close < 0 };
+}
+
+function actionSummary(text, placeholder = false) {
+  return `<section class="action-summary${placeholder ? ' pending' : ''}" aria-label="行动摘要">`
+    + `<div class="action-summary-label">${placeholder ? '正在整理行动摘要' : '行动摘要'}</div>`
+    + `<div class="action-summary-text">${esc(displayText(text, 600))}</div></section>`;
+}
+
+function detailState(key) {
+  const id = JSON.stringify([renderedSession, key]);
+  return { attributes: ` data-detail-id="${esc(id)}"`, open: expandedDetails.has(id) };
+}
 
 function displayText(value, limit) {
   const text = String(value ?? '');
@@ -15,24 +49,25 @@ function displayText(value, limit) {
 }
 
 /** Render one content part. */
-function renderPart(part) {
+function renderPart(part, key = '') {
   if (!part) return '';
   if (part.kind === 'text') return `<div class="content">${window.Markdown.render(displayText(part.text, MAX_TEXT_CHARS))}</div>`;
   if (part.kind === 'reasoning') {
-    return fold('思考过程', '', `<pre>${esc(displayText(part.text, MAX_REASONING_CHARS))}</pre>`, false);
+    return fold('思考原文', '详细记录', `<pre>${esc(displayText(part.text, MAX_REASONING_CHARS))}</pre>`, key);
   }
   if (part.kind === 'tool-call') {
-    return fold('调用工具 ' + esc(part.name || ''), esc(part.summary || ''), `<pre>${esc(displayText(part.arguments, MAX_TOOL_CHARS))}</pre>`, false);
+    return fold('调用工具 ' + esc(part.name || ''), esc(part.summary || ''), `<pre>${esc(displayText(part.arguments, MAX_TOOL_CHARS))}</pre>`, key);
   }
   if (part.kind === 'image') return '<div class="hint">[图片]</div>';
   return '';
 }
 
 /** Collapsible card markup (reasoning, tool calls, diffs). */
-function fold(title, sub, body, open) {
+function fold(title, sub, body, key) {
+  const { attributes, open } = detailState(key);
   return (
-    `<div class="fold${open ? ' open' : ''}">` +
-      `<div class="fold-head"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
+    `<div class="fold${open ? ' open' : ''}"${attributes}>` +
+      `<div class="fold-head" role="button" tabindex="0" aria-expanded="${open}"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
       `<span class="fold-title">${title}</span><span class="fold-sub">${sub}</span></div>` +
       `<div class="fold-body">${body}</div>` +
     '</div>'
@@ -61,7 +96,7 @@ function renderApproval(approval) {
 }
 
 /** Render one transcript item (user / assistant / tool / turn marker). */
-function renderItem(item, approvals = []) {
+function renderItem(item, approvals = [], rowKey = '') {
   if (item.kind === 'user') {
     const tags = item.synthetic ? '<span class="tag">系统注入</span>' : '';
     const pending = item.pending ? ' pending' : '';
@@ -69,6 +104,7 @@ function renderItem(item, approvals = []) {
     const body = item.parts?.length
       ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(displayText(part.text, MAX_TEXT_CHARS))}</div>` : renderPart(part))).join('')
       : `<div class="bubble">${esc(displayText(item.text, MAX_TEXT_CHARS))}</div>`;
+    if (item.synthetic) return `<div class="system-context">${fold('运行环境', '系统上下文', body, `${rowKey}:context`)}</div>`;
     return (
       `<div class="msg user${pending}${failed}">` +
         '<div class="msg-avatar">你</div>' +
@@ -79,11 +115,21 @@ function renderItem(item, approvals = []) {
 
   if (item.kind === 'assistant') {
     const parts = item.parts ?? [];
-    const visible = parts.filter((part) => part.kind !== 'reasoning');
-    const reasoning = parts.filter((part) => part.kind === 'reasoning');
+    const firstText = parts.findIndex(part => part.kind === 'text');
+    const text = firstText < 0 ? '' : parts[firstText].text || '';
+    const presentation = splitActionSummary(text, item.streaming);
+    const hasReasoning = parts.some(part => part.kind === 'reasoning');
+    const summary = presentation.summary ? actionSummary(presentation.summary)
+      : (item.streaming && !text && hasReasoning) || presentation.pending
+        ? actionSummary('正在分析任务，整理接下来要做的事…', true) : '';
     const body = [
-      ...reasoning.map((part) => renderPart(part)),
-      ...visible.map((part) => renderPart(part)),
+      summary,
+      ...parts.map((part, index) => {
+        if (index === firstText) {
+          return presentation.text.trim() ? renderPart({ kind: 'text', text: presentation.text }) : '';
+        }
+        return renderPart(part, `${rowKey}:part:${index}`);
+      }),
     ].join('');
     const streamingTag = item.streaming ? '<span class="tag">生成中</span>' : '';
     const interrupted = item.interrupted ? '<span class="tag">已中断</span>' : '';
@@ -106,9 +152,10 @@ function renderItem(item, approvals = []) {
     const status = approval ? '等待授权' : item.running ? '运行中' : item.isError ? '失败' : item.interrupted ? '已中断' : '完成';
     const cls = item.isError ? 'fold err' : 'fold';
     const sub = esc(item.summary || status);
+    const { attributes, open } = detailState(`${rowKey}:tool`);
     return (
-      `<div class="${cls}${item.running ? ' open' : ''}" style="margin-left:41px">` +
-        `<div class="fold-head"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
+      `<div class="${cls}${open ? ' open' : ''}"${attributes} style="margin-left:41px">` +
+        `<div class="fold-head" role="button" tabindex="0" aria-expanded="${open}"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
         `<span class="fold-title">${esc(item.name || '工具')}</span><span class="fold-sub">${sub}</span>` +
         `<span class="badge ${item.isError || approval ? 'warn' : item.running ? '' : 'ok'}" style="margin-left:auto">${status}</span></div>` +
         `<div class="fold-body">${item.arguments ? `<pre>${esc(displayText(item.arguments, MAX_TOOL_CHARS))}</pre>` : ''}${item.output ? `<pre>${esc(displayText(item.output, MAX_TOOL_CHARS))}</pre>` : ''}</div>` +
@@ -150,6 +197,7 @@ const ChatView = {
     const inner = innerEl();
     if (!inner) return;
     const approvals = transcript?.approvals ?? [];
+    renderedSession = transcript?.sessionId ?? '';
     if (!transcript || (!(transcript.items ?? []).length && !approvals.length)) {
       inner.innerHTML = renderEmpty();
       return;
@@ -160,7 +208,9 @@ const ChatView = {
     const historyNotice = hiddenCount
       ? `<div class="history-window-note">为保证长对话稳定，当前显示最近 ${MAX_VISIBLE_ITEMS} 条记录；更早的 ${hiddenCount} 条仍保存在本地。</div>`
       : '';
-    inner.innerHTML = historyNotice + items.map((item) => renderItem(item, approvals)).join('')
+    inner.innerHTML = historyNotice + items.map((item, index) => renderItem(item, approvals,
+      item.callId ?? (item.kind === 'assistant' && item.turn !== undefined
+        ? `assistant:${item.turn}:${item.step}` : `${item.kind}:${item.seq ?? index + hiddenCount}`))).join('')
       + approvals.map(renderApproval).join('');
     this.scrollToBottom();
   },
@@ -179,6 +229,12 @@ const ChatView = {
 
   /** Delegated handlers: fold toggles, copy buttons, external links, suggestions. */
   install() {
+    document.addEventListener('keydown', (event) => {
+      if ((event.key === 'Enter' || event.key === ' ') && event.target.matches?.('.fold-head')) {
+        event.preventDefault();
+        event.target.click();
+      }
+    });
     document.addEventListener('click', (event) => {
       const target = event.target;
       const approvalButton = target.closest?.('[data-approval-action]');
@@ -201,7 +257,16 @@ const ChatView = {
       }
       const foldHead = target.closest?.('.fold-head');
       if (foldHead) {
-        foldHead.parentElement.classList.toggle('open');
+        const card = foldHead.parentElement;
+        const open = card.classList.toggle('open');
+        foldHead.setAttribute('aria-expanded', String(open));
+        const key = card.getAttribute('data-detail-id');
+        if (key) {
+          if (open) expandedDetails.add(key);
+          else expandedDetails.delete(key);
+          // Bound UI-only state; never store reasoning or tool contents here.
+          if (expandedDetails.size > 500) expandedDetails.delete(expandedDetails.values().next().value);
+        }
         return;
       }
       const copy = target.closest?.('.md-copy');

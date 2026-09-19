@@ -4,11 +4,11 @@
 
 面向 Windows 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.2.22 · Windows 10/11 x64 · 便携版**。
+当前版本：**0.2.23 · Windows 10/11 x64 · 便携版**。
 
-[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.22-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内直接下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.23-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更新源已同步。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.22-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.22-build-info.json)。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.23-SHA256SUMS.txt) 和 [构建信息](https://img.uulucky.com/han/deepseek/0.2.23-build-info.json)。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -17,6 +17,7 @@ GitHub 与国内 OSS/CDN 镜像均提供同一份公开 CI 产物，软件内更
 - **余额与当天用量**：每 10 分钟自动刷新，可手动刷新；金额、Token 和请求数以平台可返回数据为准，不是逐秒计费仪表。
 - **软件内充值**：在应用内打开 DeepSeek 官方充值页面，由官方及其支付服务处理付款；客户端维护者不代收款。
 - **推理滑块**：按当前模型支持的档位选择推理等级。
+- **中文行动摘要**：执行前简短说明准备做什么，后续说明已确认的进展和下一步；摘要展开显示，思考原文与工具详情默认折叠。
 - **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；默认 Full Access，输入区持续显示风险提醒，记住你选择的档位。
 - **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
 - **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
@@ -53,9 +54,11 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 ## 当前版本改进
 
-0.2.22 修复部分 Windows 电脑在对话进行中界面突然全黑的问题：流式快照改为合并刷新，长对话和超长工具输出采用有界显示。若渲染进程、GPU 进程异常退出或界面长时间无响应，客户端会用新窗口自动接管、回到原会话，正在运行的本地任务继续接收结果。完整记录仍由 Harness 保存在本地；界面为稳定性只挂载最近 240 条记录。
+0.2.23 把对话进度变得更容易看懂：模型执行工具前，用一两句中文说明接下来要做什么；后续步骤简述已确认的进展。行动摘要直接展开，思考原文、工具参数和输出默认折叠。工具的运行、完成、失败或等待授权状态仍可见，权限确认按钮不会藏进折叠区。手动展开的详情在流式刷新、切换会话后保持展开，直到关闭软件；也可用 Tab、Enter 或空格操作。
 
-本版也加入对话重命名、搜索、归档、文件夹工作区和“从此处创建新对话”。搜索优先使用 Harness 索引；当前内核未启用索引时，会在本机扫描有限范围的历史记录，不把搜索内容发给维护者。
+摘要由当前模型在同一次回答中生成，是面向用户的高层行动说明，不是逐字翻译完整思考链；不另外调用翻译服务，也无需安装 Skill。固定提示词和简短摘要会占用少量正常模型 Token。生成摘要前显示真实等待状态，不伪造进展。旧记录不会额外联网补译；模型未输出摘要或用户要求严格 JSON 等格式时，仍显示正常回复与可展开原文。
+
+继续支持多任务、对话管理和黑窗口自动恢复。对话完整记录由 Harness 保存在本地；界面为稳定性只挂载最近 240 条记录。默认 Full Access 和常驻风险提醒不变。
 
 ### 如何同时运行多个任务
 
