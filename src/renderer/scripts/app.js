@@ -197,8 +197,10 @@ const App = {
 
   async installUpdate() {
     if (state.update?.status !== 'available') return;
-    toast(`正在下载 ${state.update.availableVersion}，完成后会自动重启…`);
-    await guard(api.update.install(), '自动更新失败');
+    toast(state.update.manual
+      ? '正在打开 Mac 下载链接。下载后请退出软件，将新应用拖入“应用程序”替换；本地数据保留。'
+      : `正在下载 ${state.update.availableVersion}，完成后会自动重启…`);
+    await guard(api.update.install(), state.update.manual ? '打开下载失败' : '自动更新失败');
   },
 
   /** Single delegated click router for modal actions. */

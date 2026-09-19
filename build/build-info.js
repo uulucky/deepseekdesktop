@@ -6,6 +6,8 @@ const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const pkg = require('../package.json');
 const pins = require('./runtime-pins.json');
+const mac = process.argv.includes('--mac');
+const prefix = mac ? `mac-${process.arch}-` : '';
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex');
 const commit = process.env.GITHUB_SHA || execFileSync('git',['rev-parse','HEAD'],{ cwd: root, encoding: 'utf8' }).trim();
 const info = {
@@ -13,12 +15,14 @@ const info = {
   sourceRepository: 'https://github.com/uulucky/deepseekdesktop',
   workflow: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
   builtAt: new Date().toISOString(), node: pins.nodeVersion, harness: pins.kernelVersion,
-  go: execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
-  electron: pkg.devDependencies.electron, authenticode: 'unsigned',
+  go: mac ? null : execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
+  platform: mac ? 'darwin' : 'win32', arch: mac ? process.arch : 'x64',
+  electron: pkg.devDependencies.electron, authenticode: mac ? 'not-applicable' : 'unsigned',
+  ...(mac ? { appleSigning: 'ad-hoc', notarized: false } : {}),
   locks: { application: hash('package-lock.json'), harness: hash('build/kernel/package-lock.json') },
 };
 fs.mkdirSync(path.join(root,'dist'),{recursive:true});
-fs.writeFileSync(path.join(root,'dist/build-info.json'),JSON.stringify(info,null,2)+'\n');
+fs.writeFileSync(path.join(root,'dist',prefix+'build-info.json'),JSON.stringify(info,null,2)+'\n');
 const packages = [];
 for (const [scope,file] of [['application','package-lock.json'],['harness','build/kernel/package-lock.json']]) {
   const lock = JSON.parse(fs.readFileSync(path.join(root,file),'utf8'));
@@ -31,5 +35,5 @@ for (const [scope,file] of [['application','package-lock.json'],['harness','buil
   }
 }
 packages.push({type:'application', name:'Electron',version:info.electron},{type:'application', name:'Node.js',version:info.node.slice(1)});
-fs.writeFileSync(path.join(root,'dist/sbom.cdx.json'),JSON.stringify({bomFormat:'CycloneDX',specVersion:'1.6',version:1,metadata:{component:{type:'application',name:pkg.name,version:pkg.version}},components:packages},null,2)+'\n');
+fs.writeFileSync(path.join(root,'dist',prefix+'sbom.cdx.json'),JSON.stringify({bomFormat:'CycloneDX',specVersion:'1.6',version:1,metadata:{component:{type:'application',name:pkg.name,version:pkg.version}},components:packages},null,2)+'\n');
 console.log('Build metadata and production dependency inventory generated:', commit);

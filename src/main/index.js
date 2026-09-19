@@ -129,7 +129,9 @@ function main() {
   });
 
   app.whenReady().then(async () => {
-    Menu.setApplicationMenu(null);
+    Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([
+      { role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' },
+    ]) : null);
     ctx.uiStore = new Store('ui');
     ctx.platformStore = new Store('platform');
     ctx.ad = new AdSlot();
@@ -146,6 +148,7 @@ function main() {
       appRoot: execDir(),
       executable: app.getPath('exe'),
       quit: () => app.quit(),
+      openExternal: (url) => shell.openExternal(url),
       onState: (state) => {
         const win = ctx.windows.main;
         if (win && !win.isDestroyed()) win.webContents.send('update:state', state);

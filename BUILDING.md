@@ -21,7 +21,11 @@ npm run test:packaged
 
 ## 自动构建
 
-[Windows build, test and release](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml) 在 push、PR、手动触发及版本 tag 时执行。同一源码构建结果发布为 GitHub Actions artifacts；仅本仓库版本 tag 的通过测试产物会发布为 Release 并生成 GitHub 构建来源证明。PR 不获得发布私钥或 OSS 凭据。
+Mac 使用匹配 CPU 的 macOS 机器和 Node 24.15.0，执行 `npm ci`、`npm run runtime:stage`、`npm test`、`npm run test:integration`、`npm run dist:mac`、`npm run test:packaged`。不需要 Apple 开发者账号；自有脚本通过锁定的 `@electron/osx-sign` 做 ad-hoc 签名，无公证、不访问开发者证书。不要在 ARM64 机器上把原生依赖复用为 Intel 包。支持 macOS 14+，CI 原生测试环境为 macOS 15 的 ARM64 与 Intel runner，不代表每个系统小版本都已验证。
+
+Mac 的 DMG 和 ZIP 包含同一 `.app`。测试从正式 ZIP 解包，验证递归代码签名和 Node CPU 架构，实际启动 Electron/随包 Harness，执行输入、多任务、行动摘要、渲染恢复、退出/重启及替换 `.app` 后独立数据和测试 Cookie 保留。测试不会为 CI 自动放行 Gatekeeper，也不能替代真实浏览器隔离属性下的首次安装、系统钥匙串或真实账户验证。
+
+[Windows and Mac build, test and release](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml) 在 push、PR、手动触发及版本 tag 时执行。同一源码构建结果发布为 GitHub Actions artifacts；仅本仓库版本 tag 的通过测试产物会发布为 Release 并生成 GitHub 构建来源证明。PR 不获得发布私钥或 OSS 凭据。
 
 公开内容包括 Windows 构建日志、契约测试、全新临时 Harness 的真实接口测试、打包后 UI 冒烟截图、原生更新器测试、`SHA256SUMS.txt`、`build-info.json` 与 `sbom.cdx.json`。测试不访问维护者的真实 Key、对话或支付账号。
 
@@ -38,17 +42,19 @@ npm ci --prefix build/kernel --ignore-scripts
 npm run test:integration
 ```
 
-非 Windows 系统可以运行契约和隔离 Harness 测试，不能据此宣称通过 Windows 端到端测试。旧 `node test/smoke.js` 入口也会启动隔离内核，不再默认连接本机 3080 或读取现有对话。
+测试结果只代表运行它的系统与架构；Mac 通过不能据此宣称 Windows 通过，反之亦然。旧 `node test/smoke.js` 入口也会启动隔离内核，不再默认连接本机 3080 或读取现有对话。
 
 ## 产物验证
 
 Release ZIP 与自动更新分发的是同一 CI 构建文件。可执行：
 
 ```sh
-gh attestation verify DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
+gh attestation verify DeepSeekDesktop-0.2.24-portable.zip --repo uulucky/deepseekdesktop
 node build/verify-update.js latest.json
 ```
 
 `gh` 是 GitHub CLI。校验值单独用于文件完整性；请同时核对来源证明对应的仓库、workflow 和提交。`build-info.json` 写入源码提交、构建时间、依赖摘要与 workflow URL。构建包含时间信息、平台打包器及上游下载资源，**尚未声明逐字节可重现构建**。
 
 参考：[GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)。
+
+Mac 产物另外提供 `mac-arm64-build-info.json` / `mac-x64-build-info.json`、对应 SBOM、分平台哈希清单。全部原生任务通过后合并更新描述与总 `SHA256SUMS.txt`，对 DMG、ZIP、更新器及元数据生成来源证明；正式发布不使用开发机临时打包结果。

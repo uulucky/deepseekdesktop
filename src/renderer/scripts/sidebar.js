@@ -209,7 +209,7 @@ const Sidebar = {
     button.disabled = update.status === 'downloading' || update.status === 'installing';
     button.textContent = update.status === 'downloading'
       ? `${Math.max(0, Number(update.progress) || 0)}%`
-      : update.status === 'installing' ? '安装中' : '更新';
+      : update.status === 'installing' ? '安装中' : update.manual ? '下载新版' : '更新';
     button.title = update.availableVersion
       ? `更新到 ${update.availableVersion}${update.error ? `：${update.error}` : ''}`
       : '下载并安装新版本';

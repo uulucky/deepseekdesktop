@@ -3,7 +3,7 @@
 ## 自动构建，单独批准更新
 
 1. 修改版本、用户说明和测试，检查无真实凭据或用户数据；推送版本 tag。
-2. 等公开 Windows CI 全部通过。Release 上传由该 tag 源码构建的 ZIP、原生更新器、哈希、SBOM 和 `unsigned-update.json`，并生成 GitHub 来源证明。不从 OSS 取旧二进制充当构建产物。
+2. 等公开 Windows、Mac ARM64、Mac Intel CI 全部通过。Release 上传由该 tag 源码构建的 ZIP、DMG、原生 Windows 更新器、哈希、分平台构建信息/SBOM 和合并后的 `unsigned-update.json`，并生成 GitHub 来源证明。不从 OSS 取旧二进制充当构建产物。
 3. 从 GitHub 下载并核对来源证明、提交、包内版本、哈希和测试结果；保留真实 Windows 人工验证记录。未完成的验证要明确列出。
 4. 只在持有发布私钥的维护机签名：
 
@@ -18,6 +18,8 @@ node build/verify-update.js latest.json
 6. 将 **同一份 CI 产物** 上传至 OSS `uulucky-pic/han/deepseek/`，核对 CDN 下载哈希；最后上传 `latest.json`，避免先公布不存在的包。签名失败或产物未通过测试时不更新线上清单。
 
 注意：Windows Authenticode、GitHub 构建来源证明和更新清单 Ed25519 是不同层次；当前前者未配置，不得宣称已验证 Windows 发布者。旧客户端首次迁移的信任边界见 SECURITY.md。
+
+Mac 当前采用 ad-hoc 签名，不需要开发者账号，也不得宣称为 Developer ID 签名/Apple 公证。分别保留匹配架构的 Node、原生依赖；打包后 `codesign --verify --deep --strict` 和真实应用测试必须通过。DMG 与 ZIP 均从同一签名 `.app` 生成。未来如申请 Apple Developer Program，应另行配置 Developer ID Application、公证和受保护 CI 凭据；Ed25519 清单私钥不能替代 Apple 证书。
 
 ## Windows 代码签名尚需发行者提供
 

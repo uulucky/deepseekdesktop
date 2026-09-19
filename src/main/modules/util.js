@@ -48,6 +48,8 @@ function execDir() {
  * app falls back to the per-user app-data directory.
  */
 function portableDataDir() {
+  // Never store Mac data inside a signed/translocated .app or mounted read-only DMG.
+  if (IS_MAC) return null;
   if (process.env.DEEPSEEK_DESKTOP_PORTABLE === '0') return null;
   // The folder holding the executable decides where state lives. The override exists for
   // tests and for moving the data folder to another drive while keeping the app portable.
@@ -93,7 +95,8 @@ function dataRoot() {
  * per-user paths.
  */
 function adoptPortablePaths() {
-  const portable = portableDataDir();
+  const portable = process.env.DEEPSEEK_DESKTOP_HOME
+    ? path.resolve(process.env.DEEPSEEK_DESKTOP_HOME) : portableDataDir();
   if (!portable) return null;
   try {
     const { app } = require('electron');

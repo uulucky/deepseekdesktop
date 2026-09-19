@@ -209,6 +209,7 @@ function encodeIco(entries) {
 function main() {
   const png256 = encodePng(render(256), 256);
   fs.writeFileSync(path.join(OUT_DIR, 'icon.png'), png256);
+  fs.writeFileSync(path.join(OUT_DIR, 'icon-mac.png'), encodePng(render(1024), 1024));
   const entries = [
     { size: 256, data: png256 },
     ...[64, 48, 32, 16].map((size) => ({ size, data: encodeBmp(render(size), size) })),

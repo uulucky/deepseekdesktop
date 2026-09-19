@@ -173,8 +173,8 @@ class Bootstrap {
     if (forced && existsSync(forced)) this.dshBin = forced;
     // A published portable package is self-contained. Never silently replace a missing
     // reviewed kernel with a floating registry build on a customer's machine.
-    if (!isDev() && !forced && (!this.bundledKernelEntry() || !existsSync(path.join(this.bundledVendorDir() || '', 'node', 'node.exe')))) {
-      throw new Error('随包运行组件不完整，请从项目发布页重新下载完整便携包');
+    if (!isDev() && !forced && (!this.bundledKernelEntry() || !existsSync(path.join(this.bundledVendorDir() || '', 'node', IS_WINDOWS ? 'node.exe' : 'bin/node')))) {
+      throw new Error('随包运行组件不完整，请从项目发布页重新下载完整安装包');
     }
 
     // 1. reuse a DSH web instance that already answers on the preferred port.

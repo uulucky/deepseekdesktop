@@ -19,6 +19,10 @@
 
 Windows EXE **目前没有 Authenticode 代码签名**，“已验证的发布者”和 SmartScreen 信誉问题尚未解决。更新签名和 GitHub 来源证明不能代替 Windows 发行者证书。请只使用自己能核实的下载来源，不要为运行软件关闭系统安全软件。
 
+Mac App 仅使用 **ad-hoc 签名**，无 Apple Developer ID、Team ID 或 Apple 公证。该签名用于本地完整性检查，不验证发行者身份，也不消除 Gatekeeper 提示。保留 hardened runtime，并为 Electron/Node JIT 和 ad-hoc 原生组件设置必要的 JIT / library-validation entitlement；不是 App Sandbox 发行包。按 [Apple 官方指引](https://support.apple.com/zh-cn/102445)，确认来源可信后仅为该应用选择“隐私与安全性 → 仍要打开”。不要求关闭 Gatekeeper、SIP 或全局解除隔离；企业策略可能禁止运行。Full Access 不绕过 macOS TCC、文件夹授权、SIP 或管理员权限。
+
+Mac 每小时验证同一 Ed25519 更新清单，仅提供匹配 CPU 的 DMG 下载；不在后台覆盖应用，不自动退出。浏览器下载文件后仍需用户核对 SHA-256/来源并替换。应用数据独立保留，但 ad-hoc 签名跨版本可能再次触发系统/钥匙串确认，真实登录态保留不能保证。
+
 首次安装时仍需要信任项目提供的公钥与程序；从不支持签名的旧客户端第一次升级，无法追溯增强旧客户端的验证能力，建议通过 GitHub Release 校验下载。拒绝降到已安装版本以下，不等于具备完整 TUF 防冻结、撤销与多方阈值签名体系。离线/阻断网络时，无法保证及时发现更新。
 
 ## 验证下载
@@ -26,11 +30,18 @@ Windows EXE **目前没有 Authenticode 代码签名**，“已验证的发布�
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.2.23-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.2.24-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.2.24-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。
+
+Mac 终端示例（Intel 下载请将 `arm64` 换为 `x64`）：
+
+```sh
+shasum -a 256 DeepSeekDesktop-0.2.24-mac-arm64.dmg
+gh attestation verify DeepSeekDesktop-0.2.24-mac-arm64.dmg --repo uulucky/deepseekdesktop
+```
 
 ## 支持范围与未覆盖事项
 

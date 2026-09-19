@@ -1,4 +1,4 @@
-name: Windows build, test and release
+name: Windows and Mac build, test and release
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
 # Only the newest commit on one branch/ref is useful; tags use a different ref and keep their
 # own formal release run.
 concurrency:
-  group: windows-build-${{ github.ref }}
+  group: desktop-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -75,8 +75,62 @@ jobs:
             dist/sbom.cdx.json
             dist/unsigned-update.json
           if-no-files-found: error
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.15.0
+          architecture: ${{ matrix.arch }}
+          cache: npm
+      - name: Verify native runner architecture
+        run: node -e "require('assert').equal(process.arch, '${{ matrix.arch }}')"
+      - run: npm ci --no-audit --no-fund
+      - name: Stage verified native Mac runtime
+        run: npm run runtime:stage
+      - run: npm test
+      - run: npm run test:integration
+      - name: Build ad-hoc signed DMG and ZIP (no Developer ID or notarization)
+        run: npm run dist:mac
+      - name: Real packaged Mac UI, replacement and data retention
+        timeout-minutes: 10
+        run: |
+          mkdir -p test-results
+          set -o pipefail
+          npm run test:packaged 2>&1 | tee test-results/packaged-console.log
+      - name: Preserve public Mac test evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: mac-${{ matrix.arch }}-test-evidence
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Preserve native Mac release artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: mac-${{ matrix.arch }}-release-artifacts
+          path: |
+            dist/DeepSeekDesktop-*-mac-${{ matrix.arch }}.dmg
+            dist/DeepSeekDesktop-*-mac-${{ matrix.arch }}.zip
+            dist/mac-${{ matrix.arch }}-*.json
+            dist/mac-${{ matrix.arch }}-SHA256SUMS.txt
+          if-no-files-found: error
   publish:
-    needs: windows
+    needs: [windows, mac]
     if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'uulucky/deepseekdesktop'
     runs-on: ubuntu-latest
     permissions:
@@ -89,23 +143,20 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: windows-release-artifacts
+          pattern: '*-release-artifacts'
+          merge-multiple: true
           path: dist
+      - name: Combine tested platform descriptors and checksums
+        run: node build/merge-release.js
       - name: Attest release build provenance
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
-          subject-path: |
-            dist/DeepSeekDesktop-*.zip
-            dist/DeepSeekDesktop-*-update-bootstrap.exe
-            dist/SHA256SUMS.txt
-            dist/build-info.json
-            dist/sbom.cdx.json
-            dist/unsigned-update.json
+          subject-path: dist/*
       - name: Verify provenance before publishing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for asset in dist/DeepSeekDesktop-*.zip dist/DeepSeekDesktop-*-update-bootstrap.exe; do
+          for asset in dist/DeepSeekDesktop-*.zip dist/DeepSeekDesktop-*.dmg dist/DeepSeekDesktop-*-update-bootstrap.exe; do
             gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY"
           done
       - name: Publish verified source-built release
@@ -115,7 +166,6 @@ jobs:
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and package version differ' }
-          $assets = @(Get-ChildItem dist/DeepSeekDesktop-*.zip, dist/DeepSeekDesktop-*-update-bootstrap.exe | ForEach-Object { $_.FullName })
-          $assets += @('dist/SHA256SUMS.txt','dist/build-info.json','dist/sbom.cdx.json','dist/unsigned-update.json')
+          $assets = @(Get-ChildItem dist -File | ForEach-Object { $_.FullName })
           gh release create $env:GITHUB_REF_NAME @assets --title "DeepSeek Desktop $version" --notes-file .github/release-notes.md --latest --verify-tag
           if ($LASTEXITCODE -ne 0) { throw 'Release publishing failed' }

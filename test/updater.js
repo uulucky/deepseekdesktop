@@ -131,7 +131,32 @@ async function signatureContract() {
   console.log('PASS signed updates — tampering, unknown keys, unsigned manifests and rollback rejected');
 }
 
-signatureContract().then(nativeHandoffContract).then(() => {
+async function macManualContract() {
+  for (const arch of ['arm64', 'x64']) {
+    const dmg = { ...target, format: 'manual-dmg', url: `https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.25-mac-${arch}.dmg` };
+    const manifest = signed({ version: '0.2.25', platforms: { [`darwin-${arch}`]: dmg, 'win32-x64': target } });
+    let opened;
+    const mac = new PortableUpdater({ platform: 'darwin', arch, currentVersion: '0.2.24', trustedKeys,
+      fetch: async () => new Response(JSON.stringify(manifest)),
+      openExternal: async url => { opened = url; },
+      spawn: () => assert.fail('Mac must not launch the Windows updater'),
+      quit: () => assert.fail('Manual download must not close the app'),
+    });
+    assert.equal(mac.get().manual, true);
+    assert.equal((await mac.check()).status, 'available');
+    await mac.install();
+    assert.equal(opened, dmg.url);
+    mac.manifest.platforms[`darwin-${arch}`].url = 'https://evil.test/app.dmg';
+    await assert.rejects(mac.install(), /签名/);
+    const wrong = new PortableUpdater({ platform: 'darwin', arch, currentVersion: '0.2.24', trustedKeys,
+      fetch: async () => new Response(JSON.stringify(signed({ version: '0.2.25', platforms: { 'win32-x64': target } }))),
+    });
+    assert.equal((await wrong.check()).status, 'error', 'Never offer Windows or the other CPU package');
+  }
+  console.log('PASS signed Mac manual updates, CPU selection, no quit, no executable handoff');
+}
+
+signatureContract().then(nativeHandoffContract).then(macManualContract).then(() => {
   console.log('PASS updater contracts — trusted manifests, acknowledged native handoff and data preservation');
 }).catch((error) => {
   console.error(error);

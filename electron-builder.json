@@ -33,6 +33,24 @@
     }
   ],
   "asar": true,
+  "mac": {
+    "target": ["dmg", "zip"],
+    "artifactName": "DeepSeekDesktop-${version}-mac-${arch}.${ext}",
+    "category": "public.app-category.productivity",
+    "minimumSystemVersion": "14.0",
+    "sign": "build/sign-mac.js",
+    "hardenedRuntime": true,
+    "notarize": false,
+    "icon": "build/icon-mac.png"
+  },
+  "dmg": {
+    "sign": false,
+    "title": "DeepSeek Desktop",
+    "contents": [
+      { "x": 130, "y": 220 },
+      { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+    ]
+  },
   "win": {
     "target": [
       {

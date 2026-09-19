@@ -1,14 +1,13 @@
-Windows 10/11 x64 便携版。下载 portable.zip 后完整解压，再运行 DeepSeek Desktop.exe。
+新增 Mac 直接下载版，同时发布 Windows 便携版；支持 macOS 14+。
 
-本版新增中文行动摘要：
+- Apple 芯片（M 系列）选择 `mac-arm64.dmg`；Intel 选择 `mac-x64.dmg`。将应用拖入“应用程序”。另提供相同内容的 Mac ZIP。
+- 不走 App Store，无 Apple Developer ID 或 Apple 公证，仅 ad-hoc 签名。确认下载可信后，如系统拦截，请到“系统设置 → 隐私与安全性 → 仍要打开”。不要求关闭系统安全保护；企业策略可能不允许打开。
+- Mac 自带匹配架构的 Node 和 Harness；适配系统菜单，数据默认在 `~/Library/Application Support/DeepSeek Desktop/`，不在 `.app` 内。Cmd+Q 完全退出。
+- 每小时检查已签名版本清单。Mac 下载后退出软件并手动替换应用，数据保留；系统可能再次要求允许打开、钥匙串授权或重新登录。Windows 保留原有自动更新/重启。
+- 保留余额、软件内官方充值、中文行动摘要、推理和权限滑块、多任务、会话管理、黑窗口恢复。默认 Full Access 并常驻提示风险，不绕过 macOS 系统权限。
 
-- 执行工具前，用一两句中文说明准备做什么；后续步骤说明已确认的进展与下一步，直接展开显示。
-- 思考原文、工具参数和输出默认折叠；运行、完成、失败和等待授权状态仍然可见，授权按钮独立显示。
-- 手动展开状态在流式刷新和会话切换后保留；支持键盘操作，修复工具状态文字挤成竖排。
-- 原生 Harness 提示词实现，无需安装 Skill，不另调用翻译服务；少量提示词/摘要 Token 计入正常模型用量。
+公开 CI 在 Windows、Apple 芯片和 Intel 原生机器上构建、启动和测试各自完整安装包；包括多任务、崩溃恢复、正常退出和替换后的数据保留。使用本地模拟模型，不验证真实登录/充值，不代表覆盖所有 Mac 的 Gatekeeper、钥匙串或企业策略。
 
-摘要是面向用户的高层行动说明，不是逐字翻译完整思考链。旧记录不自动联网补译；模型未输出摘要或严格结构化回答仍正常显示。继续支持多任务、对话管理、黑窗口恢复、默认 Full Access 与风险提醒、余额和官方充值、签名自动更新；保留本地数据。
+Windows 未 Authenticode 签名；源码可查看而非标准开源。下载前阅读 README、PRIVACY.md、SECURITY.md。总 SHA256SUMS、分平台 build-info/SBOM 与 GitHub 来源证明一同提供。
 
-Windows 程序暂未 Authenticode 签名；源码可查看而非标准开源。CI 使用受控本地模型响应，不登录真实账户、充值或调用付费模型。请阅读 README、PRIVACY.md 和 SECURITY.md。
-
-unsigned-update.json 仅供维护者审核签名，客户端不接受未签名更新清单。审核后将另附已签名 latest.json。OSS 镜像须在校验后同步，发布初期请优先使用本页资产。
+unsigned-update.json 仅供维护者审核签名，客户端不接受未签名清单。审核后另附 latest.json；国内 OSS 镜像在校验后上线，发布初期优先下载本页资产。

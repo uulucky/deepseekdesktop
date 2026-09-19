@@ -1,5 +1,7 @@
 {
   "nodeVersion": "v24.15.0",
   "nodeWindowsX64Sha256": "cc5149eabd53779ce1e7bdc5401643622d0c7e6800ade18928a767e940bb0e62",
+  "nodeDarwinArm64Sha256": "372331b969779ab5d15b949884fc6eaf88d5afe87bde8ba881d6400b9100ffc4",
+  "nodeDarwinX64Sha256": "ffd5ee293467927f3ee731a553eb88fd1f48cf74eebc2d74a6babe4af228673b",
   "kernelVersion": "0.1.5-rc.1"
 }

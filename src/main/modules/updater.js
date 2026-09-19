@@ -33,6 +33,7 @@ class PortableUpdater {
     this.fetch = options.fetch || globalThis.fetch;
     this.spawn = options.spawn || spawn;
     this.quit = options.quit || (() => {});
+    this.openExternal = options.openExternal;
     this.onState = options.onState || (() => {});
     this.allowedPackageOrigin = options.allowedPackageOrigin || ALLOWED_PACKAGE_ORIGIN;
     this.trustedKeys = options.trustedKeys;
@@ -48,6 +49,7 @@ class PortableUpdater {
       checkedAt: null,
       error: null,
       portable: this.portable,
+      manual: this.platform === 'darwin',
     };
   }
 
@@ -84,6 +86,7 @@ class PortableUpdater {
       verifySignedManifest(manifest, this.trustedKeys);
       const target = manifest?.platforms?.[`${this.platform}-${this.arch}`] ?? manifest?.package;
       validateManifest(manifest, target, this.allowedPackageOrigin);
+      if (this.platform === 'darwin' && target.format !== 'manual-dmg') throw new Error('版本清单缺少适用于此 Mac 的安装包');
       this.manifest = manifest;
       this.package = target;
       const available = compareVersions(manifest.version, this.currentVersion) > 0;
@@ -115,6 +118,19 @@ class PortableUpdater {
   }
 
   async installNow() {
+    if (this.platform === 'darwin') {
+      if (!this.manifest || compareVersions(this.manifest.version, this.currentVersion) <= 0) await this.check({ manual: true });
+      if (!this.manifest || compareVersions(this.manifest.version, this.currentVersion) <= 0) throw new Error(this.state.error || '当前已是最新版本');
+      verifySignedManifest(this.manifest, this.trustedKeys);
+      const target = this.manifest.platforms?.[`darwin-${this.arch}`];
+      validateManifest(this.manifest, target, this.allowedPackageOrigin);
+      if (target.format !== 'manual-dmg' || !new URL(target.url).pathname.endsWith('.dmg')) throw new Error('Mac 安装包格式无效');
+      if (typeof this.openExternal !== 'function') throw new Error('无法打开下载页面');
+      // Unnotarized Mac builds cannot use Squirrel's Developer ID update trust chain.
+      // Explicit manual replacement keeps the running app/data intact; never quit here.
+      await this.openExternal(target.url);
+      return this.get();
+    }
     if (!this.portable || this.platform !== 'win32') {
       throw new Error('自动更新仅支持 Windows 便携版');
     }

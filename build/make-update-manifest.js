@@ -21,9 +21,9 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '新增展开显示的中文行动摘要：执行前说明准备做什么，后续说明已确认的进展与下一步。',
-    '思考原文、工具调用及输出默认折叠；运行状态和权限确认始终可见。',
-    '手动展开详情后，流式刷新和会话切换保留展开状态；支持键盘操作。',
+    '新增 macOS 直接下载版，分别提供 Apple 芯片与 Intel 安装包，内置固定 Node 和 Harness。',
+    'Mac 版无 Apple Developer ID 与公证，首次打开须确认来源并在系统隐私与安全性中单独允许。',
+    'Mac 每小时检查新版，手动替换应用并保留用户数据；Windows 继续签名校验自动更新。',
   ],
   platforms: {
     'win32-x64': {

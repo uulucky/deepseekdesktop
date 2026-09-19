@@ -205,12 +205,12 @@ const Settings = {
       <div class="card">
         <div class="card-head">
           <div><div class="card-title">软件更新</div><div class="card-sub">${esc(updateLabel)} · 每小时自动检查一次</div></div>
-          ${update.status === 'available' ? `<button class="btn primary" data-action="install-update">更新到 ${esc(update.availableVersion || '')}</button>` : ''}
+          ${update.status === 'available' ? `<button class="btn primary" data-action="install-update">${update.manual ? '下载' : '更新到'} ${esc(update.availableVersion || '')}</button>` : ''}
         </div>
         ${update.error && update.status === 'available' ? `<div class="banner warn">上次检查：${esc(update.error)}，仍可安装已发现的版本。</div>` : ''}
         <div class="row">
           <button class="btn small" data-action="check-update" ${['checking', 'downloading', 'installing'].includes(update.status) ? 'disabled' : ''}>立即检查</button>
-          <span class="hint">更新只替换程序文件，登录信息、本地对话与设置所在的 data 目录会完整保留。</span>
+          <span class="hint">${update.manual ? 'Mac 版需下载后退出软件，将新应用拖入“应用程序”替换。数据保存在用户的 Application Support 目录，不随应用替换删除；系统可能再次要求确认打开或钥匙串访问。' : '更新只替换程序文件，登录信息、本地对话与设置所在的 data 目录会完整保留。'}</span>
         </div>
       </div>
       <div class="card">
