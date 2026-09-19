@@ -9,6 +9,54 @@ const { log } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
 const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
 
+const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const MAX_ATTACHMENTS = 20;
+const MAX_GENERIC_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 80 * 1024 * 1024;
+
+function safeAttachmentName(value, fallback) {
+  const name = String(value ?? '').replace(/[\\/\0-\x1f]/g, '_').trim().slice(0, 240);
+  return name || fallback;
+}
+
+/** Convert renderer-owned bytes into bounded, path-free upload records. */
+function normalizeAttachments(client, sessionId, input) {
+  if (!Array.isArray(input)) throw new Error('附件格式无效');
+  if (input.length > MAX_ATTACHMENTS) throw new Error(`一次最多选择 ${MAX_ATTACHMENTS} 个附件`);
+  const limits = client.projectionsFor?.(sessionId)?.imageLimits ?? {};
+  const allowedImages = new Set(Array.isArray(limits.mediaTypes) ? limits.mediaTypes : IMAGE_MEDIA_TYPES);
+  const maxImages = Number.isSafeInteger(limits.maxImagesPerMessage) ? limits.maxImagesPerMessage : MAX_ATTACHMENTS;
+  const maxImageBytes = Number.isSafeInteger(limits.maxImageBytes) ? limits.maxImageBytes : 10 * 1024 * 1024;
+  const maxMessageImageBytes = Number.isSafeInteger(limits.maxMessageImageBytes)
+    ? limits.maxMessageImageBytes : MAX_TOTAL_ATTACHMENT_BYTES;
+  let total = 0;
+  let imageTotal = 0;
+  let imageCount = 0;
+  return input.map((entry, index) => {
+    const value = entry && typeof entry === 'object' ? entry : {};
+    let bytes;
+    try { bytes = Buffer.from(value.bytes); } catch { throw new Error(`附件 ${index + 1} 的内容无效`); }
+    if (!bytes.length) throw new Error(`附件 ${index + 1} 是空文件`);
+    total += bytes.length;
+    if (total > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('本次附件总大小超过 80 MB');
+    const mediaType = String(value.mediaType ?? '').toLowerCase();
+    const isImage = value.kind === 'image' || IMAGE_MEDIA_TYPES.has(mediaType);
+    if (isImage) {
+      imageCount += 1;
+      imageTotal += bytes.length;
+      if (imageCount > maxImages) throw new Error(`当前模型一次最多接收 ${maxImages} 张图片`);
+      if (!allowedImages.has(mediaType)) throw new Error(`不支持的图片格式：${mediaType || '未知'}`);
+      if (bytes.length > maxImageBytes) throw new Error(`图片 ${safeAttachmentName(value.name, String(index + 1))} 超过大小限制`);
+      if (imageTotal > maxMessageImageBytes) throw new Error('本次图片总大小超过当前模型限制');
+      return { kind: 'image', name: safeAttachmentName(value.name, `图片-${index + 1}`), mediaType, bytes };
+    }
+    if (bytes.length > MAX_GENERIC_FILE_BYTES) {
+      throw new Error(`文件 ${safeAttachmentName(value.name, String(index + 1))} 超过 64 MB`);
+    }
+    return { kind: 'file', name: safeAttachmentName(value.name, `文件-${index + 1}`), mediaType, bytes };
+  });
+}
+
 /** Wrap a handler so a thrown error becomes a structured failure instead of a rejection. */
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, ...args) => {
@@ -150,6 +198,23 @@ function registerIpc(services) {
     return ctx.worldSnapshot ? ctx.worldSnapshot() : null;
   });
 
+  // ------------------------------------------------------------- app surface
+  handle('surface:status', () => getContext().webSurface?.snapshot() ?? {
+    mode: 'workbench', status: 'idle', url: 'https://chat.deepseek.com/',
+  });
+  handle('surface:set-mode', (mode) => {
+    if (!['workbench', 'web'].includes(mode)) throw new Error('无效的应用模式');
+    const surface = getContext().webSurface;
+    if (!surface) throw new Error('网页版尚未准备好');
+    return surface.setMode(mode);
+  });
+  handle('surface:reload', () => {
+    const surface = getContext().webSurface;
+    if (!surface) throw new Error('网页版尚未准备好');
+    surface.reload();
+    return surface.snapshot();
+  });
+
   // ------------------------------------------------------------------- sessions
   handle('sessions:list', sessionRows);
   handle('sessions:search', async (query) => {
@@ -226,9 +291,19 @@ function registerIpc(services) {
     return { ...created, warnings };
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  handle('sessions:prompt', async (sessionId, text) => {
+  handle('sessions:prompt', async (sessionId, text, attachments = []) => {
+    const ctx = getContext();
+    const message = typeof text === 'string' ? text.trim() : '';
+    const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
+    if (!message && normalized.length === 0) throw new Error('请输入消息或选择附件');
     await restorePermission(sessionId);
-    return service('chat').send(sessionId, text);
+    return service('chat').send(sessionId, message, normalized);
+  });
+  handle('sessions:attachment', (sessionId, attachmentId) => {
+    if (typeof sessionId !== 'string' || !sessionId || typeof attachmentId !== 'string' || !attachmentId) {
+      throw new Error('图片标识无效');
+    }
+    return getContext().client.attachment(sessionId, attachmentId);
   });
   handle('sessions:cancel', (sessionId) => service('chat').cancel(sessionId));
   handle('sessions:answer-approval', (sessionId, eventId, outcome) => (

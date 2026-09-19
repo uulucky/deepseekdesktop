@@ -12,7 +12,7 @@
  */
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, session, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, shell, Menu, ipcMain } = require('electron');
 
 const { DIRS, ensureDirs, log, logFilePath, isDev, isPortable, adoptPortablePaths, execDir } = require('./modules/util');
 const { Bootstrap } = require('./modules/bootstrap');
@@ -25,6 +25,7 @@ const { PortableUpdater, UPDATE_INTERVAL_MS } = require('./modules/updater');
 const { Store } = require('./modules/store');
 const { TranscriptDispatcher } = require('./modules/transcript-dispatcher');
 const { attachWindowRecovery } = require('./modules/window-recovery');
+const { WebChatSurface } = require('./modules/web-chat');
 const { registerIpc } = require('./ipc');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
 
@@ -46,6 +47,7 @@ const ctx = {
   catalog: { snapshot: readSnapshot(), changed: false },
   credentialState: null,
   domMirror: null,
+  webSurface: null,
   dataDir: DIRS.root,
   logFile: logFilePath(),
 };
@@ -100,6 +102,7 @@ function main() {
       if (ctx.platformTimer) clearInterval(ctx.platformTimer);
       if (ctx.updateTimer) clearInterval(ctx.updateTimer);
       if (ctx.updateKickTimer) clearTimeout(ctx.updateKickTimer);
+      ctx.webSurface?.dispose();
       ctx.chat?.dispose();
       ctx.transcriptDispatcher?.dispose();
       ctx.client?.dispose();
@@ -389,6 +392,8 @@ function createMainWindow() {
     return ctx.windows.main;
   }
   const bounds = ctx.uiStore.get('mainBounds', null);
+  ctx.webSurface?.dispose();
+  ctx.webSurface = null;
   const win = new BrowserWindow({
     width: bounds?.width ?? 1240,
     height: bounds?.height ?? 820,
@@ -438,6 +443,25 @@ function createMainWindow() {
     attempts: ctx.recoveryAttempts ??= [],
   });
   ctx.mainRecovery = recovery;
+  let webSurface;
+  webSurface = new WebChatSurface({
+    window: win,
+    WebContentsView,
+    partition: PLATFORM_PARTITION,
+    shell,
+    store: ctx.uiStore,
+    log: (message, detail) => log('web-chat', message, detail),
+    onState: (surface) => {
+      if (ctx.webSurface === webSurface && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+        win.webContents.send('surface:state', surface);
+      }
+    },
+    testMode: process.env.DEEPSEEK_DESKTOP_TEST_MODE === '1',
+    url: process.env.DEEPSEEK_DESKTOP_TEST_MODE === '1'
+      ? process.env.DEEPSEEK_DESKTOP_WEB_CHAT_URL
+      : undefined,
+  });
+  ctx.webSurface = webSurface;
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html')).catch((error) => {
     log('app', 'main shell load rejected', String(error));
   });
@@ -446,10 +470,13 @@ function createMainWindow() {
     ctx.uiStore.set('mainBounds', win.getNormalBounds());
   };
   win.on('resized', persistBounds);
+  win.on('resize', () => webSurface.resize());
   win.on('moved', persistBounds);
   win.on('closed', () => {
     recovery.dispose();
     if (ctx.mainRecovery === recovery) ctx.mainRecovery = null;
+    webSurface.dispose();
+    if (ctx.webSurface === webSurface) ctx.webSurface = null;
     if (ctx.windows.main === win) ctx.windows.main = null;
     // Hidden worker/platform windows otherwise keep the Windows portable app alive forever.
     if (process.platform !== 'darwin' && !win.replacedForRecovery) app.quit();
@@ -631,6 +658,7 @@ function worldSnapshot() {
     catalogChanged: Boolean(ctx.catalog?.changed),
     ad: ctx.ad?.get() ?? null,
     update: ctx.updater?.get() ?? null,
+    surface: ctx.webSurface?.snapshot() ?? { mode: 'workbench', status: 'idle', url: 'https://chat.deepseek.com/' },
     ui: ctx.uiStore?.all() ?? {},
     rendererRecovery: ctx.rendererRecovery ?? null,
     dataDir: ctx.dataDir,

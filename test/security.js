@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { isLocalShell, isTrustedIpc, isPlatformUrl, externalUrl, reusablePermission } = require('../src/main/modules/security');
+const { isDeepSeekWebUrl, surfaceMode } = require('../src/main/modules/web-chat');
 const { normalize } = require('../src/main/modules/ad');
 const { redact } = require('../src/main/modules/util');
 assert(!redact('sk-secret123 Bearer abc.def ?token=private {"password":"sensitive"}').includes('secret123'));
@@ -23,6 +24,13 @@ assert.equal(reusablePermission(null), 'danger-full-access');
 assert.equal(reusablePermission('read-only'), 'read-only');
 assert.equal(reusablePermission('invalid'), 'read-only');
 assert.equal(reusablePermission('workspace-write'), 'workspace-write');
+assert.equal(isDeepSeekWebUrl('https://chat.deepseek.com/a/chat/s/123'), true);
+assert.equal(isDeepSeekWebUrl('https://account.deepseek.com/login'), true);
+for (const bad of ['http://chat.deepseek.com/', 'https://chat.deepseek.com.evil.test/', 'https://deepseek.com@evil.test/']) {
+  assert.equal(isDeepSeekWebUrl(bad), false);
+}
+assert.equal(surfaceMode('web'), 'web');
+assert.equal(surfaceMode('unexpected'), 'workbench');
 const result = normalize({ ads: [
   { url: 'https://www.deepseek.com', pic: 'https://img.uulucky.com/han/ad.png' },
   { url: 'https://www.deepseek.com', pic: 'https://tracker.test/pixel.gif' },
@@ -30,4 +38,4 @@ const result = normalize({ ads: [
 ] });
 assert.equal(result.ads.length, 2);
 assert.equal(result.ads[1].pic, null);
-console.log('PASS renderer boundaries, exact platform origins, IPC sender checks, permission defaults and ad image allowlist');
+console.log('PASS renderer boundaries, exact DeepSeek origins, IPC sender checks, permission defaults and ad image allowlist');

@@ -8,7 +8,7 @@
 - 没有保存过权限偏好时默认 Full Access，默认工作目录为 `data/workspace/`；旧的自选目录和低权限偏好保留。Workspace Write 可修改工作目录；Full Access 取消 Harness 沙箱限制，但不会绕过 Windows 账户权限/UAC。**专用工作目录不是 Full Access 的隔离边界。**
 - Full Access 在输入区持续显示风险提醒，不通过阻塞弹窗或单次批准打断操作。三个档位都能保存为新会话默认值；重启、打开或发送旧会话不会自动更改权限。此默认值偏向操作便利，不是最小权限配置；处理不可信内容前请主动选择只读/工作区或使用隔离环境。
 - 权限由固定版本 Harness 执行。沙箱可能有上游缺陷，不能当成针对恶意代码的绝对隔离；高风险任务适合专用账户或虚拟机。
-- Electron 页面使用 context isolation、关闭 Node integration；特权 IPC 校验来源页面和主 frame，广告图片受 CSP/域名限制。它们减少攻击面，但不等于通过独立渗透审计。
+- 工作台 Electron 页面使用 context isolation、关闭 Node integration；特权 IPC 校验来源页面和主 frame，广告图片受 CSP/域名限制。官方网页版另在启用 Chromium sandbox、无 Node integration、无 preload 的远程容器中运行，不能调用桌面客户端 IPC。仅允许 DeepSeek 官方 HTTPS 域在容器内导航，外部 HTTP(S) 链接交给系统浏览器。它们减少攻击面，但不等于通过独立渗透审计。
 - 本地凭据文件可能明文，详见 [隐私说明](PRIVACY.md)。
 
 ## 三种不同的验证
@@ -30,21 +30,21 @@ Mac 每小时验证同一 Ed25519 更新清单，仅提供匹配 CPU 的 DMG 下
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.2.23-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.3.1-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.3.1-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。
 
-Mac 正式包尚未发布。未来发布后的终端示例（将 `VERSION` 换为实际发布版本；Intel 将 `arm64` 换为 `x64`）：
+Mac 终端示例（Intel 将 `arm64` 换为 `x64`）：
 
 ```sh
-shasum -a 256 DeepSeekDesktop-VERSION-mac-arm64.dmg
-gh attestation verify DeepSeekDesktop-VERSION-mac-arm64.dmg --repo uulucky/deepseekdesktop
+shasum -a 256 DeepSeekDesktop-0.3.1-mac-arm64.dmg
+gh attestation verify DeepSeekDesktop-0.3.1-mac-arm64.dmg --repo uulucky/deepseekdesktop
 ```
 
 ## 支持范围与未覆盖事项
 
-优先修复当前发行版的问题。CI 覆盖契约、隔离内核、打包启动、输入、权限提醒与保存、模型菜单、渲染进程崩溃后自动恢复原会话、原生解包与数据保留。它不登录真实账户、不充值、不调用付费模型；真实支付、不同显卡驱动、杀毒软件、企业组策略和所有 Windows 机器仍需要真实用户验证。Star、下载数和测试通过都不是安全认证。
+优先修复当前发行版的问题。CI 覆盖契约、隔离内核、打包启动、输入、附件、上下文投影、权限提醒与保存、模型菜单、工作台渲染恢复、官方网页容器隔离/显隐保活、原生解包与数据保留。它不登录真实账户、不充值、不调用付费模型，也不自动验证官方网页账号下每个功能；真实支付、不同显卡驱动、杀毒软件、企业组策略和所有系统组合仍需要真实用户验证。Star、下载数和测试通过都不是安全认证。
 
 分支保护、签名发布者证书、独立安全审计、维护者账户安全同样重要；未配置的项目不能宣传为已启用。

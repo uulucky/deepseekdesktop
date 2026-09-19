@@ -111,7 +111,55 @@ async function muxContract() {
     type: 'assistant-stream', frame: { type: 'chunk', attemptId: 'attempt-1', time: 10, chunk: { type: 'text-delta', index: 0, text: '实时回答' } },
   } });
   check('assistant chunks are normalized into transcript events', frames.some((frame) => frame.event?.type === 'assistant/chunk' && frame.event.data.chunk.text === '实时回答'));
+
+  client.openControlStream();
+  const control = writes.find((entry) => entry.endpoint === 'session/control');
+  client.handleMuxFrame({ type: 'item', streamId: control.streamId, value: {
+    type: 'baseline', value: { projections: { 'session-live': { asOfSeq: 2, values: {
+      contextPressure: { pressureTokens: 2048, contextWindow: 65536 },
+      imageLimits: { maxImageBytes: 1024, maxImagesPerMessage: 2, maxMessageImageBytes: 2048, maxImagePixels: 10000, maxImageDimension: 1000, mediaTypes: ['image/png'] },
+    } } } },
+  } });
+  check('session/control exposes live context and image-limit projections',
+    client.projectionsFor('session-live').contextPressure?.pressureTokens === 2048
+      && frames.some((frame) => frame.type === 'session/projections' && frame.sessionId === 'session-live'));
   client.dispose();
+}
+
+async function attachmentContract() {
+  let prompt;
+  let uploaded;
+  const client = {
+    onFrame() { return () => {}; },
+    onHostFrame() { return () => {}; },
+    followSession() {},
+    unfollowSession() {},
+    projectionsFor() { return { contextPressure: { projectedTokens: 4096, contextWindow: 65536 } }; },
+    async uploadFile(sessionId, bytes, name) {
+      uploaded = { sessionId, text: Buffer.from(bytes).toString('utf8'), name };
+      return { receiptId: 'receipt-1', file: { attachmentId: 'file-1', name, bytes: bytes.length } };
+    },
+    async prompt(sessionId, text, mode, zone, requestId, attachments) {
+      prompt = { sessionId, text, mode, zone, requestId, attachments };
+      return { accepted: true };
+    },
+    async listSessions() { return []; },
+    async history() { return { events: [], hasMore: false }; },
+  };
+  const chat = new ChatController(client);
+  const snapshot = await chat.send('session-attachments', '', [
+    { kind: 'image', name: 'paste.png', mediaType: 'image/png', bytes: Buffer.from('image') },
+    { kind: 'file', name: 'notes.txt', mediaType: 'text/plain', bytes: Buffer.from('notes') },
+  ]);
+  check('generic files are staged and prompts carry a receipt', uploaded?.name === 'notes.txt'
+    && prompt?.attachments?.some((item) => item.type === 'file' && item.receiptId === 'receipt-1'));
+  check('pasted images remain inline multimodal content', prompt?.attachments?.some((item) => (
+    item.type === 'image' && item.mediaType === 'image/png' && item.data === Buffer.from('image').toString('base64')
+  )));
+  check('attachment-only prompts have an optimistic visible row and live context',
+    snapshot.items.some((item) => item.kind === 'user' && item.parts.length === 2)
+      && snapshot.context.pressure.projectedTokens === 4096);
+  chat.dispose();
 }
 
 async function optimisticEchoContract() {
@@ -311,6 +359,7 @@ async function main() {
   await hydrationContract();
   await toolLifecycleContract();
   await muxContract();
+  await attachmentContract();
   await optimisticEchoContract();
   await approvalContract();
   await modelContract();

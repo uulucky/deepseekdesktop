@@ -41,6 +41,9 @@ class DeepSeekHarnessClient {
     this.workspaceItems = [];
     this.archivedSessionIds = [];
     this.workspaceWaiters = new Set();
+    /** Host-wide projection stream: context pressure, image limits and other live UI facts. */
+    this.controlStreamId = null;
+    this.sessionProjectionValues = new Map();
     /** Remote approval event id -> answerable request for the current stream generation. */
     this.pendingApprovals = new Map();
     this.frameListeners = new Set();
@@ -141,6 +144,7 @@ class DeepSeekHarnessClient {
       log('api', 'remote stream carrier open');
       this.openRemoteEventStream();
       this.openWorkspaceStream();
+      this.openControlStream();
       for (const sessionId of this.followedSessions) this.openSessionStream(sessionId);
     };
     socket.onmessage = (event) => {
@@ -157,6 +161,7 @@ class DeepSeekHarnessClient {
       this.remoteEventStreamId = null;
       this.workspaceStreamId = null;
       this.workspaceReady = false;
+      this.controlStreamId = null;
       if (this.closed) return;
       this.setState('reconnecting');
       this.scheduleReconnect();
@@ -180,6 +185,7 @@ class DeepSeekHarnessClient {
     this.remoteEventStreamId = null;
     this.workspaceStreamId = null;
     this.workspaceReady = false;
+    this.controlStreamId = null;
     for (const waiter of this.workspaceWaiters) {
       clearTimeout(waiter.timer);
       waiter.reject(new RpcError('workspace/follow', { code: 'disposed', message: '本地服务连接已关闭' }));
@@ -230,6 +236,52 @@ class DeepSeekHarnessClient {
   retryWorkspaceStream() {
     if (this.closed) return;
     setTimeout(() => this.openWorkspaceStream(), 500);
+  }
+
+  /** Follow the authoritative live Session projections used by the official Harness UI. */
+  openControlStream() {
+    if (this.controlStreamId || !this.mux || this.mux.readyState !== WebSocketClient.OPEN) return;
+    const streamId = rid('control');
+    this.controlStreamId = streamId;
+    this.logicalStreams.set(streamId, { kind: 'control', streamId });
+    this.mux.send(JSON.stringify({ type: 'open', streamId, endpoint: 'session/control', payload: { args: {} } }));
+  }
+
+  retryControlStream() {
+    if (this.closed) return;
+    setTimeout(() => this.openControlStream(), 500);
+  }
+
+  handleControlFrame(full, stream) {
+    if (full.type === 'error' || full.type === 'end') {
+      this.logicalStreams.delete(stream.streamId);
+      if (this.controlStreamId === stream.streamId) this.controlStreamId = null;
+      if (full.type === 'error') log('api', 'session control stream failed', {
+        code: full.error?.code ?? 'unknown', message: full.error?.message ?? 'stream error',
+      });
+      this.retryControlStream();
+      return;
+    }
+    if (full.type !== 'item' || !full.value) return;
+    const frame = full.value;
+    if (frame.type === 'baseline') {
+      for (const [sessionId, projection] of Object.entries(frame.value?.projections ?? {})) {
+        const values = { ...(projection?.values ?? {}) };
+        this.sessionProjectionValues.set(sessionId, values);
+        this.emitFrame({ type: 'session/projections', sessionId, values }, full);
+      }
+      return;
+    }
+    if (frame.type !== 'projection' || !frame.sessionId || typeof frame.key !== 'string') return;
+    const values = { ...(this.sessionProjectionValues.get(frame.sessionId) ?? {}), [frame.key]: frame.value };
+    this.sessionProjectionValues.set(frame.sessionId, values);
+    this.emitFrame({
+      type: 'session/projection', sessionId: frame.sessionId, key: frame.key, value: frame.value,
+    }, full);
+  }
+
+  projectionsFor(sessionId) {
+    return { ...(this.sessionProjectionValues.get(sessionId) ?? {}) };
   }
 
   workspaceSnapshot() {
@@ -421,6 +473,10 @@ class DeepSeekHarnessClient {
       this.handleWorkspaceFrame(full, stream);
       return;
     }
+    if (stream.kind === 'control') {
+      this.handleControlFrame(full, stream);
+      return;
+    }
     if (full.type === 'error' || full.type === 'end') {
       this.logicalStreams.delete(stream.streamId);
       this.sessionStreamIds.delete(stream.sessionId);
@@ -499,6 +555,12 @@ class DeepSeekHarnessClient {
       if (selection) this.sessionSelections.set(item.sessionId, selection);
       const permissions = item.projections?.values?.permissions;
       if (permissions) this.sessionPermissions.set(item.sessionId, permissions);
+      if (item.projections?.values) {
+        this.sessionProjectionValues.set(item.sessionId, {
+          ...(this.sessionProjectionValues.get(item.sessionId) ?? {}),
+          ...item.projections.values,
+        });
+      }
       const cursor = item.projections?.asOfSeq;
       if (Number.isSafeInteger(cursor)) this.sessionCursors.set(item.sessionId, cursor);
     }
@@ -645,12 +707,51 @@ class DeepSeekHarnessClient {
   }
   renameSession(sessionId, title) { return this.call('session/rename', { request: { sessionId, title } }); }
   forkSession(sessionId, atSeq) { return this.call('session/fork', { request: { sessionId, ...(atSeq === undefined ? {} : { atSeq }) } }); }
-  prompt(sessionId, text, mode = 'queue', clientTimeZone, requestId = rid('prompt')) {
+  async uploadFile(sessionId, bytes, name) {
+    const data = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    const query = new URLSearchParams({ sessionId });
+    if (name) query.set('name', name);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120000);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/session/uploadFileBinary?${query}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/octet-stream',
+          ...(this.cookie ? { cookie: this.cookie } : {}),
+        },
+        body: data,
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      let result;
+      try { result = JSON.parse(text); } catch {
+        throw new RpcError('session/uploadFileBinary', {
+          code: 'transport', message: `invalid reply (HTTP ${response.status})`,
+        });
+      }
+      if (result?.ok) return result.value;
+      throw new RpcError('session/uploadFileBinary', result?.error ?? {
+        code: 'transport', message: `HTTP ${response.status}`,
+      });
+    } catch (error) {
+      if (error instanceof RpcError) throw error;
+      if (error?.name === 'AbortError') {
+        throw new RpcError('session/uploadFileBinary', { code: 'timeout', message: '文件上传超时' });
+      }
+      throw new RpcError('session/uploadFileBinary', { code: 'transport', message: String(error?.message ?? error) });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  prompt(sessionId, text, mode = 'queue', clientTimeZone, requestId = rid('prompt'), attachments = []) {
+    const content = [...attachments, ...(text ? [{ type: 'text', text }] : [])];
     return this.call('session/prompt', { request: {
       requestId,
       sessionId,
       mode,
-      content: [{ type: 'text', text }],
+      content,
       clientTimeZone: clientTimeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     } }, { timeoutMs: 120000 });
   }

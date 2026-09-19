@@ -23,6 +23,7 @@
   --radius-sm: 10px;
   --shadow: 0 18px 48px rgba(0, 0, 0, .45);
   --rail-w: 268px;
+  --surface-h: 46px;
   --font: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, "Helvetica Neue", sans-serif;
   --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
 }
@@ -58,7 +59,26 @@ button, input, textarea, select, [role="button"], .modal, .popover {
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 a { color: var(--brand); }
 
-.app { display: flex; height: 100vh; }
+.surface-bar {
+  height: var(--surface-h); display: flex; align-items: center; gap: 12px; padding: 0 12px;
+  background: var(--rail); border-bottom: 1px solid var(--line-soft); position: relative; z-index: 80;
+  -webkit-app-region: drag;
+}
+.surface-switch {
+  display: inline-flex; align-items: center; gap: 3px; padding: 3px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 11px; -webkit-app-region: no-drag;
+}
+.surface-tab { padding: 5px 10px; border-radius: 8px; color: var(--text-muted); font-size: 12.5px; }
+.surface-tab span { margin-left: 3px; font-size: 10px; opacity: .72; }
+.surface-tab:hover { color: var(--text); }
+.surface-tab.active { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.surface-status { color: var(--text-muted); font-size: 11.5px; }
+.surface-reload {
+  margin-left: auto; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  color: var(--text-dim); font-size: 11.5px; -webkit-app-region: no-drag;
+}
+.surface-reload:hover { border-color: var(--brand-line); color: var(--text); }
+.app { display: flex; height: calc(100vh - var(--surface-h)); }
 .app.rail-hidden .rail { margin-left: calc(-1 * var(--rail-w)); }
 .app.rail-hidden .titlebar-menu { display: inline-flex; }
 
@@ -323,6 +343,17 @@ html[data-theme="light"] .md-pre { background: #f6f8fc; }
 /* Reasoning + tool cards */
 .system-context { margin-left: 41px; }
 .system-context .bubble { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; padding-top: 10px; }
+.message-attachment {
+  display: inline-flex; align-items: center; gap: 9px; max-width: 260px; min-height: 52px;
+  margin: 0 0 7px 7px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--text-dim); vertical-align: top;
+}
+.message-attachment.image { padding: 5px; overflow: hidden; }
+.message-image-placeholder { min-width: 90px; min-height: 46px; display: grid; place-items: center; color: var(--text-muted); font-size: 11px; }
+.message-image-placeholder img { display: block; max-width: 220px; max-height: 160px; object-fit: contain; border-radius: 8px; }
+.message-file-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: var(--brand-soft); color: var(--brand); font-size: 9px; font-weight: 700; }
+.message-attachment strong { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 12px; }
+.message-attachment small { display: block; color: var(--text-muted); font-size: 10px; }
 .action-summary { margin: 0 0 16px; padding: 2px 0 2px 13px; border-left: 2px solid var(--accent, #5868ff); }
 .action-summary-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
 .action-summary-text { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -402,10 +433,31 @@ html[data-theme="light"] .md-pre { background: #f6f8fc; }
   color: var(--text); font: 14px/1.6 var(--font); padding: 13px 15px 4px; max-height: 220px;
 }
 .composer textarea::placeholder { color: var(--text-muted); }
+.attachment-drafts {
+  display: flex; gap: 8px; padding: 11px 12px 2px; overflow-x: auto; scrollbar-width: thin;
+}
+.attachment-draft {
+  width: 142px; min-width: 142px; height: 52px; position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 7px 28px 7px 8px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-elev);
+}
+.attachment-draft img { width: 36px; height: 36px; object-fit: cover; border-radius: 7px; flex: 0 0 auto; }
+.attachment-file-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 7px; background: var(--brand-soft); color: var(--brand); font-size: 10px; font-weight: 700; }
+.attachment-copy { min-width: 0; }
+.attachment-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11.5px; }
+.attachment-size { color: var(--text-muted); font-size: 10px; }
+.attachment-remove { position: absolute; right: 5px; top: 5px; width: 20px; height: 20px; border-radius: 6px; color: var(--text-muted); }
+.attachment-remove:hover { background: var(--panel-2); color: var(--danger); }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px 9px 14px; }
 .composer-left { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .composer-right { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
 .composer-hint { font-size: 11.5px; color: var(--text-muted); }
+.attach-btn {
+  width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto;
+  border: 1px solid var(--line-soft); border-radius: 9px; color: var(--text-dim); background: var(--bg-elev);
+}
+.attach-btn:hover { border-color: var(--brand-line); color: var(--text); background: var(--brand-soft); }
+.attach-btn:disabled { opacity: .5; cursor: default; }
+.attach-btn svg { width: 15px; height: 15px; }
 .reasoning-control {
   display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
   padding: 3px 8px; border: 1px solid var(--line-soft); border-radius: 999px;
@@ -450,7 +502,10 @@ html[data-theme="light"] .md-pre { background: #f6f8fc; }
 .stop-btn:hover { border-color: var(--danger); color: var(--danger); }
 .stop-btn:active { transform: translateY(1px); }
 .stop-btn:disabled { opacity: .65; cursor: wait; border-color: rgba(240, 90, 90, .35); color: var(--danger); }
-.composer-note { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.context-usage { max-width: 780px; margin: 6px auto 0; color: var(--text-muted); font-size: 10.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.context-usage.warn { color: var(--warn); }
+.context-usage.danger { color: var(--danger); }
+.composer-note { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
 /* ── Popovers, modal, toasts ───────────────────────────────────────────── */
 .popover {

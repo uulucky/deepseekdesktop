@@ -2,12 +2,20 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.uulucky.com; font-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.uulucky.com; font-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none';" />
 <meta name="referrer" content="no-referrer" />
 <title>DeepSeek</title>
 <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
+  <header class="surface-bar" id="surface-bar">
+    <div class="surface-switch" role="tablist" aria-label="DeepSeek 模式">
+      <button class="surface-tab active" id="surface-workbench" type="button" role="tab" aria-selected="true">工作台 <span>Harness</span></button>
+      <button class="surface-tab" id="surface-web" type="button" role="tab" aria-selected="false">网页版 <span>免费</span></button>
+    </div>
+    <div class="surface-status" id="surface-status">本地工作台</div>
+    <button class="surface-reload" id="surface-reload" type="button" title="重新加载 DeepSeek 网页版" hidden>重新加载</button>
+  </header>
   <div class="app" id="app">
 
     <!-- ── Left rail ─────────────────────────────────────────────────────── -->
@@ -109,9 +117,14 @@
 
       <footer class="composer-wrap">
         <div class="composer" id="composer">
+          <div class="attachment-drafts" id="attachment-drafts" hidden></div>
           <textarea id="input" rows="1" placeholder="给 DeepSeek 发送消息…（Enter 发送，Shift+Enter 换行）"></textarea>
           <div class="composer-bar">
             <div class="composer-left">
+              <button class="attach-btn" id="attach-btn" type="button" title="添加图片或文件" aria-label="添加图片或文件">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <input id="file-input" type="file" multiple hidden />
               <div class="reasoning-control" id="reasoning-control" hidden>
                 <span class="reasoning-title">推理</span>
                 <input id="reasoning-slider" class="reasoning-slider" type="range" min="0" max="0" step="1" value="0" aria-label="推理等级" />
@@ -136,6 +149,7 @@
             <span><strong>Full Access 已开启</strong> · 可读写工作目录外的文件、执行命令，不逐次请求批准。请只运行可信任务。</span>
           </div>
         </div>
+        <div class="context-usage" id="context-usage" aria-live="polite">上下文：发送第一条消息后显示</div>
         <div class="composer-note">内容由 DeepSeek 模型生成，请自行核查重要信息。</div>
       </footer>
     </main>

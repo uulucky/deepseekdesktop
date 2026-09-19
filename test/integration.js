@@ -100,6 +100,33 @@ async function main() {
     assert.equal(forkSummary.parentSessionId, b, 'Copied conversation records its source without altering it');
     assert((await client.history(forked.sessionId, undefined, 8)).events.length > 0, 'Copied conversation retains completed history');
 
+    const attachmentSession = (await chat.createSession(options)).sessionId;
+    await client.selectModel(attachmentSession, group.id, model, 'off');
+    const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+    await chat.send(attachmentSession, 'attachment-fixture', [
+      { kind: 'image', name: 'pasted.png', mediaType: 'image/png', bytes: tinyPng },
+      { kind: 'file', name: 'notes.txt', mediaType: 'text/plain', bytes: Buffer.from('Harness file upload fixture') },
+    ]);
+    const findAttachmentRequest = () => provider.requests.find((request) => (
+      request.body.messages?.some((message) => message.role === 'user'
+        && JSON.stringify(message.content).includes('attachment-fixture'))
+      && request.body.messages?.some((message) => message.role === 'system'
+        && JSON.stringify(message.content).includes('<desktop-summary>'))
+    ));
+    await eventually(findAttachmentRequest, 'Local provider did not receive the attachment task');
+    const attachmentResponse = findAttachmentRequest();
+    const requestJson = JSON.stringify(attachmentResponse.body.messages);
+    assert(requestJson.includes('image_url'), 'Pasted image reaches the actual multimodal model request');
+    assert(requestJson.includes('notes.txt') && requestJson.includes('/attachments/v1/files/'),
+      'Selected file is staged and its readable Harness reference reaches the model context');
+    attachmentResponse.finish('attachment ok');
+    await eventually(() => !chat.transcripts.get(attachmentSession)?.running, 'Attachment turn settles');
+    await eventually(() => {
+      const pressure = chat.transcripts.get(attachmentSession)?.snapshot().context.pressure;
+      return Number.isFinite(pressure?.pressureTokens ?? pressure?.projectedTokens)
+        && Number.isFinite(pressure?.contextWindow);
+    }, 'Live context projection reaches the desktop transcript');
+
     await client.listWorkspaces();
     const registered = await client.createWorkspace(options.cwd);
     const inWorkspace = await client.createSession({ agentPreset: 'standard', workspaceId: registered.workspace.workspaceId });
@@ -109,7 +136,7 @@ async function main() {
     await client.archiveSession(b);
     assert((await client.listWorkspaces()).archivedSessionIds.includes(b), 'Archive state is durable and non-destructive');
     assert((await client.listSessions()).some(item => item.sessionId === b), 'Archived conversation remains in persistence');
-    console.log('PASS isolated real Harness: authentication, permissions, credentials, models, approvals, concurrent tasks, search, rename, workspace, conversation copy and archive; no paid prompts');
+    console.log('PASS isolated real Harness: authentication, permissions, credentials, models, context meter, image/file attachments, concurrent tasks, search, rename, workspace, conversation copy and archive; no paid prompts');
   } finally {
     chat?.dispose();
     client?.dispose();

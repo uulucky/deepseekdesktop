@@ -1,7 +1,7 @@
 {
   "name": "deepseek-desktop",
   "productName": "DeepSeek Desktop",
-  "version": "0.2.23",
+  "version": "0.3.1",
   "description": "DeepSeek 桌面客户端 — 用 ChatGPT 式原生界面驱动本地 DeepSeek Harness (dsh web) 内核",
   "main": "src/main/index.js",
   "author": "uulucky",
@@ -19,7 +19,7 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "ui:shot": "node build/build-main.js && node build/run-ui.js",
-    "test": "node test/runtime-target.js && node test/bootstrap.js && node test/platform.js && node test/updater.js && node test/chat.js && node test/multitask.js && node test/resilience.js && node test/action-summary.js && node test/credentials.js && node test/security.js && node test/ipc-security.js",
+    "test": "node test/runtime-target.js && node test/bootstrap.js && node test/platform.js && node test/updater.js && node test/chat.js && node test/multitask.js && node test/resilience.js && node test/action-summary.js && node test/credentials.js && node test/security.js && node test/web-chat.js && node test/ipc-security.js",
     "test:integration": "node test/integration.js",
     "test:packaged": "node test/packaged.js",
     "runtime:stage": "node build/prebundle.js",

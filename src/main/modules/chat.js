@@ -33,7 +33,19 @@ function blocksOf(content) {
     switch (block.type) {
       case 'text': return { kind: 'text', text: clip(block.text) };
       case 'reasoning': return { kind: 'reasoning', text: clip(block.text) };
-      case 'image': return { kind: 'image', attachmentId: block.attachment?.id ?? block.attachment?.attachmentId ?? null };
+      case 'image': return {
+        kind: 'image',
+        attachmentId: block.attachment?.id ?? block.attachment?.attachmentId ?? null,
+        name: block.attachment?.name ?? block.name ?? null,
+        mediaType: block.attachment?.mediaType ?? block.mediaType ?? null,
+        bytes: block.attachment?.bytes ?? null,
+      };
+      case 'file': return {
+        kind: 'file',
+        attachmentId: block.attachment?.id ?? block.attachment?.attachmentId ?? null,
+        name: block.attachment?.name ?? block.name ?? '文件',
+        bytes: block.attachment?.bytes ?? null,
+      };
       case 'tool-call': return { kind: 'tool-call', callId: block.callId, name: block.name, arguments: clip(block.arguments ?? '', 4000) };
       case 'tool-result': return {
         kind: 'tool-result',
@@ -110,7 +122,13 @@ class Transcript {
     this.lastSeq = -1;
     this.title = null;
     this.usage = { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    this.projections = {};
     this.running = false;
+  }
+
+  applyProjections(values) {
+    if (!values || typeof values !== 'object') return;
+    this.projections = { ...this.projections, ...values };
   }
 
   /** Insert an item in sequence order and index it. */
@@ -344,6 +362,11 @@ class Transcript {
       title: this.title,
       running: this.running,
       usage: this.usage,
+      context: {
+        pressure: this.projections.contextPressure ?? null,
+        breakdown: this.projections.contextBreakdown ?? null,
+        imageLimits: this.projections.imageLimits ?? null,
+      },
       lastSeq: this.lastSeq,
       items: this.items.filter((item) => item.kind !== 'turn-start'),
       approvals: [...this.approvals.values()],
@@ -423,9 +446,18 @@ class ChatController {
         .filter((event) => event && typeof event.seq === 'number' && event.seq > transcript.lastSeq)
         .sort((a, b) => a.seq - b.seq);
       for (const event of records) transcript.apply(event);
+      transcript.applyProjections(frame.projections?.values);
       if (frame.projections?.values?.title) transcript.title = frame.projections.values.title;
       if (frame.running) transcript.running = true;
       this.onUpdate({ sessionId: frame.sessionId, snapshot: true, transcript: transcript.snapshot() });
+      return;
+    }
+    if (frame.type === 'session/projections') {
+      const transcript = this.transcripts.get(frame.sessionId);
+      if (!transcript) return;
+      transcript.applyProjections(frame.values);
+      if (typeof frame.values?.title === 'string') transcript.title = frame.values.title;
+      this.onUpdate({ sessionId: frame.sessionId, projections: true, transcript: transcript.snapshot() });
       return;
     }
     if (frame.type === 'session/streaming') {
@@ -450,6 +482,7 @@ class ChatController {
     if (frame.type === 'session/projection') {
       const transcript = this.transcripts.get(frame.sessionId);
       if (!transcript) return;
+      transcript.applyProjections({ [frame.key]: frame.value });
       if (frame.key === 'title' && typeof frame.value === 'string') transcript.title = frame.value;
       this.onUpdate({ sessionId: frame.sessionId, projection: frame.key, transcript: transcript.snapshot() });
     }
@@ -461,6 +494,7 @@ class ChatController {
     let transcript = this.transcripts.get(sessionId);
     if (!transcript) {
       transcript = new Transcript(sessionId);
+      transcript.applyProjections(this.client.projectionsFor?.(sessionId));
       this.transcripts.set(sessionId, transcript);
       const pending = (async () => {
         try {
@@ -482,6 +516,7 @@ class ChatController {
       return pending;
     }
     // Navigation is renderer-only. Keep every opened task subscribed independently.
+    transcript.applyProjections(this.client.projectionsFor?.(sessionId));
     this.client.followSession?.(sessionId);
     this.syncPendingApprovals(transcript);
     return transcript.snapshot();
@@ -543,25 +578,36 @@ class ChatController {
     if (agentPreset) payload.agentPreset = agentPreset;
     const created = await this.client.createSession(payload);
     const transcript = new Transcript(created.sessionId);
+    transcript.applyProjections(this.client.projectionsFor?.(created.sessionId));
     this.transcripts.set(created.sessionId, transcript);
     this.client.followSession?.(created.sessionId);
     return created;
   }
 
   /** Send a prompt and optimistically echo the user bubble before the event arrives. */
-  async send(sessionId, text, mode = 'queue') {
+  async send(sessionId, text, attachments = [], mode = 'queue') {
     let transcript = this.transcripts.get(sessionId);
     if (!transcript) {
       transcript = new Transcript(sessionId);
+      transcript.applyProjections(this.client.projectionsFor?.(sessionId));
       this.transcripts.set(sessionId, transcript);
     }
     transcript.running = true;
     const requestId = rid('prompt');
+    const optimisticParts = [
+      ...attachments.map((attachment) => ({
+        kind: attachment.kind === 'image' ? 'image' : 'file',
+        name: attachment.name,
+        mediaType: attachment.mediaType ?? null,
+        bytes: attachment.bytes?.byteLength ?? attachment.bytes?.length ?? 0,
+      })),
+      ...(text ? [{ kind: 'text', text: clip(text) }] : []),
+    ];
     const optimistic = {
       kind: 'user', time: Date.now(), source: 'user', synthetic: false, pending: true,
       requestId,
       text: clip(text),
-      parts: [{ kind: 'text', text: clip(text) }],
+      parts: optimisticParts,
       seq: undefined,
     };
     transcript.items.push(optimistic);
@@ -569,7 +615,23 @@ class ChatController {
     this.onUpdate({ sessionId, event: { type: 'optimistic' }, transcript: transcript.snapshot() });
     this.watchUntilSettled(sessionId);
     try {
-      await this.client.prompt(sessionId, text, mode, undefined, requestId);
+      const content = [];
+      for (const attachment of attachments) {
+        const bytes = Buffer.isBuffer(attachment.bytes) ? attachment.bytes : Buffer.from(attachment.bytes);
+        if (attachment.kind === 'image') {
+          content.push({
+            type: 'image', mediaType: attachment.mediaType, data: bytes.toString('base64'),
+            ...(attachment.name ? { name: attachment.name } : {}),
+          });
+        } else {
+          // Generic files are staged through the Harness's authenticated streaming route;
+          // the prompt carries only the one-use receipt, never a filesystem path.
+          // eslint-disable-next-line no-await-in-loop
+          const uploaded = await this.client.uploadFile(sessionId, bytes, attachment.name);
+          content.push({ type: 'file', receiptId: uploaded.receiptId });
+        }
+      }
+      await this.client.prompt(sessionId, text, mode, undefined, requestId, content);
     } catch (error) {
       optimistic.pending = false;
       optimistic.failed = String(error?.message ?? error);

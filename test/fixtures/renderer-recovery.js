@@ -10,6 +10,19 @@ async function within(promise, label, ms = 30_000) {
   } finally { clearTimeout(timer); }
 }
 
+async function replacementMainWindow(application, previous, timeout = 30_000) {
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    const candidate = application.windows().find((window) => {
+      if (window === previous) return false;
+      try { return /\/index\.html$/.test(window.url()); } catch { return false; }
+    });
+    if (candidate) return candidate;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error(`Replacement main window timed out after ${timeout}ms`);
+}
+
 /** Keep a real Harness task streaming while its UI process dies, then finish the same task. */
 async function rendererRecovery(application, page, provider) {
   await page.locator('#input').fill('renderer-recovery-fixture');
@@ -22,7 +35,9 @@ async function rendererRecovery(application, page, provider) {
     return state.activeSessionId;
   });
   console.log('Recovery smoke: crashing renderer during a live response');
-  const replacement = application.waitForEvent('window', { predicate: candidate => candidate !== page, timeout: 30_000 });
+  // WebContentsView pages also appear in Playwright's Electron window inventory. Select only the
+  // recovered local shell so an official-web child cannot be mistaken for the replacement UI.
+  const replacement = replacementMainWindow(application, page);
   // Attach rejection handling before scheduling the crash, in case the driver disconnects.
   replacement.catch(() => {});
   await within(application.evaluate(({ BrowserWindow }) => {

@@ -23,7 +23,7 @@ npm run test:packaged
 
 Mac 使用匹配 CPU 的 macOS 机器和 Node 24.15.0，执行 `npm ci`、`npm run runtime:stage`、`npm test`、`npm run test:integration`、`npm run dist:mac`、`npm run test:packaged`。不需要 Apple 开发者账号；自有脚本通过锁定的 `@electron/osx-sign` 做 ad-hoc 签名，无公证、不访问开发者证书。不要在 ARM64 机器上把原生依赖复用为 Intel 包。支持 macOS 14+，CI 原生测试环境为 macOS 15 的 ARM64 与 Intel runner，不代表每个系统小版本都已验证。
 
-Mac 的 DMG 和 ZIP 包含同一 `.app`。测试从正式 ZIP 解包，验证递归代码签名和 Node CPU 架构，实际启动 Electron/随包 Harness，执行输入、多任务、行动摘要、渲染恢复、退出/重启及替换 `.app` 后独立数据和测试 Cookie 保留。测试不会为 CI 自动放行 Gatekeeper，也不能替代真实浏览器隔离属性下的首次安装、系统钥匙串或真实账户验证。
+Mac 的 DMG 和 ZIP 包含同一 `.app`。测试从正式 ZIP 解包，验证递归代码签名和 Node CPU 架构，实际启动 Electron/随包 Harness，执行输入、多任务、行动摘要、上下文投影、图片/文件附件、官方网页容器隔离与无刷新切换、渲染恢复、退出/重启及替换 `.app` 后独立数据和测试 Cookie 保留。官方网页测试使用本机回环夹具，不登录真实账号。测试不会为 CI 自动放行 Gatekeeper，也不能替代真实官方页面、首次安装、系统钥匙串或真实账户验证。
 
 [Windows and Mac build, test and release](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml) 在 push、PR、手动触发及版本 tag 时执行。同一源码构建结果发布为 GitHub Actions artifacts；仅本仓库版本 tag 的通过测试产物会发布为 Release 并生成 GitHub 构建来源证明。PR 不获得发布私钥或 OSS 凭据。
 
@@ -49,7 +49,7 @@ npm run test:integration
 Release ZIP 与自动更新分发的是同一 CI 构建文件。可执行：
 
 ```sh
-gh attestation verify DeepSeekDesktop-0.2.23-portable.zip --repo uulucky/deepseekdesktop
+gh attestation verify DeepSeekDesktop-0.3.1-portable.zip --repo uulucky/deepseekdesktop
 node build/verify-update.js latest.json
 ```
 

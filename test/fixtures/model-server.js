@@ -14,6 +14,11 @@ async function eventually(predicate, message, timeout = 20000) {
 async function startModelServer() {
   const requests = [];
   const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url === '/web-fixture') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('<!doctype html><meta charset="utf-8"><title>DeepSeek Web Fixture</title><h1 id="ready">网页版夹具</h1><main id="long"></main><script>window.fixtureIdentity=sessionStorage.fixtureIdentity||(sessionStorage.fixtureIdentity=crypto.randomUUID());document.getElementById("long").textContent="长对话".repeat(200000);</script>');
+      return;
+    }
     if (req.method !== 'POST' || req.url !== '/chat/completions') {
       res.writeHead(404); res.end(); return;
     }

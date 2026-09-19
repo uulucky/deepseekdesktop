@@ -47,7 +47,8 @@ contextBridge.exposeInMainWorld('deepseek', {
     rename: (sessionId, title) => invoke('sessions:rename', sessionId, title),
     archive: (sessionId) => invoke('sessions:archive', sessionId),
     fork: (sessionId) => invoke('sessions:fork', sessionId),
-    prompt: (sessionId, text) => invoke('sessions:prompt', sessionId, text),
+    prompt: (sessionId, text, attachments) => invoke('sessions:prompt', sessionId, text, attachments),
+    attachment: (sessionId, attachmentId) => invoke('sessions:attachment', sessionId, attachmentId),
     cancel: (sessionId) => invoke('sessions:cancel', sessionId),
     answerApproval: (sessionId, eventId, outcome) => invoke('sessions:answer-approval', sessionId, eventId, outcome),
   },
@@ -91,6 +92,11 @@ contextBridge.exposeInMainWorld('deepseek', {
     check: () => invoke('update:check'),
     install: () => invoke('update:install'),
   },
+  surface: {
+    status: () => invoke('surface:status'),
+    setMode: (mode) => invoke('surface:set-mode', mode),
+    reload: () => invoke('surface:reload'),
+  },
   window: {
     focus: () => invoke('window:focus-main'),
     minimize: () => invoke('window:minimize'),
@@ -106,5 +112,6 @@ contextBridge.exposeInMainWorld('deepseek', {
     onDomMirror: (listener) => subscribe('dsh:dom-mirror', listener),
     onAdState: (listener) => subscribe('ad:state', listener),
     onUpdateState: (listener) => subscribe('update:state', listener),
+    onSurfaceState: (listener) => subscribe('surface:state', listener),
   },
 });

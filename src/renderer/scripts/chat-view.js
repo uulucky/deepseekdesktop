@@ -9,6 +9,8 @@ const MAX_REASONING_CHARS = 24_000;
 const MAX_TOOL_CHARS = 12_000;
 const expandedDetails = new Set();
 let renderedSession = '';
+const imageUrls = new Map();
+const imageLoads = new Map();
 
 /** Only a leading, explicit presentation block is special; code/quoted examples stay intact. */
 function splitActionSummary(value, streaming = false) {
@@ -58,7 +60,14 @@ function renderPart(part, key = '') {
   if (part.kind === 'tool-call') {
     return fold('调用工具 ' + esc(part.name || ''), esc(part.summary || ''), `<pre>${esc(displayText(part.arguments, MAX_TOOL_CHARS))}</pre>`, key);
   }
-  if (part.kind === 'image') return '<div class="hint">[图片]</div>';
+  if (part.kind === 'image') {
+    const id = part.attachmentId ? esc(part.attachmentId) : '';
+    return `<div class="message-attachment image"><div class="message-image-placeholder" data-image-attachment="${id}">图片${part.name ? ' · ' + esc(part.name) : ''}</div></div>`;
+  }
+  if (part.kind === 'file') {
+    const suffix = String(part.name || '文件').split('.').pop().slice(0, 6).toUpperCase();
+    return `<div class="message-attachment file"><span class="message-file-icon">${esc(suffix)}</span><span><strong>${esc(part.name || '文件')}</strong>${part.bytes ? `<small>${esc(compact(part.bytes))} bytes</small>` : ''}</span></div>`;
+  }
   return '';
 }
 
@@ -212,7 +221,41 @@ const ChatView = {
       item.callId ?? (item.kind === 'assistant' && item.turn !== undefined
         ? `assistant:${item.turn}:${item.step}` : `${item.kind}:${item.seq ?? index + hiddenCount}`))).join('')
       + approvals.map(renderApproval).join('');
+    this.hydrateImages(renderedSession);
     this.scrollToBottom();
+  },
+
+  hydrateImages(sessionId) {
+    for (const node of document.querySelectorAll?.('[data-image-attachment]') ?? []) {
+      const attachmentId = node.getAttribute('data-image-attachment');
+      if (!sessionId || !attachmentId) continue;
+      const key = `${sessionId}:${attachmentId}`;
+      const install = (url) => {
+        if (!node.isConnected || node.querySelector('img')) return;
+        const image = document.createElement('img');
+        image.src = url;
+        image.alt = '对话图片';
+        node.textContent = '';
+        node.appendChild(image);
+      };
+      if (imageUrls.has(key)) { install(imageUrls.get(key)); continue; }
+      if (!imageLoads.has(key)) {
+        imageLoads.set(key, api.sessions.attachment(sessionId, attachmentId).then((result) => {
+          const binary = atob(result.data);
+          const bytes = new Uint8Array(binary.length);
+          for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+          const url = URL.createObjectURL(new Blob([bytes], { type: result.attachment?.mediaType || 'image/png' }));
+          imageUrls.set(key, url);
+          while (imageUrls.size > 24) {
+            const oldest = imageUrls.keys().next().value;
+            URL.revokeObjectURL(imageUrls.get(oldest));
+            imageUrls.delete(oldest);
+          }
+          return url;
+        }).catch(() => null).finally(() => imageLoads.delete(key)));
+      }
+      imageLoads.get(key).then((url) => { if (url) install(url); });
+    }
   },
 
   scrollToBottom() {

@@ -15,6 +15,8 @@ const App = {
       state.ui = state.world.ui ?? {};
       state.credentials = state.world.credential?.refs ?? {};
     }
+    state.surfaceMode = state.world?.surface?.mode === 'web' ? 'web' : 'workbench';
+    state.webSurface = { ...state.webSurface, ...(state.world?.surface ?? {}) };
     state.permissionMode = defaultPermission(state.ui.defaultPermission);
     state.account.summary = state.platform.lastBalance ?? null;
     state.account.usage = state.platform.lastUsage ?? null;
@@ -23,6 +25,7 @@ const App = {
     this.applyAppearance();
     ChatView.install();
     this.installEvents();
+    this.renderSurfaceMode();
     Sidebar.renderAll();
 
     await this.refreshSessions();
@@ -98,6 +101,16 @@ const App = {
     api.events.onServerStop(() => {
       toast('本地服务已停止，请在设置中重启', 'err');
     });
+    api.events.onSurfaceState?.((surface) => {
+      if (!surface) return;
+      state.webSurface = { ...state.webSurface, ...surface };
+      if (surface.mode) state.surfaceMode = surface.mode;
+      this.renderSurfaceMode();
+    });
+
+    document.getElementById('surface-workbench').addEventListener('click', () => this.setSurfaceMode('workbench'));
+    document.getElementById('surface-web').addEventListener('click', () => this.setSurfaceMode('web'));
+    document.getElementById('surface-reload').addEventListener('click', () => api.surface.reload());
 
     // Rails and header wiring
     document.getElementById('new-chat').addEventListener('click', () => this.newSession(state.preferredWorkspaceId));
@@ -150,6 +163,7 @@ const App = {
     // Composer
     const input = document.getElementById('input');
     input.addEventListener('input', () => this.autoGrow(input));
+    input.addEventListener('paste', (event) => this.handleImagePaste(event));
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
@@ -158,6 +172,16 @@ const App = {
       if (event.key === 'Escape') this.hidePopover();
     });
     document.getElementById('send-btn').addEventListener('click', () => this.send());
+    const fileInput = document.getElementById('file-input');
+    document.getElementById('attach-btn').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      this.addAttachments([...fileInput.files]);
+      fileInput.value = '';
+    });
+    document.getElementById('attachment-drafts').addEventListener('click', (event) => {
+      const remove = event.target.closest('[data-remove-attachment]');
+      if (remove) this.removeAttachment(remove.getAttribute('data-remove-attachment'));
+    });
     document.getElementById('stop-btn').addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -195,6 +219,31 @@ const App = {
     window.addEventListener('resize', () => { this.hidePopover(); this.hideSessionPopover(); });
   },
 
+  async setSurfaceMode(mode) {
+    if (!['workbench', 'web'].includes(mode) || mode === state.surfaceMode) return;
+    const surface = await guard(api.surface.setMode(mode), '切换模式失败');
+    if (!surface) return;
+    state.surfaceMode = surface.mode;
+    state.webSurface = { ...state.webSurface, ...surface };
+    this.renderSurfaceMode();
+  },
+
+  renderSurfaceMode() {
+    const web = state.surfaceMode === 'web';
+    const workbench = document.getElementById('surface-workbench');
+    const webButton = document.getElementById('surface-web');
+    workbench.classList.toggle('active', !web);
+    webButton.classList.toggle('active', web);
+    workbench.setAttribute('aria-selected', String(!web));
+    webButton.setAttribute('aria-selected', String(web));
+    document.getElementById('surface-reload').hidden = !web;
+    const status = document.getElementById('surface-status');
+    if (!web) status.textContent = '本地工作台';
+    else if (state.webSurface.status === 'loading') status.textContent = '正在加载官方网页版…';
+    else if (state.webSurface.status === 'error') status.textContent = '网页版加载失败，可重新加载';
+    else status.textContent = 'DeepSeek 官方网页版 · 登录状态会保留';
+  },
+
   async installUpdate() {
     if (state.update?.status !== 'available') return;
     toast(state.update.manual
@@ -217,6 +266,7 @@ const App = {
       stopping: false, permissionBusy: false, modelBusy: false, unread: false,
       selection: null, selectionRoutable: false,
       permissionMode: defaultPermission(state.ui.defaultPermission),
+      attachments: [],
     });
     return state.sessionViews.get(sessionId);
   },
@@ -231,6 +281,7 @@ const App = {
     const input = document.getElementById('input');
     input.value = view.draft;
     this.autoGrow(input);
+    this.renderAttachments();
     this.hidePopover();
     this.hideSessionPopover();
     this.paintSession();
@@ -261,6 +312,7 @@ const App = {
     this.cancelTranscriptPaint();
     this.syncSessionControls();
     ChatView.render(state.transcript);
+    this.renderAttachments();
   },
 
   scheduleTranscriptPaint(sessionId, immediate = false) {
@@ -679,7 +731,9 @@ const App = {
     if (state.streaming || state.stopping || state.sessionLoading || (state.creatingSession && !state.activeSessionId)) return;
     const input = document.getElementById('input');
     const text = input.value.trim();
-    if (!text) return;
+    const sourceView = this.sessionView();
+    const draftAttachments = [...(sourceView.attachments ?? [])];
+    if (!text && !draftAttachments.length) return;
     if (!state.activeSessionId) {
       const created = await this.newSession();
       if (!created || created.sessionId !== state.activeSessionId) return;
@@ -690,13 +744,22 @@ const App = {
     input.value = '';
     view.draft = '';
     view.sending = true;
+    view.attachments = draftAttachments;
     this.autoGrow(input);
     this.syncSessionControls();
-    const transcript = await guard(api.sessions.prompt(sessionId, text), '发送失败');
+    const serialized = await guard(Promise.all(draftAttachments.map(async (attachment) => ({
+      kind: attachment.kind,
+      name: attachment.file.name,
+      mediaType: attachment.file.type || 'application/octet-stream',
+      bytes: await attachment.file.arrayBuffer(),
+    }))), '读取附件失败');
+    const transcript = serialized && await guard(api.sessions.prompt(sessionId, text, serialized), '发送失败');
     view.sending = false;
     if (transcript) {
+      this.releaseAttachments(view.attachments);
+      view.attachments = [];
       this.receiveTranscript(sessionId, transcript, revision);
-    } else if (!view.draft) {
+    } else if (!view.draft && text) {
       view.draft = text;
       if (state.activeSessionId === sessionId && !input.value) input.value = text;
     }
@@ -705,6 +768,7 @@ const App = {
       ChatView.scrollToEnd();
     }
     Sidebar.renderSessions();
+    this.renderAttachments();
     this.refreshSessionsThrottled();
   },
 
@@ -735,6 +799,8 @@ const App = {
       stop.setAttribute('aria-busy', state.stopping ? 'true' : 'false');
     }
     if (send) send.disabled = state.streaming || state.stopping || state.sessionLoading || (state.creatingSession && !state.activeSessionId);
+    const attach = document.getElementById('attach-btn');
+    if (attach) attach.disabled = Boolean(state.streaming || state.stopping || state.sessionLoading);
     const newChat = document.getElementById('new-chat');
     if (newChat) {
       newChat.disabled = state.creatingSession;
@@ -746,6 +812,83 @@ const App = {
     }
     this.renderReasoningControl();
     this.renderPermissionControl();
+    this.renderContextUsage();
+  },
+
+  renderContextUsage() {
+    const node = document.getElementById('context-usage');
+    if (!node) return;
+    const pressure = state.transcript?.context?.pressure;
+    const used = Number(pressure?.projectedTokens ?? pressure?.pressureTokens);
+    const total = Number(pressure?.contextWindow);
+    if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) {
+      node.classList.toggle('warn', false);
+      node.classList.toggle('danger', false);
+      node.textContent = '上下文：发送第一条消息后显示';
+      return;
+    }
+    const percent = Math.min(100, Math.max(0, Math.round(used / total * 100)));
+    node.textContent = `上下文已使用 ${compact(used)} / ${compact(total)} tokens · ${percent}%`;
+    node.classList.toggle('danger', percent >= 90);
+    node.classList.toggle('warn', percent >= 75 && percent < 90);
+  },
+
+  handleImagePaste(event) {
+    const images = [...(event.clipboardData?.items ?? [])]
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile()).filter(Boolean);
+    if (!images.length) return;
+    event.preventDefault();
+    this.addAttachments(images);
+  },
+
+  addAttachments(files) {
+    if (state.streaming || state.stopping || !files?.length) return;
+    const view = this.sessionView();
+    const current = view.attachments ??= [];
+    const available = Math.max(0, 20 - current.length);
+    if (files.length > available) toast('一次最多选择 20 个附件', 'err');
+    for (const file of files.slice(0, available)) {
+      if (!file?.size) { toast(`${file?.name || '文件'} 是空文件`, 'err'); continue; }
+      if (file.size > 64 * 1024 * 1024) { toast(`${file.name} 超过 64 MB`, 'err'); continue; }
+      const kind = /^image\/(png|jpeg|webp|gif)$/i.test(file.type) ? 'image' : 'file';
+      current.push({
+        id: crypto.randomUUID(), kind, file,
+        previewUrl: kind === 'image' ? URL.createObjectURL(file) : null,
+      });
+    }
+    this.renderAttachments();
+  },
+
+  removeAttachment(id) {
+    const view = this.sessionView();
+    const index = (view.attachments ?? []).findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const [removed] = view.attachments.splice(index, 1);
+    if (removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+    this.renderAttachments();
+  },
+
+  releaseAttachments(attachments) {
+    for (const attachment of attachments ?? []) {
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    }
+  },
+
+  renderAttachments() {
+    const host = document.getElementById('attachment-drafts');
+    if (!host) return;
+    const attachments = this.sessionView().attachments ?? [];
+    host.hidden = attachments.length === 0;
+    host.innerHTML = attachments.map((attachment) => {
+      const size = attachment.file.size >= 1024 * 1024
+        ? `${(attachment.file.size / 1024 / 1024).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(attachment.file.size / 1024))} KB`;
+      const visual = attachment.kind === 'image'
+        ? `<img src="${esc(attachment.previewUrl)}" alt="" />`
+        : `<span class="attachment-file-icon">${esc((attachment.file.name.split('.').pop() || 'FILE').slice(0, 5).toUpperCase())}</span>`;
+      return `<div class="attachment-draft">${visual}<span class="attachment-copy"><span class="attachment-name">${esc(attachment.file.name || '未命名文件')}</span><span class="attachment-size">${esc(size)}</span></span><button class="attachment-remove" type="button" data-remove-attachment="${esc(attachment.id)}" title="移除">×</button></div>`;
+    }).join('');
   },
 
   /** Model-advertised effort levels for the active selection, kept in harness order. */

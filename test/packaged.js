@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const assert = require('node:assert/strict');
-const { startModelServer } = require('./fixtures/model-server');
+const { startModelServer, eventually } = require('./fixtures/model-server');
 const { multitaskUi } = require('./fixtures/multitask-ui');
 const { rendererRecovery } = require('./fixtures/renderer-recovery');
 const { actionSummaryUi } = require('./fixtures/action-summary-ui');
@@ -170,6 +170,8 @@ async function main() {
   assert(['win32', 'darwin'].includes(process.platform), 'Run packaged smoke natively on Windows or Mac');
   provider = await startModelServer();
   env.DEEPSEEK_BASE_URL = provider.baseUrl;
+  env.DEEPSEEK_DESKTOP_TEST_MODE = '1';
+  env.DEEPSEEK_DESKTOP_WEB_CHAT_URL = `${provider.baseUrl}/web-fixture`;
   env.DEEPSEEK_API_KEY = 'sk-local-ui-fixture-not-a-real-key';
   fs.mkdirSync(results, { recursive: true });
   fs.mkdirSync(dataRoot, { recursive: true });
@@ -211,6 +213,78 @@ async function main() {
   await page.evaluate(() => App.newSession());
   const fullSession = await page.evaluate(() => state.activeSessionId);
   assert.equal(await page.evaluate(id => api.sessions.permissions(id).then(value => value.currentValue), fullSession), 'danger-full-access');
+
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.locator('#attach-btn').click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({ name: 'fixture.txt', mimeType: 'text/plain', buffer: Buffer.from('packaged attachment fixture') });
+  await page.locator('#input').evaluate((input) => {
+    const binary = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }));
+    input.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+  });
+  assert.equal(await page.locator('.attachment-draft').count(), 2, 'Plus picker and pasted image both enter the composer');
+  await page.locator('#input').fill('packaged-attachment-fixture');
+  await page.locator('#send-btn').click();
+  const findAttachmentRequest = () => provider.requests.find(request => (
+    request.body.messages?.some(message => message.role === 'user'
+      && JSON.stringify(message.content).includes('packaged-attachment-fixture'))
+    && request.body.messages?.some(message => message.role === 'system'
+      && JSON.stringify(message.content).includes('<desktop-summary>'))
+  ));
+  await eventually(findAttachmentRequest, 'Packaged composer attachment prompt did not reach Harness');
+  const attachmentRequest = findAttachmentRequest();
+  const attachmentJson = JSON.stringify(attachmentRequest.body.messages);
+  assert(attachmentJson.includes('image_url') && attachmentJson.includes('fixture.txt'));
+  attachmentRequest.finish('attachment complete');
+  await page.waitForFunction(() => !state.streaming && document.getElementById('context-usage').textContent.includes('%'));
+  assert.equal(await page.locator('.attachment-draft').count(), 0, 'Successful send retires composer previews');
+  assert(await page.locator('.message-attachment').count() >= 2, 'Sent image and file stay visible in the transcript');
+
+  await page.locator('#surface-web').click();
+  const webState = async () => application.evaluate(async ({ webContents, session }) => {
+    const content = webContents.getAllWebContents()
+      .filter(item => !item.isDestroyed() && item.getURL().includes('/web-fixture'))
+      .sort((left, right) => right.id - left.id)[0];
+    if (!content || content.isLoading()) return null;
+    const identity = await Promise.race([
+      content.executeJavaScript('window.fixtureIdentity').catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve(null), 1000)),
+    ]);
+    if (!identity) return null;
+    return {
+      id: content.id,
+      identity,
+      nodeIntegration: content.getLastWebPreferences().nodeIntegration,
+      sandbox: content.getLastWebPreferences().sandbox,
+      sharedPartition: content.session === session.fromPartition('persist:deepseek-platform'),
+    };
+  });
+  await eventually(webState, 'Official web surface fixture did not load');
+  const firstWeb = await webState();
+  assert.equal(firstWeb.nodeIntegration, false);
+  assert.equal(firstWeb.sandbox, true);
+  assert.equal(firstWeb.sharedPartition, true, 'Official web surface shares only the persistent DeepSeek login partition');
+  await page.locator('#surface-workbench').click();
+  await page.locator('#surface-web').click();
+  const resumedWeb = await webState();
+  assert.equal(resumedWeb.id, firstWeb.id, 'Switching modes does not reload a long web conversation');
+  assert.equal(resumedWeb.identity, firstWeb.identity);
+  await application.evaluate(({ webContents }) => {
+    const content = webContents.getAllWebContents().find(item => item.getURL().includes('/web-fixture'));
+    if (!content) throw new Error('Official web fixture contents missing before crash test');
+    // Return to the Playwright driver before killing the target renderer. Crashing it inline can
+    // leave Electron's evaluate callback waiting even though the main process recovered it.
+    setTimeout(() => { if (!content.isDestroyed()) content.forcefullyCrashRenderer(); }, 100);
+    return true;
+  });
+  await eventually(async () => {
+    const recovered = await webState();
+    return recovered && recovered.id !== firstWeb.id;
+  }, 'Crashed web surface was not replaced');
+  await page.locator('#surface-workbench').click();
   await page.locator('#open-profile').click();
   await page.locator('#manual-key-input').fill('sk-ui-fixture-not-submitted');
   assert.equal(await page.locator('#manual-key-input').inputValue(), 'sk-ui-fixture-not-submitted');

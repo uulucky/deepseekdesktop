@@ -1,15 +1,18 @@
-待发布说明草稿：Mac 支持已加入源码，暂不分配版本号、不发布安装包或更新清单。用户要求与其他功能一并发布。以下内容仅供下次正式发布前核对。
+# DeepSeek Desktop 0.3.1
 
-计划增加 Mac 直接下载版，同时保留 Windows 便携版；支持 macOS 14+。
+本版同步发布 Windows、Mac Apple 芯片和 Mac Intel 安装包。
 
-- Apple 芯片（M 系列）选择 `mac-arm64.dmg`；Intel 选择 `mac-x64.dmg`。将应用拖入“应用程序”。另提供相同内容的 Mac ZIP。
-- 不走 App Store，无 Apple Developer ID 或 Apple 公证，仅 ad-hoc 签名。确认下载可信后，如系统拦截，请到“系统设置 → 隐私与安全性 → 仍要打开”。不要求关闭系统安全保护；企业策略可能不允许打开。
-- Mac 自带匹配架构的 Node 和 Harness；适配系统菜单，数据默认在 `~/Library/Application Support/DeepSeek Desktop/`，不在 `.app` 内。Cmd+Q 完全退出。
-- 每小时检查已签名版本清单。Mac 下载后退出软件并手动替换应用，数据保留；系统可能再次要求允许打开、钥匙串授权或重新登录。Windows 保留原有自动更新/重启。
-- 保留余额、软件内官方充值、中文行动摘要、推理和权限滑块、多任务、会话管理、黑窗口恢复。默认 Full Access 并常驻提示风险，不绕过 macOS 系统权限。
+## 新增
 
-公开 CI 在 Windows、Apple 芯片和 Intel 原生机器上构建、启动和测试各自完整安装包；包括多任务、崩溃恢复、正常退出和替换后的数据保留。使用本地模拟模型，不验证真实登录/充值，不代表覆盖所有 Mac 的 Gatekeeper、钥匙串或企业策略。
+- 左上角可切换“工作台（Harness）”与“网页版（免费）”。网页版直接运行隔离的 DeepSeek 官方页面，使用自己的登录和会话列表；切换模式不会刷新或销毁另一边的长对话。
+- 工作台输入框下显示当前会话上下文已使用 Token、总量与百分比，接近上限时提示。
+- 工作台支持直接粘贴图片；输入框左下角新增“+”，可一次选择多个图片或文件随消息发送。
+- Windows、Apple 芯片与 Intel Mac 使用同一源码和公开 CI 测试后同步发布。
 
-Windows 未 Authenticode 签名；源码可查看而非标准开源。下载前阅读 README、PRIVACY.md、SECURITY.md。总 SHA256SUMS、分平台 build-info/SBOM 与 GitHub 来源证明一同提供。
+## 隐私与安全说明
 
-unsigned-update.json 仅供维护者审核签名，客户端不接受未签名清单。审核后另附 latest.json；国内 OSS 镜像在校验后上线，发布初期优先下载本页资产。
+- 网页版只加载 DeepSeek 官方页面，不读取或注入登录令牌，不向远程页面暴露 Node、preload 或桌面 IPC。网页版消息、附件、搜索和分享由 DeepSeek 官方服务处理。
+- Windows 暂无 Authenticode 代码签名，可能显示“未知发布者”。Mac 仅为 ad-hoc 签名，无 Apple Developer ID 和公证；首次打开请在确认下载来源和哈希后按 README 操作，不要关闭系统安全功能。
+- 三个平台都验证 Ed25519 更新清单；发布页提供 SHA-256、构建信息、SBOM 和 GitHub 来源证明。Mac 更新仍需下载 DMG 后手动替换应用。
+
+详细使用、网络连接、数据保存和已知边界见 README、PRIVACY.md、NETWORK.md 与 SECURITY.md。
