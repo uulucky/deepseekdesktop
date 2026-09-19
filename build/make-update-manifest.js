@@ -21,8 +21,9 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '修复官方网页版在 Electron 环境中被识别为异常环境的问题，登录与聊天继续在客户端内完成。',
-    '官方页面确实返回 HTTP 403/429 时改为本地恢复提示和手动重试，不会自动连续请求。',
+    '中文问题的行动摘要会在本地稳定显示为中文，模型偶尔输出英文时保留折叠原文供核对。',
+    '网页版补全 Chrome 兼容标识，并按 Retry-After 倒计时、限次重试，避免 429 时连续刷新。',
+    '网页版恢复会保留 Cookie 与站点存储；403 验证页和连接失败都可在客户端内继续处理。',
     'Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。',
   ],
   platforms: {

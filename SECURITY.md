@@ -30,8 +30,8 @@ Mac 每小时验证同一 Ed25519 更新清单，仅提供匹配 CPU 的 DMG 下
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.3.1-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.3.1-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.3.3-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.3.3-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。
@@ -39,8 +39,8 @@ gh attestation verify .\DeepSeekDesktop-0.3.1-portable.zip --repo uulucky/deepse
 Mac 终端示例（Intel 将 `arm64` 换为 `x64`）：
 
 ```sh
-shasum -a 256 DeepSeekDesktop-0.3.1-mac-arm64.dmg
-gh attestation verify DeepSeekDesktop-0.3.1-mac-arm64.dmg --repo uulucky/deepseekdesktop
+shasum -a 256 DeepSeekDesktop-0.3.3-mac-arm64.dmg
+gh attestation verify DeepSeekDesktop-0.3.3-mac-arm64.dmg --repo uulucky/deepseekdesktop
 ```
 
 ## 支持范围与未覆盖事项

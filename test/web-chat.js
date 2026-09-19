@@ -44,7 +44,7 @@ const external = [];
 const states = [];
 const fakeSession = { webRequest: {
   onHeadersReceived(_filter, listener) { this.listener = listener; },
-}, getUserAgent: () => 'Mozilla/5.0 deepseek-desktop/0.3.2 Chrome/152.0.0.0 Electron/44.4.1 Safari/537.36',
+}, getUserAgent: () => 'Mozilla/5.0 deepseek-desktop/0.3.3 Chrome/152.0.0.0 Electron/44.4.1 Safari/537.36',
 setUserAgent(value) { this.userAgent = value; } };
 let now = 100000;
 const timers = new Map();
@@ -70,7 +70,7 @@ assert.equal(surface.view.options.webPreferences.preload, undefined);
 assert.match(surface.view.webContents.userAgent, /Chrome\/152/);
 assert.doesNotMatch(surface.view.webContents.userAgent, /Electron/i);
 assert.doesNotMatch(surface.view.webContents.userAgent, /deepseek-desktop/i);
-assert.equal(chromeCompatibleUserAgent('Mozilla/5.0 DeepSeekDesktop/0.3.2 Chrome/152.0.0.0 Electron/44.4.1 Safari/537.36'), 'Mozilla/5.0 Chrome/152.0.0.0 Safari/537.36');
+assert.equal(chromeCompatibleUserAgent('Mozilla/5.0 DeepSeekDesktop/0.3.3 Chrome/152.0.0.0 Electron/44.4.1 Safari/537.36'), 'Mozilla/5.0 Chrome/152.0.0.0 Safari/537.36');
 assert.equal(fakeSession.userAgent, surface.view.webContents.userAgent, 'popups and redirects inherit the compatible session User-Agent');
 assert.equal(chromeCompatibleUserAgent('not-a-browser Electron/44.4.1'), 'not-a-browser Electron/44.4.1');
 
