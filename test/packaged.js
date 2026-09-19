@@ -95,6 +95,27 @@ async function launch() {
   await page.waitForFunction(() => typeof App !== 'undefined' && App.ready === true);
   return page;
 }
+
+async function assertNoPackagedProcesses() {
+  // Electron's main-process exit alone must not hide a leftover Harness/renderer.
+  // Query only executables from this unique fixture directory, never user processes.
+  const prefix = (target + path.sep).replace(/'/g, "''");
+  const script = `$prefix = '${prefix}'; @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) } | Select-Object ProcessId, Name, ExecutablePath) | ConvertTo-Json -Compress`;
+  let remaining = '';
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf8', timeout: 20_000, windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+    remaining = result.stdout.trim();
+    if (!remaining || remaining === '[]') {
+      console.log('PASS no packaged Electron, renderer, updater or Harness processes remain');
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  assert.fail(`Packaged processes survived normal application exit: ${remaining}`);
+}
 async function main() {
   assert.equal(process.platform, 'win32', 'Run packaged smoke on Windows');
   provider = await startModelServer();
@@ -168,6 +189,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-renderer-recovered.png') });
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
   await closeApplication();
+  await assertNoPackagedProcesses();
   console.log('PASS packaged Windows: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation');
 }
 main().catch(async error => {
@@ -184,7 +206,15 @@ main().catch(async error => {
 }).finally(async () => {
   await closeApplication({ allowForce: true }).catch(() => {});
   await provider?.close();
-  fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  try {
+    fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
+  } catch (error) {
+    // Windows sandbox/runner ACLs can deny deletion after every app process has exited.
+    // This is disposable runner housekeeping, not a functional assertion. GitHub destroys
+    // the hosted runner. Never weaken normal-exit, orphan-process or data-preservation checks.
+    if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code)) throw error;
+    console.warn(`Test-only directory cleanup deferred to hosted runner disposal (${error.code})`);
+  }
 }).catch(error => {
   // Cleanup failures previously escaped main().catch, leaving only an exit code in
   // public annotations. Keep the exact failure visible without weakening the gate.
