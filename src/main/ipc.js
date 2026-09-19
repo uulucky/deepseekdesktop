@@ -214,6 +214,11 @@ function registerIpc(services) {
     surface.reload();
     return surface.snapshot();
   });
+  handle('surface:open-external', () => {
+    const surface = getContext().webSurface;
+    if (!surface) throw new Error('网页版尚未准备好');
+    return surface.openInBrowser();
+  });
 
   // ------------------------------------------------------------------- sessions
   handle('sessions:list', sessionRows);

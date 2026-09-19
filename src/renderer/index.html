@@ -16,6 +16,19 @@
     <div class="surface-status" id="surface-status">本地工作台</div>
     <button class="surface-reload" id="surface-reload" type="button" title="重新加载 DeepSeek 网页版" hidden>重新加载</button>
   </header>
+  <section class="surface-fallback" id="surface-fallback" aria-live="polite" hidden>
+    <div class="surface-fallback-card">
+      <div class="surface-fallback-mark" aria-hidden="true">D</div>
+      <h1>官方网页版暂时无法在客户端内打开</h1>
+      <p id="surface-fallback-message">DeepSeek 官方服务拒绝了这次嵌入式访问。工作台功能不受影响。</p>
+      <div class="surface-fallback-actions">
+        <button class="primary" id="surface-fallback-retry" type="button">稍后重试</button>
+        <button id="surface-fallback-browser" type="button">在默认浏览器打开</button>
+        <button id="surface-fallback-workbench" type="button">返回工作台</button>
+      </div>
+      <small>客户端仅隐藏 Electron 产品标识，不会绕过验证码、账号或 DeepSeek 的访问控制。</small>
+    </div>
+  </section>
   <div class="app" id="app">
 
     <!-- ── Left rail ─────────────────────────────────────────────────────── -->

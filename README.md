@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.3.1**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.3.2**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.1-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.1-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.1-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.2-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.2-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.2-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.1-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.2-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -68,11 +68,17 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险，不通过反复弹窗打断操作。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.3.1 新增
+## 0.3.2 更新
+
+修复“网页版（免费）”在 Electron 环境中被 DeepSeek 官方页面识别为异常环境或直接显示访问限制页的问题。容器现在保留真实操作系统和 Chromium 版本，只移除 Electron 产品标识；不会改写 Cookie、验证码、账号身份或官方接口。实测已能在客户端内正常打开官方登录页。
+
+官方主页面如果确实返回 HTTP 403/429，客户端会隐藏远程错误页并显示本地恢复提示，避免自动重试造成更多请求。可手动重试、返回工作台，或在故障情况下改用默认浏览器。正常使用时仍在软件内完成，不会自动跳出客户端。
+
+### 0.3.1 功能
 
 工作台现在读取 Harness 的实时上下文投影，在输入框下显示已使用/总 Token 和百分比，并在接近上限时提醒。图片可从剪贴板直接粘贴；“+”文件选择器支持一次加入多项。图片以内联多模态内容发送，普通文件先由本机 Harness 暂存，再把其文件引用交给当前会话。附件大小、类型及模型能力仍受 Harness 和当前模型限制。
 
-新增“网页版（免费）”。它是 `chat.deepseek.com` 官方页面的独立沙箱容器，不复制官方私有接口，也不读取或注入登录令牌；首次进入后可按官方页面完成登录。官方网页自己的会话管理、搜索、文件、深度思考、联网搜索、复制、重新生成、朗读和分享等功能，以 DeepSeek 当时实际提供的界面、账号权限和地区规则为准。切回工作台只隐藏网页，不刷新或销毁超长会话；网页版和工作台的对话列表完全分开。
+新增“网页版（免费）”。它是 `chat.deepseek.com` 官方页面的独立沙箱容器，不复制官方私有接口，也不读取或注入登录令牌；首次进入后可按官方页面完成登录。为兼容官方网页，容器的 User-Agent 保留真实操作系统与 Chromium 版本，但不发送 Electron 产品标识；不会修改验证码、Cookie 或官方接口。官方网页自己的会话管理、搜索、文件、深度思考、联网搜索、复制、重新生成、朗读和分享等功能，以 DeepSeek 当时实际提供的界面、账号权限和地区规则为准。切回工作台只隐藏网页，不刷新或销毁超长会话；网页版和工作台的对话列表完全分开。官方服务仍可能按账号、网络或策略返回 403/429，此时客户端停止显示远程错误页，并提供手动重试。
 
 中文行动摘要、多任务、对话管理和黑窗口恢复继续保留。对话完整记录由 Harness 保存在本地；工作台界面为稳定性只挂载最近 240 条记录。默认 Full Access 和常驻风险提醒不变。
 

@@ -1,15 +1,18 @@
 'use strict';
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { WebChatSurface, SURFACE_BAR_HEIGHT } = require('../src/main/modules/web-chat');
+const { WebChatSurface, SURFACE_BAR_HEIGHT, chromeCompatibleUserAgent } = require('../src/main/modules/web-chat');
 
 class FakeContents extends EventEmitter {
   constructor(options) {
     super();
+    this.id = FakeContents.nextId++;
     this.options = options;
     this.loads = [];
     this.destroyed = false;
+    this.session = fakeSession;
   }
+  setUserAgent(value) { this.userAgent = value; }
   setWindowOpenHandler(handler) { this.openHandler = handler; }
   loadURL(url) { this.loads.push(url); return Promise.resolve(); }
   reload() { this.reloads = (this.reloads ?? 0) + 1; }
@@ -17,6 +20,7 @@ class FakeContents extends EventEmitter {
   isDestroyed() { return this.destroyed; }
   close() { this.destroyed = true; }
 }
+FakeContents.nextId = 1;
 class FakeView {
   constructor(options) { this.options = options; this.webContents = new FakeContents(options.webPreferences); }
   setVisible(value) { this.visible = value; }
@@ -36,6 +40,10 @@ const parent = {
 const values = {};
 const external = [];
 const states = [];
+const fakeSession = { webRequest: {
+  onHeadersReceived(_filter, listener) { this.listener = listener; },
+}, getUserAgent: () => 'Mozilla/5.0 Chrome/152.0.0.0 Electron/44.4.1 Safari/537.36',
+setUserAgent(value) { this.userAgent = value; } };
 const surface = new WebChatSurface({
   window: parent,
   WebContentsView: FakeView,
@@ -51,6 +59,10 @@ assert.deepEqual(surface.view.bounds, { x: 0, y: SURFACE_BAR_HEIGHT, width: 1200
 assert.equal(surface.view.options.webPreferences.nodeIntegration, false);
 assert.equal(surface.view.options.webPreferences.sandbox, true);
 assert.equal(surface.view.options.webPreferences.preload, undefined);
+assert.match(surface.view.webContents.userAgent, /Chrome\/152/);
+assert.doesNotMatch(surface.view.webContents.userAgent, /Electron/i);
+assert.equal(fakeSession.userAgent, surface.view.webContents.userAgent, 'popups and redirects inherit the compatible session User-Agent');
+assert.equal(chromeCompatibleUserAgent('not-a-browser Electron/44.4.1'), 'not-a-browser Electron/44.4.1');
 
 surface.setMode('web');
 assert.equal(surface.view.visible, true);
@@ -59,6 +71,24 @@ surface.setMode('workbench');
 surface.setMode('web');
 assert.equal(surface.view.webContents.loads.length, 1, 'mode switching preserves web DOM and long conversations');
 assert.equal(values.surfaceMode, 'web');
+
+let responseContinued = false;
+fakeSession.webRequest.listener({
+  statusCode: 429,
+  resourceType: 'mainFrame',
+  webContentsId: surface.view.webContents.id,
+}, () => { responseContinued = true; });
+assert.equal(responseContinued, true, 'response observer never blocks the official response itself');
+assert.equal(surface.snapshot().status, 'blocked');
+assert.equal(surface.snapshot().httpStatus, 429);
+assert.equal(surface.view.visible, false, 'official refusal page yields to the local recovery message');
+surface.reload();
+assert.equal(surface.snapshot().status, 'loading');
+assert.equal(surface.snapshot().httpStatus, null);
+assert.equal(surface.view.visible, true, 'manual retry is explicit and restores the remote surface');
+
+surface.openInBrowser();
+assert(external.includes('https://chat.deepseek.com/'), 'browser fallback always opens the fixed official URL');
 
 let prevented = false;
 surface.view.webContents.emit('will-navigate', { preventDefault: () => { prevented = true; } }, 'https://evil.test/');

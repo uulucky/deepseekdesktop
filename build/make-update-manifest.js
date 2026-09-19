@@ -21,8 +21,8 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '新增工作台上下文用量显示、粘贴图片和“+”文件选择，图片与文件可随消息交给 Harness。',
-    '新增“网页版（免费）”：在隔离的官方 DeepSeek 页面中登录与聊天，切换模式时保留各自会话和页面状态。',
+    '修复官方网页版在 Electron 环境中被识别为异常环境的问题，登录与聊天继续在客户端内完成。',
+    '官方页面确实返回 HTTP 403/429 时改为本地恢复提示和手动重试，不会自动连续请求。',
     'Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。',
   ],
   platforms: {

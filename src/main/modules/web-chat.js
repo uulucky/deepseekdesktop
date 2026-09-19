@@ -29,6 +29,12 @@ function isLoopbackTestUrl(value) {
   } catch { return false; }
 }
 
+function chromeCompatibleUserAgent(value) {
+  const original = String(value ?? '').trim();
+  const sanitized = original.replace(/\s+Electron\/[^\s]+/gi, '').replace(/\s{2,}/g, ' ').trim();
+  return /\bChrome\/\d/i.test(sanitized) ? sanitized : original;
+}
+
 /**
  * Hosts the official free DeepSeek website below the local mode switch. The remote page has
  * no preload or Node access and owns its own DOM/history, so a long web conversation is never
@@ -48,8 +54,11 @@ class WebChatSurface {
     this.url = isDeepSeekWebUrl(url) || (this.testMode && isLoopbackTestUrl(url)) ? url : OFFICIAL_WEB_URL;
     this.mode = surfaceMode(store?.get('surfaceMode', 'workbench'));
     this.status = 'idle';
+    this.httpStatus = null;
     this.view = null;
     this.disposed = false;
+    this.requestedVisible = false;
+    this.responseObserverInstalled = false;
     this.recoveryTimes = [];
     this.createView();
     this.resize();
@@ -58,7 +67,7 @@ class WebChatSurface {
   }
 
   snapshot() {
-    return { mode: this.mode, status: this.status, url: this.url };
+    return { mode: this.mode, status: this.status, httpStatus: this.httpStatus, url: this.url };
   }
 
   emit() { this.onState(this.snapshot()); }
@@ -83,6 +92,12 @@ class WebChatSurface {
     this.view = view;
     this.window.contentView.addChildView(view);
     const contents = view.webContents;
+    const compatibleUserAgent = chromeCompatibleUserAgent(contents.session?.getUserAgent?.());
+    if (compatibleUserAgent) {
+      contents.session?.setUserAgent?.(compatibleUserAgent);
+      contents.setUserAgent(compatibleUserAgent);
+    }
+    this.installResponseObserver(contents.session);
     contents.setWindowOpenHandler(({ url }) => {
       if (this.allows(url)) {
         return {
@@ -112,9 +127,16 @@ class WebChatSurface {
     });
     contents.on('did-start-loading', () => {
       this.status = 'loading';
+      this.httpStatus = null;
+      this.setVisible(this.requestedVisible);
       this.emit();
     });
     contents.on('did-finish-load', () => {
+      if (this.status === 'blocked') {
+        this.applyVisibility();
+        this.emit();
+        return;
+      }
       this.status = 'ready';
       this.emit();
     });
@@ -127,9 +149,35 @@ class WebChatSurface {
     contents.on('render-process-gone', (_event, details) => this.recover(details));
   }
 
+  installResponseObserver(targetSession) {
+    if (this.responseObserverInstalled || !targetSession?.webRequest?.onHeadersReceived) return;
+    this.responseObserverInstalled = true;
+    targetSession.webRequest.onHeadersReceived({ urls: ['https://chat.deepseek.com/*'] }, (details, callback) => {
+      try {
+        const code = Number(details.statusCode)
+          || Number(String(details.statusLine ?? '').match(/\s(\d{3})(?:\s|$)/)?.[1])
+          || 0;
+        const currentId = this.view?.webContents?.id;
+        if (!this.disposed && details.resourceType === 'mainFrame'
+          && (!Number.isInteger(details.webContentsId) || details.webContentsId === currentId)
+          && [403, 429].includes(code)) {
+          this.status = 'blocked';
+          this.httpStatus = code;
+          this.applyVisibility();
+          this.emit();
+          this.log?.('official web access refused', { statusCode: code });
+        }
+      } finally {
+        callback({});
+      }
+    });
+  }
+
   load() {
     if (!this.view || this.view.webContents.isDestroyed()) return false;
     this.status = 'loading';
+    this.httpStatus = null;
+    this.setVisible(this.requestedVisible);
     this.emit();
     this.view.webContents.loadURL(this.url).catch(() => {
       if (this.disposed) return;
@@ -145,6 +193,8 @@ class WebChatSurface {
       return true;
     }
     this.status = 'loading';
+    this.httpStatus = null;
+    this.setVisible(this.requestedVisible);
     this.emit();
     this.view.webContents.reload();
     return true;
@@ -164,7 +214,17 @@ class WebChatSurface {
   }
 
   setVisible(visible) {
-    this.view?.setVisible(Boolean(visible));
+    this.requestedVisible = Boolean(visible);
+    this.applyVisibility();
+  }
+
+  applyVisibility() {
+    this.view?.setVisible(this.requestedVisible && this.status !== 'blocked');
+  }
+
+  async openInBrowser() {
+    await this.shell.openExternal(OFFICIAL_WEB_URL);
+    return true;
   }
 
   resize() {
@@ -216,5 +276,5 @@ class WebChatSurface {
 
 module.exports = {
   WebChatSurface, OFFICIAL_WEB_URL, SURFACE_BAR_HEIGHT, isDeepSeekWebUrl, isExternalHttpUrl,
-  isLoopbackTestUrl, surfaceMode,
+  isLoopbackTestUrl, surfaceMode, chromeCompatibleUserAgent,
 };

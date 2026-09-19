@@ -111,6 +111,9 @@ const App = {
     document.getElementById('surface-workbench').addEventListener('click', () => this.setSurfaceMode('workbench'));
     document.getElementById('surface-web').addEventListener('click', () => this.setSurfaceMode('web'));
     document.getElementById('surface-reload').addEventListener('click', () => api.surface.reload());
+    document.getElementById('surface-fallback-browser').addEventListener('click', () => this.openOfficialWeb());
+    document.getElementById('surface-fallback-retry').addEventListener('click', () => api.surface.reload());
+    document.getElementById('surface-fallback-workbench').addEventListener('click', () => this.setSurfaceMode('workbench'));
 
     // Rails and header wiring
     document.getElementById('new-chat').addEventListener('click', () => this.newSession(state.preferredWorkspaceId));
@@ -228,8 +231,13 @@ const App = {
     this.renderSurfaceMode();
   },
 
+  async openOfficialWeb() {
+    await guard(api.surface.openExternal(), '打开默认浏览器失败');
+  },
+
   renderSurfaceMode() {
     const web = state.surfaceMode === 'web';
+    const blocked = web && state.webSurface.status === 'blocked';
     const workbench = document.getElementById('surface-workbench');
     const webButton = document.getElementById('surface-web');
     workbench.classList.toggle('active', !web);
@@ -237,9 +245,19 @@ const App = {
     workbench.setAttribute('aria-selected', String(!web));
     webButton.setAttribute('aria-selected', String(web));
     document.getElementById('surface-reload').hidden = !web;
+    const fallback = document.getElementById('surface-fallback');
+    fallback.hidden = !blocked;
+    const fallbackMessage = document.getElementById('surface-fallback-message');
+    if (blocked) {
+      const code = Number(state.webSurface.httpStatus || 0);
+      fallbackMessage.textContent = code === 429
+        ? 'DeepSeek 官方服务返回 HTTP 429（访问频率限制）。请稍后重试，或在默认浏览器中继续使用。工作台功能不受影响。'
+        : `DeepSeek 官方服务拒绝了这次嵌入式访问${code ? `（HTTP ${code}）` : ''}。可改用默认浏览器，工作台功能不受影响。`;
+    }
     const status = document.getElementById('surface-status');
     if (!web) status.textContent = '本地工作台';
     else if (state.webSurface.status === 'loading') status.textContent = '正在加载官方网页版…';
+    else if (blocked) status.textContent = `官方网页版暂不可用${state.webSurface.httpStatus ? ` · HTTP ${state.webSurface.httpStatus}` : ''}`;
     else if (state.webSurface.status === 'error') status.textContent = '网页版加载失败，可重新加载';
     else status.textContent = 'DeepSeek 官方网页版 · 登录状态会保留';
   },

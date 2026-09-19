@@ -77,7 +77,27 @@ a { color: var(--brand); }
   margin-left: auto; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
   color: var(--text-dim); font-size: 11.5px; -webkit-app-region: no-drag;
 }
-.surface-reload:hover { border-color: var(--brand-line); color: var(--text); }
+.surface-reload:hover { border-color: var(--brand); color: var(--text); background: var(--brand-soft); }
+.surface-fallback {
+  position: fixed; inset: var(--surface-h) 0 0; z-index: 70; padding: 32px;
+  display: grid; place-items: center; background: var(--bg);
+}
+.surface-fallback-card {
+  width: min(560px, 100%); padding: 34px; text-align: center;
+  border: 1px solid var(--line); border-radius: 20px; background: var(--bg-elev); box-shadow: var(--shadow);
+}
+.surface-fallback-mark {
+  width: 48px; height: 48px; margin: 0 auto 18px; display: grid; place-items: center;
+  border-radius: 14px; color: #fff; font-size: 21px; font-weight: 750;
+  background: linear-gradient(140deg, #5a78ff, #3550e0);
+}
+.surface-fallback h1 { margin: 0 0 10px; font-size: 21px; }
+.surface-fallback p { margin: 0 auto 22px; max-width: 460px; color: var(--text-dim); }
+.surface-fallback small { display: block; margin-top: 16px; color: var(--text-muted); }
+.surface-fallback-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; }
+.surface-fallback-actions button { padding: 9px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.surface-fallback-actions button:hover { border-color: var(--brand-line); }
+.surface-fallback-actions button.primary { color: #fff; border-color: var(--brand); background: var(--brand); }
 .app { display: flex; height: calc(100vh - var(--surface-h)); }
 .app.rail-hidden .rail { margin-left: calc(-1 * var(--rail-w)); }
 .app.rail-hidden .titlebar-menu { display: inline-flex; }

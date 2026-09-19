@@ -44,7 +44,7 @@ const state = {
   stopping: false,
   connection: 'connected',
   surfaceMode: 'workbench',
-  webSurface: { status: 'idle', url: 'https://chat.deepseek.com/' },
+  webSurface: { status: 'idle', httpStatus: null, url: 'https://chat.deepseek.com/' },
   account: { summary: null, usage: null, keys: null, busy: false, error: null, revealed: null },
   view: { modal: null, tab: 'account' },
 };

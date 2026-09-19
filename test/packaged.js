@@ -87,7 +87,11 @@ function extract() {
     fs.rmSync(appBundle, { recursive: true, force: true });
     fs.mkdirSync(target, { recursive: true });
     let result;
-    if (macExtractions++ === 0) {
+    // CI exercises the DMG first and the ZIP replacement second. A local developer may
+    // opt into ZIP-only smoke testing when the host cannot create/mount disk images;
+    // the default release gate remains unchanged.
+    const zipOnly = process.env.DEEPSEEK_DESKTOP_TEST_ZIP_ONLY === '1';
+    if (macExtractions++ === 0 && !zipOnly) {
       const mount = path.join(temporary, 'installer');
       fs.mkdirSync(mount);
       const dmg = archive.replace(/\.zip$/, '.dmg');
@@ -259,6 +263,7 @@ async function main() {
       identity,
       nodeIntegration: content.getLastWebPreferences().nodeIntegration,
       sandbox: content.getLastWebPreferences().sandbox,
+      userAgent: content.getUserAgent(),
       sharedPartition: content.session === session.fromPartition('persist:deepseek-platform'),
     };
   });
@@ -266,6 +271,8 @@ async function main() {
   const firstWeb = await webState();
   assert.equal(firstWeb.nodeIntegration, false);
   assert.equal(firstWeb.sandbox, true);
+  assert.match(firstWeb.userAgent, /Chrome\/\d+/);
+  assert.doesNotMatch(firstWeb.userAgent, /Electron\//i, 'Official web surface uses a browser-compatible Chromium User-Agent');
   assert.equal(firstWeb.sharedPartition, true, 'Official web surface shares only the persistent DeepSeek login partition');
   await page.locator('#surface-workbench').click();
   await page.locator('#surface-web').click();
