@@ -42,6 +42,36 @@ assert(!inner.innerHTML.includes('class="fold open"'), 'reasoning and running to
 assert.match(inner.innerHTML, /最终回答/);
 assert(!inner.innerHTML.includes('<desktop-summary>'));
 assert.match(inner.innerHTML, /运行中/);
+// If a model ignores the wrapper, the client still exposes a Chinese action summary and keeps
+// the original progress text collapsed instead of showing an English preamble as the answer.
+item.streaming = false;
+item.parts = [
+  { kind: 'text', text: "I'll start by exploring the video project directory." },
+  { kind: 'tool-call', name: 'bash', arguments: '{"command":"ls -la video && cat narration.txt"}' },
+];
+render();
+assert.match(inner.innerHTML, /准备：检查素材和项目结构/);
+assert.match(inner.innerHTML, /模型进展原文/);
+assert.match(inner.innerHTML, /I'll start by exploring/);
+assert(!inner.innerHTML.includes('<p>I\'ll start by exploring'), 'unwrapped English progress is not rendered as the public answer');
+assert(!inner.innerHTML.includes('class="fold open"'), 'fallback source remains collapsed');
+// A non-Chinese wrapper is also treated as protocol drift rather than a valid Chinese summary.
+item.parts = [
+  { kind: 'text', text: '<desktop-summary>I will edit the file next.</desktop-summary>' },
+  { kind: 'tool-call', name: 'apply_patch', arguments: '{"path":"README.md"}' },
+];
+render();
+assert.match(inner.innerHTML, /进展：已确认需要调整的内容/);
+assert.match(inner.innerHTML, /I will edit the file next/);
+// Extra pre-tool prose is also folded even when the model emitted a valid Chinese wrapper.
+item.parts = [
+  { kind: 'text', text: '<desktop-summary>我先检查配置，再继续处理。</desktop-summary>I will now inspect the file.' },
+  { kind: 'tool-call', name: 'read', arguments: '{"path":"config.json"}' },
+];
+render();
+assert.match(inner.innerHTML, /我先检查配置，再继续处理/);
+assert.match(inner.innerHTML, /模型进展原文/);
+assert(!inner.innerHTML.includes('<p>I will now inspect'));
 // Manual fold choices survive stream snapshots and isolate separate sessions.
 context.window.ChatView.install();
 const key = JSON.stringify(['a', 'one:tool']);
@@ -61,6 +91,7 @@ item.parts = [{ kind: 'text', text: '<desktop-summary><img src=x onerror=alert(1
 render();
 assert(!inner.innerHTML.includes('<img'));
 assert.match(inner.innerHTML, /&lt;img/);
+item.streaming = true;
 item.parts = [{ kind: 'reasoning', text: 'analysis' }];
 render();
 assert.match(inner.innerHTML, /正在整理行动摘要/);
@@ -74,5 +105,7 @@ const sections = [];
 require('../src/main/modules/desktop-presentation.cjs').apply({ systemPrompt: { section: value => sections.push(value) } });
 assert.equal(sections.length, 1);
 assert.match(sections[0].text, /never change permissions/);
+assert.match(sections[0].text, /every user-visible sentence/);
+assert.match(sections[0].text, /Never switch to English/);
 assert(!sections[0].text.includes('{{'), 'Harness variable interpolation must not see unregistered variables');
 console.log('PASS action summary: native prompt, streaming protocol, safe rendering, collapsed tools and per-session fold state');

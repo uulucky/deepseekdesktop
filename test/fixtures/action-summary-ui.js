@@ -43,7 +43,26 @@ async function actionSummaryUi(page, provider) {
   await tool.locator('.fold-head').focus();
   await tool.locator('.fold-head').press('Enter');
   assert.equal(await tool.locator('.fold-body').isVisible(), true, 'Keyboard can expand tool details');
+
+  // Real models are not guaranteed to obey a prompt-level presentation protocol. Reproduce the
+  // reported Mac output and verify the renderer supplies the Chinese public fallback itself.
+  await page.evaluate(() => {
+    const snapshot = structuredClone(state.transcript);
+    snapshot.items.push({
+      kind: 'assistant', turn: 900, step: 0, streaming: false,
+      parts: [
+        { kind: 'text', text: "I'll start by exploring the video project directory." },
+        { kind: 'tool-call', name: 'bash', arguments: '{"command":"ls -la video && cat narration.txt"}' },
+      ],
+    });
+    ChatView.render(snapshot);
+  });
+  const fallback = page.locator('.action-summary').last();
+  assert((await fallback.innerText()).includes('准备：检查素材和项目结构'));
+  const source = page.locator('.fold').filter({ hasText: '模型进展原文' });
+  assert.equal(await source.locator('.fold-body').isVisible(), false, 'Non-compliant model progress remains collapsed');
+  assert(!(await page.locator('#stream-inner').innerText()).includes("I'll start by exploring"), 'English source is not exposed while collapsed');
   await page.evaluate(() => ChatView.render(state.transcript));
-  console.log('PASS real action-summary UI: Chinese public summary, private-detail folding, partial stream, keyboard and visible approvals');
+  console.log('PASS real action-summary UI: Chinese public summary, non-compliant model fallback, private-detail folding, partial stream, keyboard and visible approvals');
 }
 module.exports = { actionSummaryUi };

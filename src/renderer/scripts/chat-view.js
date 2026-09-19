@@ -39,6 +39,42 @@ function actionSummary(text, placeholder = false) {
     + `<div class="action-summary-text">${esc(displayText(text, 600))}</div></section>`;
 }
 
+function isChineseSummary(value) {
+  const text = String(value ?? '');
+  const hanCount = (text.match(/[\u3400-\u9fff]/gu) ?? []).length;
+  const latinWords = (text.match(/[A-Za-z]{2,}/g) ?? []).length;
+  return hanCount >= 4 && hanCount >= latinWords * 2;
+}
+
+/**
+ * Models occasionally ignore the presentation wrapper and emit an English pre-tool preamble.
+ * Keep that source text available as a collapsed record, but never let protocol drift remove the
+ * Chinese, expanded status the desktop promises. This is deliberately deterministic: it does not
+ * make another paid model request and it never guesses at tool results that have not arrived.
+ */
+function fallbackActionSummary(item, parts) {
+  const toolText = parts
+    .filter(part => part.kind === 'tool-call')
+    .map(part => `${part.name ?? ''} ${part.arguments ?? ''}`)
+    .join('\n');
+  const laterStep = Number(item?.step ?? 0) > 0;
+  if (/(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|build)|pytest|cargo\s+test|go\s+test|\btest\b|\blint\b|\bbuild\b|验证|测试|检查构建/i.test(toolText)) {
+    return '进展：相关处理已进入验证阶段。下一步：运行检查并根据结果收尾。';
+  }
+  if (/apply_patch|write|edit|create|mkdir|copy|move|set-content|add-content|out-file|修改|写入|创建/i.test(toolText)) {
+    return '进展：已确认需要调整的内容。下一步：完成修改并验证结果。';
+  }
+  if (/browser|search|web|curl|wget|invoke-webrequest|https?:|搜索|网页|查询/i.test(toolText)) {
+    return '准备：查询并核对相关信息。下一步：依据确认后的结果继续处理。';
+  }
+  if (/image|video|ffmpeg|media|render|图片|视频|素材|渲染/i.test(toolText)) {
+    return '准备：检查素材和项目结构。下一步：根据现状调整内容并验证效果。';
+  }
+  return laterStep
+    ? '进展：已取得上一阶段结果。下一步：继续检查关键内容并完成处理。'
+    : '准备：检查相关文件和当前状态。下一步：根据结果定位问题并继续处理。';
+}
+
 function detailState(key) {
   const id = JSON.stringify([renderedSession, key]);
   return { attributes: ` data-detail-id="${esc(id)}"`, open: expandedDetails.has(id) };
@@ -128,13 +164,24 @@ function renderItem(item, approvals = [], rowKey = '') {
     const text = firstText < 0 ? '' : parts[firstText].text || '';
     const presentation = splitActionSummary(text, item.streaming);
     const hasReasoning = parts.some(part => part.kind === 'reasoning');
-    const summary = presentation.summary ? actionSummary(presentation.summary)
+    const hasToolCall = parts.some(part => part.kind === 'tool-call');
+    const validSummary = presentation.summary && (isChineseSummary(presentation.summary) || !hasToolCall);
+    const fallbackSummary = hasToolCall && !validSummary ? fallbackActionSummary(item, parts) : '';
+    const summary = validSummary ? actionSummary(presentation.summary)
+      : fallbackSummary ? actionSummary(fallbackSummary)
       : (item.streaming && !text && hasReasoning) || presentation.pending
         ? actionSummary('正在分析任务，整理接下来要做的事…', true) : '';
+    const unwrappedProgress = hasToolCall
+      ? [validSummary ? '' : presentation.summary, presentation.text].filter(Boolean).join('\n').trim()
+      : '';
     const body = [
       summary,
+      unwrappedProgress
+        ? fold('模型进展原文', '详细记录', `<pre>${esc(displayText(unwrappedProgress, MAX_REASONING_CHARS))}</pre>`, `${rowKey}:progress`)
+        : '',
       ...parts.map((part, index) => {
         if (index === firstText) {
+          if (unwrappedProgress) return '';
           return presentation.text.trim() ? renderPart({ kind: 'text', text: presentation.text }) : '';
         }
         return renderPart(part, `${rowKey}:part:${index}`);
