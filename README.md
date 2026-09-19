@@ -2,21 +2,13 @@
 
 [![Windows and Mac build and tests](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml/badge.svg)](https://github.com/uulucky/deepseekdesktop/actions/workflows/release.yml)
 
-面向 Windows 和 Mac 的第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
+第三方 DeepSeek 桌面客户端：余额、充值、API Key、本地对话和 Agent 权限集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。** 已发布 Windows 版；Mac 适配已加入当前源码，尚未发布下载包。
 
-当前版本：**0.2.24 · Windows 10/11 x64 · macOS 14 及以上（Apple 芯片 / Intel）**。
+当前已发布版本：**0.2.23 · Windows 10/11 x64 · 便携版**。Mac 版待后续功能一并发布，暂不分配新版本号。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [国内 Windows 下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.23-portable.zip) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-| 电脑 | 国内下载 | GitHub 下载 |
-| --- | --- | --- |
-| Mac，Apple 芯片（M 系列） | [ARM64 DMG](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.24-mac-arm64.dmg) | [ARM64 DMG](https://github.com/uulucky/deepseekdesktop/releases/download/v0.2.24/DeepSeekDesktop-0.2.24-mac-arm64.dmg) |
-| Mac，Intel 处理器 | [Intel DMG](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.24-mac-x64.dmg) | [Intel DMG](https://github.com/uulucky/deepseekdesktop/releases/download/v0.2.24/DeepSeekDesktop-0.2.24-mac-x64.dmg) |
-| Windows 10/11 x64 | [便携 ZIP](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.2.24-portable.zip) | [便携 ZIP](https://github.com/uulucky/deepseekdesktop/releases/download/v0.2.24/DeepSeekDesktop-0.2.24-portable.zip) |
-
-Mac 可在苹果菜单 →“关于本机”查看芯片类型；Release 同时提供 Mac ZIP 备用包。Mac 版不走 App Store，**没有 Apple Developer ID 签名或 Apple 公证**，首次打开方法见下文。
-
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.24-SHA256SUMS.txt) 和 Release 内各平台的 `build-info.json`。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.2.23-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -30,13 +22,15 @@ GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件
 - **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
 - **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
 - **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
-- **本地记录与更新**：每小时检查更新。Windows 便携版确认后自动安装并重启；Mac 下载后手动替换应用，数据独立保存。
+- **本地记录与更新**：每小时检查更新。Windows 便携版确认后自动安装并重启；待发布 Mac 版设计为手动替换应用，数据独立保存。
 
 DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许可免费不等于 API 免费。
 
 ## 开始使用
 
-### Mac
+### Mac（未发布功能说明）
+
+以下是待发布版的使用说明，当前没有 Mac 正式下载包。目标为 macOS 14+，分别支持 Apple 芯片（M 系列）与 Intel；可在苹果菜单 →“关于本机”查看芯片类型。不走 App Store，没有 Apple Developer ID 签名或 Apple 公证。
 
 1. 下载与你的芯片匹配的 DMG，核对来源与校验值，打开后把 `DeepSeek Desktop.app` 拖入“应用程序”。不要长期从安装盘内运行。
 2. 在“应用程序”中打开。如果提示开发者无法验证或 Apple 无法检查恶意软件，先取消；**确认来源可信且文件完整后**，进入“系统设置 → 隐私与安全性 → 仍要打开”，按系统提示确认。该入口可能只在尝试打开后短时间出现。参考 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。
@@ -74,7 +68,7 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 ## 当前版本改进
 
-0.2.24 新增 Mac 直接下载版，按芯片分别打包固定 Node 与 Harness，适配系统菜单、复制粘贴、独立数据目录和手动更新提示。公开 CI 分别在 Windows、Apple 芯片 Mac 与 Intel Mac 上启动完整安装包测试。
+已发布的 0.2.23 提供中文行动摘要。当前源码另已加入待发布的 Mac 适配：按芯片分别打包固定 Node 与 Harness，适配系统菜单、独立数据目录和手动更新提示。构建流程新增两种 Mac 的原生测试任务；正式下载和上线更新等后续功能完成后一并安排。
 
 中文行动摘要继续保留：模型执行工具前，用一两句中文说明接下来要做什么；后续步骤简述已确认的进展。行动摘要直接展开，思考原文、工具参数和输出默认折叠。运行状态和权限确认仍然可见，手动展开选择会在流式刷新、会话切换后保留。
 

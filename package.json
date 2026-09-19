@@ -1,7 +1,7 @@
 {
   "name": "deepseek-desktop",
   "productName": "DeepSeek Desktop",
-  "version": "0.2.24",
+  "version": "0.2.23",
   "description": "DeepSeek 桌面客户端 — 用 ChatGPT 式原生界面驱动本地 DeepSeek Harness (dsh web) 内核",
   "main": "src/main/index.js",
   "author": "uulucky",
