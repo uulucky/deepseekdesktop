@@ -52,7 +52,10 @@ jobs:
         run: npm run dist:portable
       - name: Real packaged Windows UI and update extraction
         timeout-minutes: 8
-        run: npm run test:packaged
+        run: |
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          npm run test:packaged 2>&1 | Tee-Object -FilePath test-results/packaged-console.log
+          exit $LASTEXITCODE
       - name: Preserve public test evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

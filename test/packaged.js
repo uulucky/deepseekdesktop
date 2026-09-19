@@ -185,4 +185,13 @@ main().catch(async error => {
   await closeApplication({ allowForce: true }).catch(() => {});
   await provider?.close();
   fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+}).catch(error => {
+  // Cleanup failures previously escaped main().catch, leaving only an exit code in
+  // public annotations. Keep the exact failure visible without weakening the gate.
+  console.error('Packaged test cleanup failed:', error);
+  if (process.env.GITHUB_ACTIONS) {
+    const annotation = String(error.stack || error).slice(0, 6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.log(`::error title=Packaged cleanup::${annotation}`);
+  }
+  process.exitCode = 1;
 });
