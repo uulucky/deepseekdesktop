@@ -13,9 +13,16 @@ async function eventually(predicate, message, timeout = 20000) {
 }
 async function startModelServer() {
   const requests = [];
+  const webResponses = [];
+  const webRequests = [];
   const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/web-fixture') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      const response = webResponses.shift() ?? { status: 200 };
+      webRequests.push({ time: Date.now(), status: response.status, userAgent: req.headers['user-agent'] });
+      res.writeHead(response.status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
+        ...(response.retryAfter ? { 'Retry-After': response.retryAfter } : {}) });
+      if (response.status === 429) { res.end('<h1>Rate Limit Reached</h1>'); return; }
+      if (response.status === 403) { res.end('<h1 id="verify">需要验证</h1><a href="/web-fixture">继续</a>'); return; }
       res.end('<!doctype html><meta charset="utf-8"><title>DeepSeek Web Fixture</title><h1 id="ready">网页版夹具</h1><main id="long"></main><script>window.fixtureIdentity=sessionStorage.fixtureIdentity||(sessionStorage.fixtureIdentity=crypto.randomUUID());document.getElementById("long").textContent="长对话".repeat(200000);</script>');
       return;
     }
@@ -49,7 +56,7 @@ async function startModelServer() {
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   return {
-    baseUrl: `http://127.0.0.1:${server.address().port}`, requests,
+    baseUrl: `http://127.0.0.1:${server.address().port}`, requests, webResponses, webRequests,
     async waitFor(marker) {
       const find = () => requests.find(request => request.body.messages?.some(message => (
         message.role === 'user' && JSON.stringify(message.content).includes(marker)

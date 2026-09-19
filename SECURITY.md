@@ -8,7 +8,7 @@
 - 没有保存过权限偏好时默认 Full Access，默认工作目录为 `data/workspace/`；旧的自选目录和低权限偏好保留。Workspace Write 可修改工作目录；Full Access 取消 Harness 沙箱限制，但不会绕过 Windows 账户权限/UAC。**专用工作目录不是 Full Access 的隔离边界。**
 - Full Access 在输入区持续显示风险提醒，不通过阻塞弹窗或单次批准打断操作。三个档位都能保存为新会话默认值；重启、打开或发送旧会话不会自动更改权限。此默认值偏向操作便利，不是最小权限配置；处理不可信内容前请主动选择只读/工作区或使用隔离环境。
 - 权限由固定版本 Harness 执行。沙箱可能有上游缺陷，不能当成针对恶意代码的绝对隔离；高风险任务适合专用账户或虚拟机。
-- 工作台 Electron 页面使用 context isolation、关闭 Node integration；特权 IPC 校验来源页面和主 frame，广告图片受 CSP/域名限制。官方网页版另在启用 Chromium sandbox、无 Node integration、无 preload 的远程容器中运行，不能调用桌面客户端 IPC。仅允许 DeepSeek 官方 HTTPS 域在容器内导航，外部 HTTP(S) 链接交给系统浏览器。网页版 User-Agent 去掉 Electron 产品标识以兼容官方页面，但保留真实系统与 Chromium 版本；这不授予页面桌面权限，也不绕过验证码或账号限制。它们减少攻击面，但不等于通过独立渗透审计。
+- 工作台 Electron 页面使用 context isolation、关闭 Node integration；特权 IPC 校验来源页面和主 frame，广告图片受 CSP/域名限制。官方网页版另在启用 Chromium sandbox、无 Node integration、无 preload 的远程容器中运行，不能调用桌面客户端 IPC。仅允许 DeepSeek 官方 HTTPS 域在容器内导航，外部 HTTP(S) 链接交给系统浏览器。网页版 User-Agent 去掉 Electron 和客户端产品标识以兼容官方页面，但保留真实系统与 Chromium 版本；这不授予页面桌面权限，也不绕过验证码或账号限制。429 恢复遵守服务器等待时间，自动重试仅一次；403 不遮蔽官方验证页面。它们减少攻击面，但不等于通过独立渗透审计。
 - 本地凭据文件可能明文，详见 [隐私说明](PRIVACY.md)。
 
 ## 三种不同的验证

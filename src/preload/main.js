@@ -96,7 +96,6 @@ contextBridge.exposeInMainWorld('deepseek', {
     status: () => invoke('surface:status'),
     setMode: (mode) => invoke('surface:set-mode', mode),
     reload: () => invoke('surface:reload'),
-    openExternal: () => invoke('surface:open-external'),
   },
   window: {
     focus: () => invoke('window:focus-main'),

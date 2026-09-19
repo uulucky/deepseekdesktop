@@ -98,6 +98,7 @@ a { color: var(--brand); }
 .surface-fallback-actions button { padding: 9px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .surface-fallback-actions button:hover { border-color: var(--brand-line); }
 .surface-fallback-actions button.primary { color: #fff; border-color: var(--brand); background: var(--brand); }
+.surface-fallback-actions button:disabled, .surface-reload:disabled { opacity: .55; cursor: wait; }
 .app { display: flex; height: calc(100vh - var(--surface-h)); }
 .app.rail-hidden .rail { margin-left: calc(-1 * var(--rail-w)); }
 .app.rail-hidden .titlebar-menu { display: inline-flex; }

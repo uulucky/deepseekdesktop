@@ -111,7 +111,6 @@ const App = {
     document.getElementById('surface-workbench').addEventListener('click', () => this.setSurfaceMode('workbench'));
     document.getElementById('surface-web').addEventListener('click', () => this.setSurfaceMode('web'));
     document.getElementById('surface-reload').addEventListener('click', () => api.surface.reload());
-    document.getElementById('surface-fallback-browser').addEventListener('click', () => this.openOfficialWeb());
     document.getElementById('surface-fallback-retry').addEventListener('click', () => api.surface.reload());
     document.getElementById('surface-fallback-workbench').addEventListener('click', () => this.setSurfaceMode('workbench'));
 
@@ -231,35 +230,44 @@ const App = {
     this.renderSurfaceMode();
   },
 
-  async openOfficialWeb() {
-    await guard(api.surface.openExternal(), '打开默认浏览器失败');
-  },
-
   renderSurfaceMode() {
+    clearTimeout(this.webRetryUiTimer);
     const web = state.surfaceMode === 'web';
     const blocked = web && state.webSurface.status === 'blocked';
+    const error = web && state.webSurface.status === 'error';
+    const remaining = blocked ? Math.max(0, Math.ceil((state.webSurface.retryAt - Date.now()) / 1000)) || 0 : 0;
     const workbench = document.getElementById('surface-workbench');
     const webButton = document.getElementById('surface-web');
     workbench.classList.toggle('active', !web);
     webButton.classList.toggle('active', web);
     workbench.setAttribute('aria-selected', String(!web));
     webButton.setAttribute('aria-selected', String(web));
-    document.getElementById('surface-reload').hidden = !web;
+    const reload = document.getElementById('surface-reload');
+    reload.hidden = !web;
+    reload.disabled = state.webSurface.status === 'loading' || remaining > 0;
     const fallback = document.getElementById('surface-fallback');
-    fallback.hidden = !blocked;
+    fallback.hidden = !(blocked || error);
     const fallbackMessage = document.getElementById('surface-fallback-message');
+    const retry = document.getElementById('surface-fallback-retry');
+    retry.disabled = remaining > 0;
+    retry.textContent = remaining > 0 ? `${remaining} 秒后可重试` : '重新连接';
     if (blocked) {
-      const code = Number(state.webSurface.httpStatus || 0);
-      fallbackMessage.textContent = code === 429
-        ? 'DeepSeek 官方服务返回 HTTP 429（访问频率限制）。请稍后重试，或在默认浏览器中继续使用。工作台功能不受影响。'
-        : `DeepSeek 官方服务拒绝了这次嵌入式访问${code ? `（HTTP ${code}）` : ''}。可改用默认浏览器，工作台功能不受影响。`;
+      document.getElementById('surface-fallback-title').textContent = '正在等待网页版恢复';
+      fallbackMessage.textContent = state.webSurface.autoRetry
+        ? `DeepSeek 暂时限制了这次访问（HTTP 429）。等待${remaining > 0 ? ` ${remaining} 秒` : '结束'}后，将在软件内自动重试一次。`
+        : 'DeepSeek 仍限制这次访问（HTTP 429）。已暂停自动重试，等待结束后可在这里重新连接。';
+    } else if (error) {
+      document.getElementById('surface-fallback-title').textContent = '网页版连接中断';
+      fallbackMessage.textContent = '请检查网络连接，然后点击“重新连接”在软件内继续。';
     }
     const status = document.getElementById('surface-status');
     if (!web) status.textContent = '本地工作台';
     else if (state.webSurface.status === 'loading') status.textContent = '正在加载官方网页版…';
     else if (blocked) status.textContent = `官方网页版暂不可用${state.webSurface.httpStatus ? ` · HTTP ${state.webSurface.httpStatus}` : ''}`;
+    else if (state.webSurface.status === 'verification') status.textContent = '官方页面返回 HTTP 403；如有验证，请在下方完成';
     else if (state.webSurface.status === 'error') status.textContent = '网页版加载失败，可重新加载';
     else status.textContent = 'DeepSeek 官方网页版 · 登录状态会保留';
+    if (remaining > 0) this.webRetryUiTimer = setTimeout(() => this.renderSurfaceMode(), 1000);
   },
 
   async installUpdate() {

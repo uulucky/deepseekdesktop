@@ -9,6 +9,7 @@ const { startModelServer, eventually } = require('./fixtures/model-server');
 const { multitaskUi } = require('./fixtures/multitask-ui');
 const { rendererRecovery } = require('./fixtures/renderer-recovery');
 const { actionSummaryUi } = require('./fixtures/action-summary-ui');
+const { webRecoveryUi } = require('./fixtures/web-recovery-ui');
 const { spawnSync } = require('node:child_process');
 const version = require('../package.json').version;
 const root = path.resolve(__dirname, '..');
@@ -293,6 +294,7 @@ async function main() {
     return recovered && recovered.id !== firstWeb.id;
   }, 'Crashed web surface was not replaced');
   await page.locator('#surface-workbench').click();
+  await webRecoveryUi(page, application, provider);
   await page.locator('#open-profile').click();
   await page.locator('#manual-key-input').fill('sk-ui-fixture-not-submitted');
   assert.equal(await page.locator('#manual-key-input').inputValue(), 'sk-ui-fixture-not-submitted');
