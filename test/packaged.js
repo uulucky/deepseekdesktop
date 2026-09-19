@@ -204,14 +204,15 @@ async function main() {
   await page.locator('#model-popover').waitFor({ state: 'visible' });
   await page.locator('#input').click();
   await page.locator('#model-popover').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   await page.locator('#permission-slider').focus();
   await page.locator('#permission-slider').press('Home');
+  await page.waitForFunction(() => state.permissionMode === 'read-only' && !state.permissionBusy);
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   assert.equal(await page.locator('#permission-slider').inputValue(), '0');
   await page.locator('#permission-slider').press('End');
+  await page.waitForFunction(() => state.permissionMode === 'danger-full-access' && !state.permissionBusy);
   await page.locator('#permission-warning').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   assert.equal(await page.locator('#permission-slider').inputValue(), '2');
   assert.equal(await page.locator('[role="alertdialog"]').count(), 0, 'Reminder does not block the composer');
   await page.evaluate(() => App.newSession());
@@ -312,10 +313,11 @@ async function main() {
   assert.equal(await page.locator('#permission-slider').inputValue(), '2');
   await page.locator('#permission-warning').waitFor({ state: 'visible' });
   // A saved lower permission must survive both creating a session and restarting.
+  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   await page.locator('#permission-slider').focus();
   await page.locator('#permission-slider').press('Home');
+  await page.waitForFunction(() => state.permissionMode === 'read-only' && !state.permissionBusy);
   await page.locator('#permission-warning').waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => !document.querySelector('#permission-slider').disabled);
   await page.evaluate(() => App.newSession());
   const readOnlySession = await page.evaluate(() => state.activeSessionId);
   assert.equal(await page.evaluate(() => api.sessions.permissions(state.activeSessionId).then(value => value.currentValue)), 'read-only');
