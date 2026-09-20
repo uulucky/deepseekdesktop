@@ -92,7 +92,15 @@ function main() {
   });
 
   app.on('activate', () => {
-    if ((!ctx.windows.main || ctx.windows.main.isDestroyed()) && ctx.baseUrl) createMainWindow();
+    const win = ctx.windows.main;
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      ctx.webSurface?.resize();
+      return;
+    }
+    if (ctx.baseUrl) createMainWindow();
   });
 
   app.on('before-quit', async () => {
@@ -472,11 +480,32 @@ function createMainWindow() {
   win.on('resized', persistBounds);
   win.on('resize', () => webSurface.resize());
   win.on('moved', persistBounds);
+  let webSurfaceDisposed = false;
+  const disposeWebSurface = () => {
+    if (webSurfaceDisposed) return;
+    webSurfaceDisposed = true;
+    webSurface.dispose();
+    if (ctx.webSurface === webSurface) ctx.webSurface = null;
+  };
+  win.on('close', (event) => {
+    // On macOS the red traffic-light button conventionally hides the last window while the
+    // application, tasks and login session stay alive. More importantly, do not destroy a
+    // BrowserWindow and its WebContentsView in the same native NSWindow close callback: Electron
+    // 44 can otherwise enter a use-after-free in _finishClosingWindow. Cmd+Q sets ctx.quitting,
+    // allowing the real close after before-quit has synchronously detached the web surface.
+    if (process.platform === 'darwin' && !ctx.quitting && !win.replacedForRecovery) {
+      event.preventDefault();
+      win.hide();
+      return;
+    }
+    // Dispose child WebContentsView state before the native window is destroyed. The `closed`
+    // event is too late on macOS and was the source of the normal-close SIGSEGV.
+    disposeWebSurface();
+  });
   win.on('closed', () => {
     recovery.dispose();
     if (ctx.mainRecovery === recovery) ctx.mainRecovery = null;
-    webSurface.dispose();
-    if (ctx.webSurface === webSurface) ctx.webSurface = null;
+    disposeWebSurface();
     if (ctx.windows.main === win) ctx.windows.main = null;
     // Hidden worker/platform windows otherwise keep the Windows portable app alive forever.
     if (process.platform !== 'darwin' && !win.replacedForRecovery) app.quit();

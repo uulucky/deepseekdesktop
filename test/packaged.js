@@ -140,6 +140,32 @@ async function launch() {
   return page;
 }
 
+async function macCloseButtonLifecycle(page) {
+  if (!mac) return;
+  const child = application.process();
+  const originalId = await application.evaluate(({ BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find((win) => /\/index\.html$/.test(win.webContents.getURL()));
+    if (!main) throw new Error('Main window missing before Mac close-button test');
+    main.close(); // Same Electron close path as the red traffic-light button.
+    return main.id;
+  });
+  await eventually(async () => application.evaluate(({ BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find((win) => /\/index\.html$/.test(win.webContents.getURL()));
+    return Boolean(main && !main.isDestroyed() && !main.isVisible());
+  }), 'Mac close button did not hide the main window');
+  assert.equal(child.exitCode, null, 'Mac close button keeps the application and background tasks alive');
+  await application.evaluate(({ app }) => app.emit('activate'));
+  await eventually(async () => application.evaluate(({ BrowserWindow }, expectedId) => {
+    const main = BrowserWindow.getAllWindows().find((win) => /\/index\.html$/.test(win.webContents.getURL()));
+    return Boolean(main && main.id === expectedId && !main.isDestroyed() && main.isVisible());
+  }, originalId), 'Dock activation did not restore the same hidden Mac window');
+  await page.locator('#input').waitFor({ state: 'visible' });
+  await page.locator('#input').fill('Mac close and restore input check');
+  assert.equal(await page.locator('#input').inputValue(), 'Mac close and restore input check');
+  await page.locator('#input').fill('');
+  console.log('PASS Mac close button hides safely and Dock activation restores the same window');
+}
+
 async function assertNoPackagedProcesses() {
   if (mac) {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -304,6 +330,7 @@ async function main() {
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
   await actionSummaryUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-action-summary.png') });
+  await macCloseButtonLifecycle(page);
   await closeApplication();
   extract(); // Real native updater replaces files but preserves a populated data folder.
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'unchanged test data');
@@ -338,7 +365,7 @@ async function main() {
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
   await closeApplication();
   await assertNoPackagedProcesses();
-  console.log(`PASS packaged ${process.platform}-${process.arch}: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, renderer crash recovery, restart, saved lower preferences and data preservation`);
+  console.log(`PASS packaged ${process.platform}-${process.arch}: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, Mac close/restore, renderer crash recovery, restart, saved lower preferences and data preservation`);
 }
 main().catch(async error => {
   console.error(error);
