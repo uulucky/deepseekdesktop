@@ -120,6 +120,10 @@
             <span class="balance-separator">·</span>
             <span id="usage-text">今日 --</span>
           </div>
+          <button class="share-client" id="share-client" type="button" title="分享 DeepSeek Desktop" aria-haspopup="dialog" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.2 10.8l7.5-4.4M8.2 13.2l7.5 4.4" /></svg>
+            <span>分享客户端</span>
+          </button>
         </div>
       </header>
 
@@ -172,6 +176,25 @@
     <div class="popover-head">选择模型</div>
     <div class="popover-body" id="model-list"></div>
     <div class="popover-foot" id="model-foot"></div>
+  </div>
+
+  <!-- ── Share client ────────────────────────────────────────────────────── -->
+  <div class="share-popover" id="share-popover" role="dialog" aria-labelledby="share-title" hidden>
+    <div class="share-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.2 10.8l7.5-4.4M8.2 13.2l7.5 4.4" /></svg>
+    </div>
+    <div class="share-content">
+      <h2 id="share-title">分享 DeepSeek Desktop</h2>
+      <p>一个桌面客户端，连接 DeepSeek 的两种使用方式</p>
+      <button class="share-link" id="share-link" type="button" title="打开介绍页面">
+        <span>https://www.uulucky.com/deepseek.html</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8" /><path d="M18 13v6H5V6h6" /></svg>
+      </button>
+      <button class="share-copy" id="share-copy" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5H5v11h3" /></svg>
+        <span>复制链接</span>
+      </button>
+    </div>
   </div>
 
   <!-- ── Conversation actions ───────────────────────────────────────────── -->

@@ -95,6 +95,7 @@ const workspaces = {
 };
 let selection = { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' };
 let permissionMode = 'danger-full-access';
+let copiedText = null;
 const catalog = {
   fetchedAt: now, day: '2026-09-11', source: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
   models: [
@@ -157,7 +158,7 @@ function registerStubIpc() {
   ipcMain.handle('app:info', () => ok({ ...world, platform: process.platform, arch: process.arch }));
   ipcMain.handle('app:boot-state', () => ok(world.boot));
   ipcMain.handle('app:world', () => ok(world));
-  ipcMain.handle('app:copy', () => ok(true));
+  ipcMain.handle('app:copy', (_event, text) => { copiedText = String(text); return ok(true); });
   ipcMain.handle('app:open-external', () => ok(true));
   ipcMain.handle('app:open-path', () => ok(true));
   ipcMain.handle('sessions:list', () => ok(sessions));
@@ -341,6 +342,30 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.log('PROBE_ERROR', String(error));
   }
+  const sharePanel = await win.webContents.executeJavaScript(`(() => {
+    document.getElementById('share-client').click();
+    return {
+      visible: !document.getElementById('share-popover').hidden,
+      expanded: document.getElementById('share-client').getAttribute('aria-expanded'),
+      title: document.getElementById('share-title').textContent,
+      text: document.querySelector('.share-content p').textContent,
+      url: document.querySelector('#share-link span').textContent,
+    };
+  })()`);
+  require('node:assert/strict').deepEqual(sharePanel, {
+    visible: true,
+    expanded: 'true',
+    title: '分享 DeepSeek Desktop',
+    text: '一个桌面客户端，连接 DeepSeek 的两种使用方式',
+    url: 'https://www.uulucky.com/deepseek.html',
+  });
+  fs.writeFileSync(shot('-share'), (await capture(win)).toPNG());
+  await win.webContents.executeJavaScript(`document.getElementById('share-copy').click()`);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  sharePanel.closedAfterCopy = await win.webContents.executeJavaScript(`document.getElementById('share-popover').hidden`);
+  require('node:assert/strict').equal(sharePanel.closedAfterCopy, true);
+  require('node:assert/strict').equal(copiedText, 'https://www.uulucky.com/deepseek.html');
+  console.log('CLIENT SHARE', JSON.stringify({ ...sharePanel, copiedText }, null, 2));
   const managementSearch = await win.webContents.executeJavaScript(`(async () => {
     const input = document.getElementById('session-search');
     input.value = '整理接口';

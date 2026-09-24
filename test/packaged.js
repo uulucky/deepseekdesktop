@@ -225,6 +225,19 @@ async function main() {
   await page.locator('#input').fill('本地输入测试，不发送');
   assert.equal(await page.locator('#input').inputValue(), '本地输入测试，不发送');
   await page.locator('#input').fill('');
+  const previousClipboard = await application.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await page.locator('#share-client').click();
+    await page.locator('#share-popover').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#share-title').textContent(), '分享 DeepSeek Desktop');
+    assert.match(await page.locator('#share-popover').textContent(), /一个桌面客户端，连接 DeepSeek 的两种使用方式/);
+    assert.equal(await page.locator('#share-link span').textContent(), 'https://www.uulucky.com/deepseek.html');
+    await page.locator('#share-copy').click();
+    assert.equal(await application.evaluate(({ clipboard }) => clipboard.readText()), 'https://www.uulucky.com/deepseek.html');
+    await page.locator('#share-popover').waitFor({ state: 'hidden' });
+  } finally {
+    await application.evaluate(({ clipboard }, value) => clipboard.writeText(value), previousClipboard);
+  }
   assert.equal(await page.locator('#permission-slider').inputValue(), '2');
   await page.locator('#permission-warning').waitFor({ state: 'visible' });
   await page.locator('#model-chip').click();
@@ -365,7 +378,7 @@ async function main() {
   console.log('PASS packaged renderer crash recovery returned to the selected conversation');
   await closeApplication();
   await assertNoPackagedProcesses();
-  console.log(`PASS packaged ${process.platform}-${process.arch}: extraction, startup, input, model popover, Full Access default/reminder, kernel permissions, Mac close/restore, renderer crash recovery, restart, saved lower preferences and data preservation`);
+  console.log(`PASS packaged ${process.platform}-${process.arch}: extraction, startup, input, client sharing, model popover, Full Access default/reminder, kernel permissions, Mac close/restore, renderer crash recovery, restart, saved lower preferences and data preservation`);
 }
 main().catch(async error => {
   console.error(error);

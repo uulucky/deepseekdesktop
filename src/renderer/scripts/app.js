@@ -1,6 +1,8 @@
 'use strict';
 /** App controller: bootstraps the shell, owns navigation, the composer and event wiring. */
 
+const SHARE_CLIENT_URL = 'https://www.uulucky.com/deepseek.html';
+
 const App = {
   async init() {
     this.ready = false;
@@ -161,6 +163,11 @@ const App = {
     });
     document.getElementById('balance-chip').addEventListener('click', () => Settings.open('account'));
     document.getElementById('model-chip').addEventListener('click', () => this.toggleModelPopover());
+    document.getElementById('share-client').addEventListener('click', () => this.toggleSharePopover());
+    document.getElementById('share-link').addEventListener('click', () => {
+      guard(api.app.openExternal(SHARE_CLIENT_URL), '打开介绍页面失败');
+    });
+    document.getElementById('share-copy').addEventListener('click', () => this.copyShareLink());
 
     // Composer
     const input = document.getElementById('input');
@@ -197,6 +204,7 @@ const App = {
       if (event.key === 'Escape') {
         this.hidePopover();
         this.hideSessionPopover();
+        this.hideSharePopover();
         if (this.actionDialog) this.closeActionDialog(null);
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); this.newSession(); }
@@ -205,6 +213,7 @@ const App = {
     document.addEventListener('click', (event) => {
       this.closeModelPopoverFromOutside(event.target);
       this.closeSessionPopoverFromOutside(event.target);
+      this.closeSharePopoverFromOutside(event.target);
       this.routeClick(event);
     });
     document.addEventListener('pointerdown', (event) => {
@@ -218,7 +227,7 @@ const App = {
     }, true);
     document.addEventListener('change', (event) => Settings.onGeneralChange(event.target));
     document.getElementById('ad-slot').addEventListener('click', () => Sidebar.openCurrentAd());
-    window.addEventListener('resize', () => { this.hidePopover(); this.hideSessionPopover(); });
+    window.addEventListener('resize', () => { this.hidePopover(); this.hideSessionPopover(); this.hideSharePopover(); });
   },
 
   async setSurfaceMode(mode) {
@@ -1070,6 +1079,7 @@ const App = {
   toggleModelPopover() {
     const popover = document.getElementById('model-popover');
     if (!popover.hidden) { this.hidePopover(); return; }
+    this.hideSharePopover();
     const chip = document.getElementById('model-chip');
     const rect = chip.getBoundingClientRect();
     popover.style.top = rect.bottom + 8 + 'px';
@@ -1089,6 +1099,42 @@ const App = {
     if (!popover || popover.hidden) return;
     if (popover.contains(target) || chip?.contains(target)) return;
     this.hidePopover();
+  },
+
+  // -------------------------------------------------------------- client sharing
+  toggleSharePopover() {
+    const popover = document.getElementById('share-popover');
+    if (!popover.hidden) { this.hideSharePopover(); return; }
+    this.hidePopover();
+    this.hideSessionPopover();
+    const button = document.getElementById('share-client');
+    const rect = button.getBoundingClientRect();
+    popover.style.top = rect.bottom + 8 + 'px';
+    popover.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
+    popover.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+  },
+
+  hideSharePopover() {
+    const popover = document.getElementById('share-popover');
+    const button = document.getElementById('share-client');
+    if (popover) popover.hidden = true;
+    button?.setAttribute('aria-expanded', 'false');
+  },
+
+  closeSharePopoverFromOutside(target) {
+    const popover = document.getElementById('share-popover');
+    const button = document.getElementById('share-client');
+    if (!popover || popover.hidden) return;
+    if (popover.contains(target) || button?.contains(target)) return;
+    this.hideSharePopover();
+  },
+
+  async copyShareLink() {
+    const copied = await guard(api.app.copy(SHARE_CLIENT_URL), '复制链接失败');
+    if (!copied) return;
+    this.hideSharePopover();
+    toast('客户端链接已复制', 'ok');
   },
 
   renderModelPopover() {
