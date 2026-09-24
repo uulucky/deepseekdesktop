@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.3.3**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.3.4**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.3-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.3-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.3-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.3-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.4-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -22,6 +22,7 @@ GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件
 - **中文行动摘要**：执行前简短说明准备做什么，后续说明已确认的进展和下一步；摘要展开显示，思考原文与工具详情默认折叠。
 - **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；默认 Full Access，输入区持续显示风险提醒，记住你选择的档位。
 - **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
+- **交互提问**：Agent 需要补充信息时，工作台直接显示待回答卡片，支持选项、自定义回答、多题与取消；侧栏标记待回答会话。
 - **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
 - **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
 - **本地记录与更新**：每小时检查更新。Windows 便携版确认后自动安装并重启；Mac 下载匹配芯片的 DMG 后手动替换应用，数据独立保存。
@@ -68,19 +69,19 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险，不通过反复弹窗打断操作。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.3.3 更新
+## 0.3.4 更新
 
-- 中文问题的“行动摘要”由本地展示层兜底为简体中文，直接展开说明准备做什么、已确认的进展和下一步；模型偶尔输出的英文进展保留在折叠原文中供核对，不再冒充中文摘要。
-- 继续修复“网页版（免费）”的浏览器兼容：保留真实操作系统和 Chromium 版本，移除 Electron 与客户端产品名称。429 时按服务器 `Retry-After` 倒计时（未提供时等待 60 秒），在网页版可见时只自动重试一次，再次失败后停止请求。
-- 网页恢复绕过错误页缓存但保留 Cookie、站点存储和登录态；403 验证页面继续留在客户端内供用户处理，连接失败也可在软件内重新连接。错误页不再提供跳转默认浏览器的入口。
-- 工作台继续支持上下文用量、粘贴图片、“+”选择多文件、多任务、对话管理、权限滑块和黑窗口恢复。对话完整记录由 Harness 保存，本地界面为稳定性只挂载最近 240 条记录。
+- 修复 `ask_user_question` 一直显示“运行中”：工作台现在展示可交互问题，回答或取消后会立即回传给 Harness；切换会话、界面重绘和连接重建时保留待回答状态。
+- 修复 Mac 正常关闭窗口时偶发的原生崩溃：红色关闭按钮隐藏窗口，Dock 可恢复；Cmd+Q 才完全退出。
+- Mac 启动时仅清理经进程路径及父进程核实的本应用残留 Harness 服务，避免旧进程占用会话写入锁而导致“继续对话”报错；不会清理正常运行的客户端或其他 Harness。
+- 右上角新增“分享客户端”，可复制发布页链接。其余工作台、网页版和安全权限功能保持不变。
 
 网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码、网络出口或官方访问策略。真实账号环境仍可能因官方规则收到 403/429，遇到持续拒绝时请等待倒计时结束，不要反复重启刷新。
 
 ### 如何同时运行多个任务
 
 1. 在一个会话中发送任务后，点击左侧“新建对话”（或 Ctrl/Cmd+N），继续发送另一个任务，无需等待前一个结束。
-2. 点击侧栏会话查看进度；“待批准”表示需要进入该会话处理权限请求。任务在后台完成后显示“已完成”，查看后清除该提示。
+2. 点击侧栏会话查看进度；“待批准”表示需要处理权限请求，“待回答”表示 Agent 正在等你的答案。任务在后台完成后显示“已完成”，查看后清除该提示。
 3. “停止”只停止当前显示的会话，其他任务继续。切换时会保留各自的未发送草稿；草稿仅保留到本次软件关闭。
 
 并行任务分别消耗 API 用量，共享本机资源；如果多个任务可能修改同一批文件，请避免同时写入。各会话的 Full Access 风险提醒和独立权限选择仍然有效。完全退出软件或安装更新会结束本地运行服务；Mac 仅关闭主窗口不会退出应用。

@@ -31,7 +31,7 @@ class TranscriptDispatcher {
 
   isUrgent(payload) {
     const type = payload?.event?.type;
-    return Boolean(payload.approval || payload.transcript?.running === false
+    return Boolean(payload.approval || payload.question || payload.transcript?.running === false
       || ['optimistic', 'prompt-failed', 'cancelled', 'turn/start', 'turn/end'].includes(type));
   }
 

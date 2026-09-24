@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('deepseek', {
     attachment: (sessionId, attachmentId) => invoke('sessions:attachment', sessionId, attachmentId),
     cancel: (sessionId) => invoke('sessions:cancel', sessionId),
     answerApproval: (sessionId, eventId, outcome) => invoke('sessions:answer-approval', sessionId, eventId, outcome),
+    answerQuestion: (sessionId, eventId, answers) => invoke('sessions:answer-question', sessionId, eventId, answers),
   },
   workspaces: {
     list: () => invoke('workspaces:list'),

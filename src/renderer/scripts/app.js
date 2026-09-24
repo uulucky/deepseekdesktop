@@ -380,6 +380,10 @@ const App = {
     view.transcript = transcript;
     view.revision += 1;
     if (before?.running && !transcript.running && state.activeSessionId !== sessionId) view.unread = true;
+    if (!(before?.questions ?? []).length && (transcript.questions ?? []).length
+      && state.activeSessionId !== sessionId) {
+      toast('有对话正在等待你的回答，请在左侧选择“待回答”会话', 'ok');
+    }
     if (!state.sessions.some((session) => session.sessionId === sessionId)) {
       state.sessions.unshift({ sessionId, title: transcript.title, updatedAt: Date.now() });
     }
@@ -387,13 +391,15 @@ const App = {
       // Keep Stop / task state accurate immediately, but coalesce expensive Markdown and DOM
       // rebuilding while tokens stream. Terminal and approval transitions paint at once.
       this.syncSessionControls();
-      const approvalsChanged = JSON.stringify(before?.approvals ?? []) !== JSON.stringify(transcript.approvals ?? []);
+      const approvalsChanged = JSON.stringify(before?.approvals ?? []) !== JSON.stringify(transcript.approvals ?? [])
+        || JSON.stringify(before?.questions ?? []) !== JSON.stringify(transcript.questions ?? []);
       this.scheduleTranscriptPaint(sessionId, Boolean(
         (before?.running && !transcript.running) || approvalsChanged,
       ));
     }
     if (!before || before.running !== transcript.running || before.title !== transcript.title
-      || JSON.stringify(before.approvals ?? []) !== JSON.stringify(transcript.approvals ?? [])) {
+      || JSON.stringify(before.approvals ?? []) !== JSON.stringify(transcript.approvals ?? [])
+      || JSON.stringify(before.questions ?? []) !== JSON.stringify(transcript.questions ?? [])) {
       Sidebar.renderSessions();
     }
   },

@@ -11,6 +11,7 @@ const expandedDetails = new Set();
 let renderedSession = '';
 const imageUrls = new Map();
 const imageLoads = new Map();
+const questionDrafts = new Map();
 
 /** Only a leading, explicit presentation block is special; code/quoted examples stay intact. */
 function splitActionSummary(value, streaming = false) {
@@ -140,8 +141,48 @@ function renderApproval(approval) {
   );
 }
 
+function rememberQuestionDrafts() {
+  for (const panel of innerEl()?.querySelectorAll?.('.question-panel') ?? []) {
+    const id = panel.getAttribute('data-question-id');
+    if (!id) continue;
+    questionDrafts.set(id, [...panel.querySelectorAll('.question-group')].map((group) => ({
+      selected: [...group.querySelectorAll('[data-question-option]:checked')].map((input) => input.value),
+      custom: group.querySelector('[data-question-custom]')?.value ?? '',
+      skipped: Boolean(group.querySelector('[data-question-skip]')?.checked),
+    })));
+  }
+  if (questionDrafts.size > 50) questionDrafts.delete(questionDrafts.keys().next().value);
+}
+
+function renderQuestion(pending) {
+  const drafts = questionDrafts.get(pending.eventId) ?? [];
+  const groups = (pending.questions ?? []).map((question, index) => {
+    const draft = drafts[index] ?? { selected: [], custom: '', skipped: false };
+    const options = (question.options ?? []).map((option) => (
+      `<label class="question-option"><input type="${question.multiSelect ? 'checkbox' : 'radio'}" ` +
+      `name="question-${esc(pending.eventId)}-${index}" value="${esc(option.label)}" data-question-option ` +
+      `${draft.selected.includes(option.label) ? 'checked' : ''}>` +
+      `<span><strong>${esc(option.label)}</strong>${option.description ? `<small>${esc(option.description)}</small>` : ''}</span></label>`
+    )).join('');
+    return `<fieldset class="question-group" data-question-index="${index}">` +
+      `<legend>${esc(question.header || `问题 ${index + 1}`)}</legend>` +
+      `<div class="question-text">${esc(question.question || '')}</div>` +
+      (question.detail ? `<pre class="question-detail">${esc(displayText(question.detail, MAX_TEXT_CHARS))}</pre>` : '') +
+      options +
+      `<textarea data-question-custom maxlength="4000" placeholder="也可以填写自己的回答">${esc(draft.custom)}</textarea>` +
+      `<label class="question-skip"><input type="checkbox" data-question-skip ${draft.skipped ? 'checked' : ''}>暂不回答此题</label>` +
+      '</fieldset>';
+  }).join('');
+  return `<section class="question-panel" data-question-id="${esc(pending.eventId)}" aria-label="等待回答的问题">` +
+    '<div class="question-title">DeepSeek 正在等待你的回答</div>' + groups +
+    '<div class="question-actions">' +
+      `<button class="approval-btn reject" data-question-action="cancel" data-question-id="${esc(pending.eventId)}">取消提问</button>` +
+      `<button class="approval-btn allow" data-question-action="answer" data-question-id="${esc(pending.eventId)}">提交回答并继续</button>` +
+    '</div></section>';
+}
+
 /** Render one transcript item (user / assistant / tool / turn marker). */
-function renderItem(item, approvals = [], rowKey = '') {
+function renderItem(item, approvals = [], questions = [], rowKey = '') {
   if (item.kind === 'user') {
     const tags = item.synthetic ? '<span class="tag">系统注入</span>' : '';
     const pending = item.pending ? ' pending' : '';
@@ -205,7 +246,8 @@ function renderItem(item, approvals = [], rowKey = '') {
       (entry.callId && entry.callId === item.callId)
       || (!entry.callId && item.running && entry.toolName === item.name)
     ));
-    const status = approval ? '等待授权' : item.running ? '运行中' : item.isError ? '失败' : item.interrupted ? '已中断' : '完成';
+    const waitingQuestion = item.running && item.name === 'ask_user_question' && questions.length > 0;
+    const status = waitingQuestion ? '等待回答' : approval ? '等待授权' : item.running ? '运行中' : item.isError ? '失败' : item.interrupted ? '已中断' : '完成';
     const cls = item.isError ? 'fold err' : 'fold';
     const sub = esc(item.summary || status);
     const { attributes, open } = detailState(`${rowKey}:tool`);
@@ -213,7 +255,7 @@ function renderItem(item, approvals = [], rowKey = '') {
       `<div class="${cls}${open ? ' open' : ''}"${attributes} style="margin-left:41px">` +
         `<div class="fold-head" role="button" tabindex="0" aria-expanded="${open}"><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>` +
         `<span class="fold-title">${esc(item.name || '工具')}</span><span class="fold-sub">${sub}</span>` +
-        `<span class="badge ${item.isError || approval ? 'warn' : item.running ? '' : 'ok'}" style="margin-left:auto">${status}</span></div>` +
+        `<span class="badge ${item.isError || approval || waitingQuestion ? 'warn' : item.running ? '' : 'ok'}" style="margin-left:auto">${status}</span></div>` +
         `<div class="fold-body">${item.arguments ? `<pre>${esc(displayText(item.arguments, MAX_TOOL_CHARS))}</pre>` : ''}${item.output ? `<pre>${esc(displayText(item.output, MAX_TOOL_CHARS))}</pre>` : ''}</div>` +
       '</div>'
     );
@@ -252,9 +294,11 @@ const ChatView = {
   render(transcript) {
     const inner = innerEl();
     if (!inner) return;
+    rememberQuestionDrafts();
     const approvals = transcript?.approvals ?? [];
+    const questions = transcript?.questions ?? [];
     renderedSession = transcript?.sessionId ?? '';
-    if (!transcript || (!(transcript.items ?? []).length && !approvals.length)) {
+    if (!transcript || (!(transcript.items ?? []).length && !approvals.length && !questions.length)) {
       inner.innerHTML = renderEmpty();
       return;
     }
@@ -264,10 +308,10 @@ const ChatView = {
     const historyNotice = hiddenCount
       ? `<div class="history-window-note">为保证长对话稳定，当前显示最近 ${MAX_VISIBLE_ITEMS} 条记录；更早的 ${hiddenCount} 条仍保存在本地。</div>`
       : '';
-    inner.innerHTML = historyNotice + items.map((item, index) => renderItem(item, approvals,
+    inner.innerHTML = historyNotice + items.map((item, index) => renderItem(item, approvals, questions,
       item.callId ?? (item.kind === 'assistant' && item.turn !== undefined
         ? `assistant:${item.turn}:${item.step}` : `${item.kind}:${item.seq ?? index + hiddenCount}`))).join('')
-      + approvals.map(renderApproval).join('');
+      + approvals.map(renderApproval).join('') + questions.map(renderQuestion).join('');
     this.hydrateImages(renderedSession);
     this.scrollToBottom();
   },
@@ -327,6 +371,34 @@ const ChatView = {
     });
     document.addEventListener('click', (event) => {
       const target = event.target;
+      const questionButton = target.closest?.('[data-question-action]');
+      if (questionButton) {
+        const eventId = questionButton.getAttribute('data-question-id');
+        const panel = questionButton.closest('.question-panel');
+        const sessionId = state.activeSessionId;
+        const cancel = questionButton.getAttribute('data-question-action') === 'cancel';
+        const answers = cancel ? null : [...(panel?.querySelectorAll('.question-group') ?? [])].map((group, index) => {
+          const question = state.transcript?.questions?.find((item) => item.eventId === eventId)?.questions?.[index];
+          const custom = group.querySelector('[data-question-custom]')?.value.trim() ?? '';
+          const selected = [...group.querySelectorAll('[data-question-option]:checked')].map((input) => input.value);
+          return { id: question?.id, selected: group.querySelector('[data-question-skip]')?.checked ? []
+            : custom && !question?.multiSelect ? [] : selected,
+          ...(custom && !group.querySelector('[data-question-skip]')?.checked ? { custom } : {}) };
+        });
+        if (!cancel && answers.some((answer, index) => {
+          const skipped = panel.querySelectorAll('[data-question-skip]')[index]?.checked;
+          return !skipped && !answer.selected.length && !answer.custom;
+        })) { toast('请回答每个问题，或勾选“暂不回答此题”', 'err'); return; }
+        const buttons = [...(panel?.querySelectorAll('[data-question-action]') ?? [])];
+        buttons.forEach((button) => { button.disabled = true; });
+        panel?.classList.add('answering');
+        guard(api.sessions.answerQuestion(sessionId, eventId, answers), '提交问题回答')
+          .then((result) => {
+            if (result) { questionDrafts.delete(eventId); toast(cancel ? '已取消提问' : '已提交回答，任务继续运行', 'ok'); }
+            else { buttons.forEach((button) => { button.disabled = false; }); panel?.classList.remove('answering'); }
+          });
+        return;
+      }
       const approvalButton = target.closest?.('[data-approval-action]');
       if (approvalButton) {
         const eventId = approvalButton.getAttribute('data-approval-id');

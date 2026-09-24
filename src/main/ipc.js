@@ -309,6 +309,9 @@ function registerIpc(services) {
   handle('sessions:answer-approval', (sessionId, eventId, outcome) => (
     service('chat').answerApproval(sessionId, eventId, outcome)
   ));
+  handle('sessions:answer-question', (sessionId, eventId, answers) => (
+    service('chat').answerQuestion(sessionId, eventId, answers)
+  ));
   handle('sessions:model-selection', async (sessionId) => {
     const ctx = getContext();
     const models = await ctx.client.sessionModels(sessionId);

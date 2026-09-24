@@ -117,6 +117,7 @@ class Transcript {
     this.toolCalls = new Map();
     /** @type {Map<string, object>} interactive Host approvals currently blocking this session */
     this.approvals = new Map();
+    this.questions = new Map();
     /** @type {Map<number, {turn:number, step:number, index:number}>} live streaming state */
     this.streaming = new Map();
     this.lastSeq = -1;
@@ -370,6 +371,7 @@ class Transcript {
       lastSeq: this.lastSeq,
       items: this.items.filter((item) => item.kind !== 'turn-start'),
       approvals: [...this.approvals.values()],
+      questions: [...this.questions.values()],
     };
   }
 }
@@ -398,21 +400,36 @@ class ChatController {
       return;
     }
     const transcript = this.transcripts.get(frame.sessionId);
-    if (!transcript) return;
+    if (!transcript) {
+      if (frame.type === 'question/request' || frame.type === 'approval/request') {
+        this.open(frame.sessionId).catch((error) => log('chat', 'interactive session open failed', String(error)));
+      }
+      return;
+    }
     if (frame.type === 'approval/request' && frame.approval?.eventId) {
       transcript.approvals.set(frame.approval.eventId, frame.approval);
     } else if ((frame.type === 'approval/cancel' || frame.type === 'approval/answered') && frame.eventId) {
       transcript.approvals.delete(frame.eventId);
+    } else if (frame.type === 'question/request' && frame.question?.eventId) {
+      transcript.questions.set(frame.question.eventId, frame.question);
+    } else if ((frame.type === 'question/cancel' || frame.type === 'question/answered') && frame.eventId) {
+      transcript.questions.delete(frame.eventId);
     } else {
       return;
     }
-    this.onUpdate({ sessionId: frame.sessionId, approval: frame.type, transcript: transcript.snapshot() });
+    this.onUpdate({ sessionId: frame.sessionId,
+      ...(frame.type.startsWith('approval/') ? { approval: frame.type } : { question: frame.type }),
+      transcript: transcript.snapshot() });
   }
 
   syncPendingApprovals(transcript) {
     transcript.approvals.clear();
     for (const approval of this.client.pendingApprovalsFor?.(transcript.sessionId) ?? []) {
       if (approval?.eventId) transcript.approvals.set(approval.eventId, approval);
+    }
+    transcript.questions.clear();
+    for (const question of this.client.pendingQuestionsFor?.(transcript.sessionId) ?? []) {
+      if (question?.eventId) transcript.questions.set(question.eventId, question);
     }
   }
 
@@ -650,6 +667,15 @@ class ChatController {
     const result = await this.client.answerApproval(eventId, outcome);
     transcript.approvals.delete(eventId);
     this.onUpdate({ sessionId, approval: 'approval/answered', transcript: transcript.snapshot() });
+    return result;
+  }
+
+  async answerQuestion(sessionId, eventId, answers) {
+    const transcript = this.transcripts.get(sessionId);
+    if (!transcript?.questions.has(eventId)) throw new Error('该问题已经结束');
+    const result = await this.client.answerQuestion(eventId, answers);
+    transcript.questions.delete(eventId);
+    this.onUpdate({ sessionId, question: 'question/answered', transcript: transcript.snapshot() });
     return result;
   }
 

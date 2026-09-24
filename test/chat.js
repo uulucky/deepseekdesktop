@@ -227,6 +227,60 @@ async function approvalContract() {
   client.dispose();
 }
 
+async function questionContract() {
+  const client = new DeepSeekHarnessClient('http://127.0.0.1:1');
+  const writes = [];
+  const calls = [];
+  const frames = [];
+  client.mux = { readyState: WebSocket.OPEN, send: (text) => writes.push(JSON.parse(text)) };
+  client.call = async (method, args) => { calls.push({ method, args }); return {}; };
+  client.onHostFrame((frame) => frames.push(frame));
+  client.openRemoteEventStream();
+  const streamId = writes[0].streamId;
+  client.handleMuxFrame({ type: 'item', streamId, value: { type: 'ready', clientId: 'client-questions' } });
+  const questions = [
+    { id: 'priority', header: '优先事项', question: '先做什么？', options: [{ label: '修复' }, { label: '测试' }] },
+    { id: 'targets', question: '哪些平台？', multiSelect: true, options: [{ label: 'Mac' }, { label: 'Windows' }] },
+  ];
+  const request = (eventId) => client.handleMuxFrame({ type: 'item', streamId, value: {
+    type: 'waterfall', event: 'user-questions/request', eventId, agentId: 'session-live', request: { questions },
+  } });
+  request('question-1');
+  check('question waterfall is presented, not delegated', frames.some((frame) => frame.type === 'question/request'
+    && frame.question?.questions?.[0]?.id === 'priority') && calls.length === 0);
+  check('pending question belongs to its session', client.pendingQuestionsFor('session-live').length === 1);
+  const transcript = new (require('../src/main/modules/chat').Transcript)('session-live');
+  const chat = new ChatController(client);
+  chat.transcripts.set('session-live', transcript);
+  chat.syncPendingApprovals(transcript);
+  check('question is restored when a conversation is reopened', transcript.snapshot().questions.length === 1);
+  let rejected = false;
+  try { await chat.answerQuestion('session-live', 'question-1', [{ id: 'priority', selected: ['other'] }]); }
+  catch { rejected = true; }
+  check('invalid question answers cannot cross the IPC boundary', rejected && calls.length === 0);
+  await chat.answerQuestion('session-live', 'question-1', [
+    { id: 'priority', selected: ['修复'] },
+    { id: 'targets', selected: ['Mac', 'Windows'], custom: '先验证 Apple 芯片' },
+  ]);
+  check('all answers return through the Host remote-event result', calls[0]?.method === '$events/result'
+    && calls[0]?.args?.outcome?.kind === 'result'
+    && calls[0]?.args?.outcome?.value?.answers?.length === 2
+    && calls[0]?.args?.outcome?.value?.answers?.[1]?.custom === '先验证 Apple 芯片');
+  check('answering clears the waiting state', transcript.snapshot().questions.length === 0);
+  request('question-2');
+  chat.syncPendingApprovals(transcript);
+  await chat.answerQuestion('session-live', 'question-2', null);
+  check('cancel is a structured rejection, not a hanging delegation', calls[1]?.args?.outcome?.kind === 'rejected'
+    && calls[1]?.args?.outcome?.error?.code === 'ASK_CANCELLED');
+  request('question-3');
+  chat.syncPendingApprovals(transcript);
+  client.handleMuxFrame({ type: 'item', streamId, value: { type: 'cancel', eventId: 'question-3' } });
+  check('Host cancellation removes a pending question', client.pendingQuestionsFor('session-live').length === 0
+    && transcript.snapshot().questions.length === 0);
+  chat.dispose();
+  client.dispose();
+}
+
 async function modelContract() {
   const client = new DeepSeekHarnessClient('http://127.0.0.1:1');
   let request;
@@ -362,6 +416,7 @@ async function main() {
   await attachmentContract();
   await optimisticEchoContract();
   await approvalContract();
+  await questionContract();
   await modelContract();
   await permissionContract();
   await conversationManagementContract();

@@ -8,7 +8,7 @@ const Sidebar = {
     const sessions = state.sessions ?? [];
     const taskState = (session) => {
       const view = state.sessionViews.get(session.sessionId);
-      const waiting = Boolean(view?.transcript?.approvals?.length);
+      const waiting = Boolean(view?.transcript?.approvals?.length || view?.transcript?.questions?.length);
       const running = Boolean(view?.sending || (view?.transcript ? view.transcript.running : session.running));
       return { view, waiting, running };
     };
@@ -33,7 +33,7 @@ const Sidebar = {
       const { view, waiting, running } = taskState(session);
       const title = esc(view?.transcript?.title || session.title || '新对话');
       const active = session.sessionId === state.activeSessionId ? ' active' : '';
-      const label = waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
+      const label = view?.transcript?.questions?.length ? '待回答' : waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
       const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
       const snippet = session.snippet ? `<span class="session-snippet">${esc(session.snippet)}</span>` : '';
       return (
@@ -229,7 +229,7 @@ const Sidebar = {
     const usage = transcript.usage ?? {};
     const total = (usage.uncachedInputTokens ?? 0) + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0) + (usage.outputTokens ?? 0);
     sub.textContent = state.sessionLoading ? '正在准备对话…' : [
-      transcript.approvals?.length ? '等待你的批准' : state.streaming ? '任务运行中 · 可新建其他对话' : '',
+      transcript.questions?.length ? '等待你回答问题' : transcript.approvals?.length ? '等待你的批准' : state.streaming ? '任务运行中 · 可新建其他对话' : '',
       total ? `本会话约 ${compact(total)} tokens` : '',
     ].filter(Boolean).join(' · ');
   },

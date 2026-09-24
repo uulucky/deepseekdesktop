@@ -422,6 +422,18 @@ html[data-theme="light"] .md-pre { background: #f6f8fc; }
 .approval-btn.reject { color: var(--text-dim); background: var(--panel); }
 .approval-btn.allow { color: #fff; border-color: var(--brand); background: var(--brand); }
 .approval-btn:disabled { opacity: .55; cursor: default; }
+.question-panel { margin: 0 0 22px 41px; padding: 18px; border: 1px solid var(--brand); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 30px rgba(0, 0, 0, .1); }
+.question-panel.answering { opacity: .72; }
+.question-title { color: var(--text); font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+.question-group { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0 0 12px; min-width: 0; }
+.question-group legend { color: var(--brand); font-size: 12px; font-weight: 700; padding: 0 6px; }
+.question-text { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 12px; }
+.question-detail { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.question-option, .question-skip { display: flex; gap: 9px; align-items: flex-start; color: var(--text); cursor: pointer; margin: 8px 0; }
+.question-option small { display: block; color: var(--text-muted); margin-top: 2px; }
+.question-option input, .question-skip input { accent-color: var(--brand); margin-top: 3px; }
+.question-group textarea { display: block; width: 100%; min-height: 68px; resize: vertical; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px; font: inherit; margin-top: 12px; }
+.question-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 720px) {
   .approval-panel { grid-template-columns: 30px minmax(0, 1fr); }
   .approval-actions { grid-column: 1 / -1; justify-content: flex-end; }

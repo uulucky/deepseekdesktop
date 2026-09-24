@@ -46,6 +46,7 @@ class DeepSeekHarnessClient {
     this.sessionProjectionValues = new Map();
     /** Remote approval event id -> answerable request for the current stream generation. */
     this.pendingApprovals = new Map();
+    this.pendingQuestions = new Map();
     this.frameListeners = new Set();
     this.hostListeners = new Set();
     this.stateListeners = new Set();
@@ -346,6 +347,10 @@ class DeepSeekHarnessClient {
       this.emitHostFrame({ type: 'approval/cancel', sessionId: approval.sessionId, eventId: approval.eventId, reason });
     }
     this.pendingApprovals.clear();
+    for (const question of this.pendingQuestions.values()) {
+      this.emitHostFrame({ type: 'question/cancel', sessionId: question.sessionId, eventId: question.eventId, reason });
+    }
+    this.pendingQuestions.clear();
   }
 
   handleRemoteEventFrame(full, stream) {
@@ -372,6 +377,11 @@ class DeepSeekHarnessClient {
         this.pendingApprovals.delete(value.eventId);
         this.emitHostFrame({ type: 'approval/cancel', sessionId: approval.sessionId, eventId: value.eventId });
       }
+      const question = this.pendingQuestions.get(value.eventId);
+      if (question) {
+        this.pendingQuestions.delete(value.eventId);
+        this.emitHostFrame({ type: 'question/cancel', sessionId: question.sessionId, eventId: value.eventId });
+      }
       return;
     }
     if (value.type === 'emit') {
@@ -379,9 +389,22 @@ class DeepSeekHarnessClient {
       return;
     }
     if (value.type !== 'waterfall' || !stream.clientId) return;
+    if (value.event === 'user-questions/request') {
+      const questions = value.request?.questions;
+      if (typeof value.agentId !== 'string' || !value.agentId || !Array.isArray(questions) || !questions.length) {
+        this.answerRemoteEvent(stream.clientId, value.eventId, { kind: 'next' })
+          .catch((error) => log('api', 'invalid question delegation failed', String(error)));
+        return;
+      }
+      const pending = {
+        eventId: value.eventId, clientId: stream.clientId, sessionId: value.agentId, questions,
+      };
+      this.pendingQuestions.set(pending.eventId, pending);
+      this.emitHostFrame({ type: 'question/request', sessionId: pending.sessionId, question: pending }, full);
+      return;
+    }
     if (value.event !== 'approval/request') {
-      // This shell does not own other interactive waterfalls. Delegate immediately so an
-      // official/third-party Client can answer without this connection holding the Host open.
+      // Delegate only waterfalls this shell does not present.
       this.answerRemoteEvent(stream.clientId, value.eventId, { kind: 'next' })
         .catch((error) => log('api', 'remote event delegation failed', String(error)));
       return;
@@ -404,6 +427,42 @@ class DeepSeekHarnessClient {
 
   pendingApprovalsFor(sessionId) {
     return [...this.pendingApprovals.values()].filter((approval) => approval.sessionId === sessionId);
+  }
+
+  pendingQuestionsFor(sessionId) {
+    return [...this.pendingQuestions.values()].filter((question) => question.sessionId === sessionId);
+  }
+
+  async answerQuestion(eventId, answers) {
+    const pending = this.pendingQuestions.get(eventId);
+    if (!pending) throw new RpcError('$events/result', { code: 'not-found', message: '该问题已经结束' });
+    let outcome;
+    if (answers === null) {
+      outcome = { kind: 'rejected', error: {
+        name: 'UserQuestionError', code: 'ASK_CANCELLED', message: '用户取消了提问',
+      } };
+    } else {
+      if (!Array.isArray(answers) || answers.length !== pending.questions.length) {
+        throw new RpcError('$events/result', { code: 'arguments-invalid', message: '回答数量与问题不一致' });
+      }
+      const normalized = answers.map((answer, index) => {
+        const question = pending.questions[index];
+        const options = (question.options ?? []).map((option) => option.label);
+        if (!answer || answer.id !== question.id || !Array.isArray(answer.selected)
+          || answer.selected.some((label) => typeof label !== 'string' || !options.includes(label))
+          || (question.multiSelect !== true && answer.selected.length > 1)
+          || (answer.custom !== undefined && (typeof answer.custom !== 'string' || answer.custom.length > 4000))) {
+          throw new RpcError('$events/result', { code: 'arguments-invalid', message: '回答内容无效' });
+        }
+        return { id: question.id, selected: [...new Set(answer.selected)],
+          ...(answer.custom?.trim() ? { custom: answer.custom.trim() } : {}) };
+      });
+      outcome = { kind: 'result', value: { answers: normalized } };
+    }
+    await this.answerRemoteEvent(pending.clientId, eventId, outcome);
+    this.pendingQuestions.delete(eventId);
+    this.emitHostFrame({ type: 'question/answered', sessionId: pending.sessionId, eventId });
+    return { accepted: true };
   }
 
   async answerApproval(eventId, outcome) {

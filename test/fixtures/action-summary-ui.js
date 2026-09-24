@@ -44,6 +44,28 @@ async function actionSummaryUi(page, provider) {
   await tool.locator('.fold-head').press('Enter');
   assert.equal(await tool.locator('.fold-body').isVisible(), true, 'Keyboard can expand tool details');
 
+  await page.evaluate(() => {
+    const snapshot = structuredClone(state.transcript);
+    snapshot.questions = [{ eventId: 'ui-fixture-question', sessionId: snapshot.sessionId, questions: [
+      { id: 'priority', header: '优先事项', question: '请问优先处理什么？', options: [{ label: '修复' }, { label: '测试' }] },
+      { id: 'targets', question: '需要哪些平台？', multiSelect: true, options: [{ label: 'Mac' }, { label: 'Windows' }] },
+    ] }];
+    ChatView.render(snapshot);
+  });
+  const questionCard = page.locator('.question-panel');
+  await questionCard.waitFor({ state: 'visible' });
+  assert.equal(await questionCard.locator('.question-group').count(), 2, 'All questions are visible');
+  await questionCard.locator('[data-question-custom]').first().fill('先处理会话等待');
+  await page.evaluate(() => {
+    const snapshot = structuredClone(state.transcript);
+    snapshot.questions = [{ eventId: 'ui-fixture-question', sessionId: snapshot.sessionId, questions: [
+      { id: 'priority', header: '优先事项', question: '请问优先处理什么？', options: [{ label: '修复' }, { label: '测试' }] },
+      { id: 'targets', question: '需要哪些平台？', multiSelect: true, options: [{ label: 'Mac' }, { label: 'Windows' }] },
+    ] }];
+    ChatView.render(snapshot);
+  });
+  assert.equal(await questionCard.locator('[data-question-custom]').first().inputValue(), '先处理会话等待', 'A streaming repaint keeps the answer draft');
+
   // Real models are not guaranteed to obey a prompt-level presentation protocol. Reproduce the
   // reported Mac output and verify the renderer supplies the Chinese public fallback itself.
   await page.evaluate(() => {
