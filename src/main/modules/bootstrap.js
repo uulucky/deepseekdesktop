@@ -19,6 +19,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { DIRS, IS_WINDOWS, IS_MAC, isDev, log, clamp, sleep, existsSync, readJsonSync, writeJsonSync } = require('./util');
 const { run, runStreaming, killTree, waitFor } = require('./proc');
+const { reapOrphanKernels } = require('./orphan-kernel');
 
 const DEFAULT_PORT = 3080;
 // DSH 0.1.5+ uses `import.meta.main` in its executable entry. That API is available in
@@ -167,6 +168,9 @@ class Bootstrap {
 
   async run() {
     this.report({ phase: 'detect', percent: 2, label: '正在检查运行环境' });
+    // An earlier Mac app crash may have left its Harness child alive and holding old
+    // sessions' write leases. Release only verified app-owned orphans before probing ports.
+    await reapOrphanKernels(DIRS.root);
 
     // 0. explicit override wins (used by tests and by power users who already run dsh).
     const forced = process.env.DEEPSEEK_DESKTOP_DSH_BIN;
