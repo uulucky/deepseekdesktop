@@ -21,9 +21,9 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '中文问题的行动摘要会在本地稳定显示为中文，模型偶尔输出英文时保留折叠原文供核对。',
-    '网页版补全 Chrome 兼容标识，并按 Retry-After 倒计时、限次重试，避免 429 时连续刷新。',
-    '网页版恢复会保留 Cookie 与站点存储；403 验证页和连接失败都可在客户端内继续处理。',
+    '工作台现在能显示并回答 ask_user_question，支持选项、自定义回答和取消，不再让对话无期限等待。',
+    '修复 Mac 点击关闭按钮时的原生崩溃，并在启动时清理已失去主进程的本应用残留服务，恢复旧会话续聊。',
+    '新增分享客户端按钮，可复制发布页链接。',
     'Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。',
   ],
   platforms: {
