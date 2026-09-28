@@ -21,9 +21,9 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '工作台现在能显示并回答 ask_user_question，支持选项、自定义回答和取消，不再让对话无期限等待。',
-    '修复 Mac 点击关闭按钮时的原生崩溃，并在启动时清理已失去主进程的本应用残留服务，恢复旧会话续聊。',
-    '新增分享客户端按钮，可复制发布页链接。',
+    '修复 Windows 关闭客户端时账号子窗口聚焦已销毁的主窗口，引发主进程 JavaScript 错误弹窗。',
+    '关闭阶段停止账号刷新，并保护窗口聚焦与后台状态推送，避免访问正在销毁的 WebContents。',
+    'Windows、Apple 芯片与 Intel Mac 同版本构建；Mac 功能保持不变。',
     'Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。',
   ],
   platforms: {

@@ -16,6 +16,11 @@ async function startModelServer() {
   const webResponses = [];
   const webRequests = [];
   const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url === '/platform-fixture') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('<!doctype html><meta charset="utf-8"><title>Account Window Fixture</title><h1>账号窗口测试</h1>');
+      return;
+    }
     if (req.method === 'GET' && req.url === '/web-fixture') {
       const response = webResponses.shift() ?? { status: 200 };
       webRequests.push({ time: Date.now(), status: response.status, userAgent: req.headers['user-agent'] });

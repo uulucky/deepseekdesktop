@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.3.4**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.3.5**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.4-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.4-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.5-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 ![DeepSeek Desktop 软件界面](desktop.png)
 
@@ -69,12 +69,11 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险，不通过反复弹窗打断操作。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.3.4 更新
+## 0.3.5 更新
 
-- 修复 `ask_user_question` 一直显示“运行中”：工作台现在展示可交互问题，回答或取消后会立即回传给 Harness；切换会话、界面重绘和连接重建时保留待回答状态。
-- 修复 Mac 正常关闭窗口时偶发的原生崩溃：红色关闭按钮隐藏窗口，Dock 可恢复；Cmd+Q 才完全退出。
-- Mac 启动时仅清理经进程路径及父进程核实的本应用残留 Harness 服务，避免旧进程占用会话写入锁而导致“继续对话”报错；不会清理正常运行的客户端或其他 Harness。
-- 右上角新增“分享客户端”，可复制发布页链接。其余工作台、网页版和安全权限功能保持不变。
+- 修复 Windows 关闭主窗口时，账号子窗口及后台回调仍尝试聚焦或向已销毁的窗口发送消息，导致弹出 Electron 主进程 JavaScript 错误的问题。
+- 退出开始后停止对子窗口的账号刷新；窗口聚焦与消息发送增加生命周期检查，避免关闭过程中的竞争条件。
+- Windows、Mac Apple 芯片和 Mac Intel 使用同一套签名更新清单，本次三端同版本构建；Mac 使用方式与功能保持不变。
 
 网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码、网络出口或官方访问策略。真实账号环境仍可能因官方规则收到 403/429，遇到持续拒绝时请等待倒计时结束，不要反复重启刷新。
 

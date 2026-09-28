@@ -203,7 +203,7 @@ async function main() {
   env.DEEPSEEK_BASE_URL = provider.baseUrl;
   env.DEEPSEEK_DESKTOP_TEST_MODE = '1';
   env.DEEPSEEK_DESKTOP_WEB_CHAT_URL = `${provider.baseUrl}/web-fixture`;
-  env.DEEPSEEK_DESKTOP_PLATFORM_URL = `${provider.baseUrl}/web-fixture`;
+  env.DEEPSEEK_DESKTOP_PLATFORM_URL = `${provider.baseUrl}/platform-fixture`;
   env.DEEPSEEK_API_KEY = 'sk-local-ui-fixture-not-a-real-key';
   fs.mkdirSync(results, { recursive: true });
   fs.mkdirSync(dataRoot, { recursive: true });
@@ -347,7 +347,7 @@ async function main() {
   await macCloseButtonLifecycle(page);
   if (!mac) {
     await page.evaluate(() => api.platform.login());
-    await eventually(() => application.windows().some(window => window.url().includes('/web-fixture')),
+    await eventually(() => application.windows().some(window => window.url().includes('/platform-fixture')),
       'Account child window did not open before Windows main close');
   }
   await closeApplication();
