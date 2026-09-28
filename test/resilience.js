@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { TranscriptDispatcher } = require('../src/main/modules/transcript-dispatcher');
 const { attachWindowRecovery } = require('../src/main/modules/window-recovery');
+const { withLiveWindow, focusLiveWindow } = require('../src/main/modules/window-lifecycle');
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -79,6 +80,50 @@ async function recoveryContract() {
   assert.equal(failures.at(-1).status, 'failed');
 }
 
+function windowCloseContract() {
+  const calls = [];
+  let contentsDestroyed = false;
+  const contents = {
+    isDestroyed: () => contentsDestroyed,
+    focus: () => calls.push('contents.focus'),
+    send: (channel) => calls.push(`send:${channel}`),
+  };
+  const win = {
+    webContents: contents,
+    isDestroyed: () => false,
+    isMinimized: () => true,
+    restore: () => calls.push('restore'),
+    show: () => calls.push('show'),
+    focus: () => calls.push('focus'),
+  };
+  const options = { isStopping: () => false };
+  assert.equal(focusLiveWindow(() => win, options), true);
+  assert.deepEqual(calls, ['restore', 'show', 'focus', 'contents.focus']);
+  assert.equal(withLiveWindow(() => win, (_window, live) => live.send('ready'), options), true);
+  assert.equal(calls.at(-1), 'send:ready');
+
+  win.closingForExit = true;
+  assert.equal(focusLiveWindow(() => win, options), false, 'a main close blocks child-window focus');
+  assert.equal(withLiveWindow(() => win, (_window, live) => live.send('late'), options), false);
+  assert(!calls.includes('send:late'));
+  win.closingForExit = false;
+  contentsDestroyed = true;
+  assert.equal(focusLiveWindow(() => win, options), false, 'a dead WebContents blocks focus');
+  contentsDestroyed = false;
+
+  const errors = [];
+  const tearingDown = { isDestroyed: () => false,
+    get webContents() { throw new TypeError('Object has been destroyed'); } };
+  assert.equal(focusLiveWindow(() => tearingDown, { onError: error => errors.push(error.message) }), false);
+  assert.deepEqual(errors, ['Object has been destroyed']);
+  contents.focus = () => { throw new TypeError('Object has been destroyed'); };
+  assert.equal(focusLiveWindow(() => win, { onError: error => errors.push(error.message) }), false,
+    'a native close after show/focus does not escape into Electron main');
+  assert.equal(errors.length, 2);
+  assert.equal(focusLiveWindow(() => win, { isStopping: () => true }), false,
+    'application quit blocks focus even when the window object is still present');
+}
+
 function chatRenderBudgetContract() {
   const inner = { innerHTML: '' };
   const stream = { scrollHeight: 1000, scrollTop: 0, clientHeight: 800 };
@@ -104,6 +149,7 @@ function chatRenderBudgetContract() {
 async function main() {
   await dispatcherContract();
   await recoveryContract();
+  windowCloseContract();
   chatRenderBudgetContract();
   console.log('PASS renderer resilience: IPC coalescing, bounded transcript DOM and automatic crash/hang recovery');
 }

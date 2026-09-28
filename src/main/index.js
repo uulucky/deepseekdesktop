@@ -25,6 +25,7 @@ const { PortableUpdater, UPDATE_INTERVAL_MS } = require('./modules/updater');
 const { Store } = require('./modules/store');
 const { TranscriptDispatcher } = require('./modules/transcript-dispatcher');
 const { attachWindowRecovery } = require('./modules/window-recovery');
+const { withLiveWindow, focusLiveWindow } = require('./modules/window-lifecycle');
 const { WebChatSurface } = require('./modules/web-chat');
 const { registerIpc } = require('./ipc');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
@@ -66,12 +67,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    const win = ctx.windows.main;
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    }
+    focusMainWindow();
   });
   main();
 }
@@ -92,15 +88,11 @@ function main() {
   });
 
   app.on('activate', () => {
-    const win = ctx.windows.main;
-    if (win && !win.isDestroyed()) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
+    if (focusMainWindow()) {
       ctx.webSurface?.resize();
       return;
     }
-    if (ctx.baseUrl) createMainWindow();
+    if (ctx.baseUrl && !ctx.quitting) createMainWindow();
   });
 
   app.on('before-quit', async () => {
@@ -160,17 +152,14 @@ function main() {
       executable: app.getPath('exe'),
       quit: () => app.quit(),
       openExternal: (url) => shell.openExternal(url),
-      onState: (state) => {
-        const win = ctx.windows.main;
-        if (win && !win.isDestroyed()) win.webContents.send('update:state', state);
-      },
+      onState: (state) => sendMainWindow('update:state', state),
     });
     startUpdateRefreshTimer();
     // Create the bootstrap before registering IPC. Older builds passed null here and the IPC
     // module destructured it, permanently breaking retry, session and chat actions.
     ctx.bootstrap = new Bootstrap({
       port: Number(process.env.DEEPSEEK_DESKTOP_PORT || 3080),
-      onStopped: (detail) => ctx.windows.main?.webContents.send('server:stopped', { at: Date.now(), ...detail }),
+      onStopped: (detail) => sendMainWindow('server:stopped', { at: Date.now(), ...detail }),
       emit: (state) => {
         ctx.logFile = logFilePath();
         ctx.windows.splash?.webContents.send('boot:state', state);
@@ -201,11 +190,11 @@ function main() {
 
     // Ad feed: fetched lazily, refreshed every 30 minutes, and pushed to the shell on change.
     ctx.ad.refresh()
-      .then((changed) => { if (changed) ctx.windows.main?.webContents.send('ad:state', ctx.ad.get()); })
+      .then((changed) => { if (changed) sendMainWindow('ad:state', ctx.ad.get()); })
       .catch(() => {});
     ctx.adTimer = setInterval(() => {
       ctx.ad.refresh()
-        .then((changed) => { if (changed) ctx.windows.main?.webContents.send('ad:state', ctx.ad.get()); })
+        .then((changed) => { if (changed) sendMainWindow('ad:state', ctx.ad.get()); })
         .catch(() => {});
     }, 30 * 60 * 1000);
 
@@ -224,10 +213,7 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
   ctx.client.connect();
   ctx.transcriptDispatcher?.dispose();
   ctx.transcriptDispatcher = new TranscriptDispatcher((payload) => {
-    const win = ctx.windows.main;
-    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
-      win.webContents.send('chat:transcript', payload);
-    }
+    sendMainWindow('chat:transcript', payload);
   });
   ctx.chat = new ChatController(ctx.client, {
     onUpdate: (payload) => ctx.transcriptDispatcher.push(payload),
@@ -243,7 +229,7 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
   // the user is signed in; the window itself stays hidden.
   await refreshPlatformSnapshot().catch((error) => log('app', 'platform probe failed', String(error)));
   startPlatformRefreshTimer();
-  ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+  sendMainWindow('platform:state', worldSnapshot());
 }
 
 /** Cache whether a DeepSeek API key is configured in the harness (shown on the account page). */
@@ -252,7 +238,7 @@ async function refreshCredentialState() {
   const refs = ['DEEPSEEK_API_KEY'];
   const described = await ctx.client.credentialsDescribe(refs);
   ctx.credentialState = { refs: described, at: Date.now() };
-  ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+  sendMainWindow('platform:state', worldSnapshot());
   return ctx.credentialState;
 }
 
@@ -261,7 +247,7 @@ async function refreshPlatformToken() {
   await ensurePlatformWindow({ show: false });
   const token = await ctx.platform.refreshToken();
   if (token) {
-    ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+    sendMainWindow('platform:state', worldSnapshot());
   }
 }
 
@@ -273,7 +259,7 @@ async function refreshPlatformSnapshot() {
     if (!ctx.platform.hasToken()) await ctx.platform.refreshToken();
     if (!ctx.platform.hasToken()) {
       const result = { needsLogin: true, summary: null, usage: null };
-      ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+      sendMainWindow('platform:state', worldSnapshot());
       return result;
     }
 
@@ -285,7 +271,7 @@ async function refreshPlatformSnapshot() {
       if (summaryResult.reason?.code === 'unauthorized') {
         ctx.platformStore.delete('lastBalance');
         ctx.platformStore.delete('lastUsage');
-        ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+        sendMainWindow('platform:state', worldSnapshot());
         return { needsLogin: true, summary: null, usage: null };
       }
       throw summaryResult.reason;
@@ -303,7 +289,7 @@ async function refreshPlatformSnapshot() {
     ctx.platformStore.set('lastBalance', summary);
     if (usageResult.status === 'fulfilled') ctx.platformStore.set('lastUsage', usageResult.value);
     else if (!usage) ctx.platformStore.delete('lastUsage');
-    ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+    sendMainWindow('platform:state', worldSnapshot());
     return { needsLogin: false, summary, usage, usageFresh: usageResult.status === 'fulfilled' };
   })().finally(() => { ctx.platformRefreshPromise = null; });
   return ctx.platformRefreshPromise;
@@ -324,7 +310,7 @@ async function refreshPlatformAccountSnapshot() {
   if (credentialResult?.status === 'fulfilled') {
     ctx.credentialState = { refs: credentialResult.value, at: Date.now() };
   }
-  ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+  sendMainWindow('platform:state', worldSnapshot());
   return { ...snapshot, keys: keysResult.status === 'fulfilled' ? keysResult.value : null };
 }
 
@@ -460,9 +446,7 @@ function createMainWindow() {
     store: ctx.uiStore,
     log: (message, detail) => log('web-chat', message, detail),
     onState: (surface) => {
-      if (ctx.webSurface === webSurface && !win.isDestroyed() && !win.webContents.isDestroyed()) {
-        win.webContents.send('surface:state', surface);
-      }
+      if (ctx.webSurface === webSurface) sendMainWindow('surface:state', surface);
     },
     testMode: process.env.DEEPSEEK_DESKTOP_TEST_MODE === '1',
     url: process.env.DEEPSEEK_DESKTOP_TEST_MODE === '1'
@@ -498,6 +482,10 @@ function createMainWindow() {
       win.hide();
       return;
     }
+    // Child account windows may emit `closed` before this main window's own `closed` event.
+    // Mark teardown now, before any child callback tries to focus or send to WebContents.
+    win.closingForExit = true;
+    if (process.platform !== 'darwin' && !win.replacedForRecovery) ctx.quitting = true;
     // Dispose child WebContentsView state before the native window is destroyed. The `closed`
     // event is too late on macOS and was the source of the normal-close SIGSEGV.
     disposeWebSurface();
@@ -537,13 +525,17 @@ function replaceMainWindow(failedWindow) {
 
 /** Return keyboard focus to the app shell after an account/recharge window closes. */
 function focusMainWindow() {
-  const win = ctx.windows.main;
-  if (!win || win.isDestroyed()) return false;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-  win.webContents.focus();
-  return true;
+  return focusLiveWindow(() => ctx.windows.main, {
+    isStopping: () => ctx.quitting,
+    onError: (error) => log('app', 'main window focus skipped during close', String(error)),
+  });
+}
+
+function sendMainWindow(channel, payload) {
+  return withLiveWindow(() => ctx.windows.main, (_win, contents) => contents.send(channel, payload), {
+    isStopping: () => ctx.quitting,
+    onError: (error) => log('app', `main window ${channel} skipped during close`, String(error)),
+  });
 }
 
 /**
@@ -575,7 +567,7 @@ function createWorkerWindow(baseUrl) {
     try {
       const payload = JSON.parse(message.slice('__DSH_MIRROR__:'.length));
       ctx.domMirror = payload;
-      ctx.windows.main?.webContents.send('dsh:dom-mirror', payload);
+      sendMainWindow('dsh:dom-mirror', payload);
     } catch { /* malformed mirror frame */ }
   });
   win.webContents.on('did-finish-load', () => log('app', 'hidden harness view loaded'));
@@ -610,7 +602,7 @@ async function ensurePlatformWindow({ show = true, url } = {}) {
   win.removeMenu?.();
   win.on('closed', () => {
     if (ctx.windows.platform === win) ctx.windows.platform = null;
-    if (ctx.quitting) return;
+    if (ctx.quitting || ctx.windows.main?.closingForExit) return;
     focusMainWindow();
     // The bearer token is captured from the successful login request before this event.
     // Recreate only a hidden platform view, fetch the complete account snapshot, and update
@@ -624,11 +616,14 @@ async function ensurePlatformWindow({ show = true, url } = {}) {
     if (ctx.platform.hasToken()) {
       refreshPlatformAccountSnapshot().catch((error) => log('platform', 'post-login refresh failed', String(error)));
     } else {
-      ctx.windows.main?.webContents.send('platform:state', worldSnapshot());
+      sendMainWindow('platform:state', worldSnapshot());
     }
   });
   ctx.windows.platform = win;
-  await win.loadURL(url ?? ctx.platform.usageUrl()).catch((error) => log('app', 'platform load failed', String(error)));
+  const fixtureUrl = process.env.DEEPSEEK_DESKTOP_TEST_MODE === '1'
+    ? process.env.DEEPSEEK_DESKTOP_PLATFORM_URL : null;
+  await win.loadURL(url ?? fixtureUrl ?? ctx.platform.usageUrl())
+    .catch((error) => log('app', 'platform load failed', String(error)));
   if (show) win.show();
   return win;
 }
