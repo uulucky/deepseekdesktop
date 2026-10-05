@@ -338,6 +338,48 @@ async function permissionContract() {
   try { await client.selectPermission('session-permission', 'unconfined'); } catch (error) { invalid = error; }
   check('permission selection rejects unknown modes before RPC', invalid?.code === 'arguments-invalid', invalid?.message);
   client.dispose();
+
+  const coldClient = new DeepSeekHarnessClient('http://127.0.0.1:1');
+  const coldCalls = [];
+  let activated = false;
+  coldClient.call = async (method, args) => {
+    coldCalls.push({ method, args });
+    if (method === 'commands/list') {
+      activated = true;
+      return [{ name: 'permission' }];
+    }
+    if (method === 'session/list') return { items: [{
+      sessionId: 'session-cold',
+      projections: { asOfSeq: 1, values: activated ? {
+        permissions: { currentValue: 'read-only', options: [{ value: 'read-only' }] },
+      } : {} },
+    }] };
+    throw new Error(`unexpected cold-session method ${method}`);
+  };
+  const coldPermissions = await coldClient.permissions('session-cold');
+  check('cold permissions resume through read-only command discovery', coldPermissions.currentValue === 'read-only'
+    && JSON.stringify(coldCalls.map(call => call.method)) === JSON.stringify(['session/list', 'commands/list', 'session/list'])
+    && coldCalls[1].args.agentId === 'session-cold');
+  check('cold permission discovery never changes permission or sends a prompt', !coldCalls.some(call => (
+    call.method === 'commands/execute' || call.method === 'session/prompt'
+  )));
+  coldClient.sessionPermissions.clear();
+  coldClient.call = async (method) => {
+    if (method === 'session/list') return { items: [{ sessionId: 'session-cold' }] };
+    if (method === 'commands/list') return [];
+    throw new Error(`unexpected unavailable method ${method}`);
+  };
+  let unavailable;
+  try { await coldClient.permissions('session-cold'); } catch (error) { unavailable = error; }
+  check('missing permission projection after activation still fails closed', unavailable?.code === 'unavailable');
+  coldClient.call = async (method) => {
+    if (method === 'session/list') return { items: [{ sessionId: 'session-cold' }] };
+    throw Object.assign(new Error('activation forbidden'), { code: 'forbidden' });
+  };
+  let denied;
+  try { await coldClient.permissions('session-cold'); } catch (error) { denied = error; }
+  check('cold permission discovery preserves activation denial', denied?.code === 'forbidden');
+  coldClient.dispose();
 }
 
 async function conversationManagementContract() {

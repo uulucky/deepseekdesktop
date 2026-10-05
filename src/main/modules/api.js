@@ -731,6 +731,14 @@ class DeepSeekHarnessClient {
       throw new RpcError('session/permissions', { code: 'arguments-invalid', message: '缺少有效的 sessionId' });
     }
     await this.listSessions();
+    if (!this.sessionPermissions.has(sessionId) && this.sessionSummaries.has(sessionId)) {
+      // session/list deliberately leaves persisted sessions cold. Their permission
+      // projection may not exist until the Agent is resumed. Discovery resolves that
+      // exact Agent without executing a command, submitting a prompt or changing its
+      // permission preset; then read the authoritative projection again.
+      await this.call('commands/list', { agentId: sessionId });
+      await this.listSessions();
+    }
     const value = this.sessionPermissions.get(sessionId);
     if (!value) {
       throw new RpcError('session/permissions', { code: 'unavailable', message: '当前内核没有提供权限模式' });

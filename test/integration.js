@@ -35,7 +35,7 @@ async function main() {
   const port = await freePort();
   const provider = await startModelServer();
   process.env.DEEPSEEK_BASE_URL = provider.baseUrl;
-  const boot = new Bootstrap({ port, emit: () => {} });
+  let boot = new Bootstrap({ port, emit: () => {} });
   let client, chat;
   try {
     boot.dshBin = entry;
@@ -139,6 +139,34 @@ async function main() {
     await client.archiveSession(b);
     assert((await client.listWorkspaces()).archivedSessionIds.includes(b), 'Archive state is durable and non-destructive');
     assert((await client.listSessions()).some(item => item.sessionId === b), 'Archived conversation remains in persistence');
+    // A renamed session with no prompt is still cold after a process restart. The
+    // list endpoint must not be assumed to activate its Agent/permission projection.
+    const coldSession = await client.createSession(options);
+    await client.selectPermission(coldSession.sessionId, 'read-only');
+    await client.renameSession(coldSession.sessionId, 'Cold permission restart fixture');
+    const child = boot.child;
+    chat.dispose();
+    client.dispose();
+    await boot.stop();
+    await eventually(() => child.exitCode !== null || child.signalCode !== null, 'Private Harness exits before restart');
+    const restartedPort = await freePort();
+    boot = new Bootstrap({ port: restartedPort, emit: () => {} });
+    boot.dshBin = entry;
+    await boot.spawnServer(restartedPort);
+    await boot.awaitReady(restartedPort);
+    client = new DeepSeekHarnessClient(`http://127.0.0.1:${restartedPort}`, { cookie: boot.authCookie });
+    const cold = (await client.listSessions()).find(item => item.sessionId === coldSession.sessionId);
+    assert(cold, 'Renamed no-prompt session survives restart');
+    const permission = await client.permissions(coldSession.sessionId);
+    assert(permission.options.some(item => item.value === 'read-only'), 'Cold session exposes actual kernel permission choices');
+    assert.equal((await client.selectPermission(coldSession.sessionId, 'read-only')).currentValue, 'read-only');
+    await client.selectModel(coldSession.sessionId, group.id, model, 'off');
+    await client.prompt(coldSession.sessionId, 'cold-restart-fixture');
+    const resumedResponse = await provider.waitFor('cold-restart-fixture');
+    resumedResponse.finish('Cold restart works');
+    await eventually(async () => !(await client.listSessions()).find(item => item.sessionId === coldSession.sessionId)?.running,
+      'Restarted cold session finishes a real fixture turn');
+    console.log('PASS real Harness cold-session restart, permission discovery and confirmed read-only restoration');
     console.log('PASS isolated real Harness: authentication, permissions, credentials, models, context meter, image/file attachments, concurrent tasks, search, rename, workspace, conversation copy and archive; no paid prompts');
   } finally {
     chat?.dispose();
