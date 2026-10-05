@@ -15,6 +15,7 @@ const { pipeline } = require('node:stream/promises');
 
 const { DIRS, log } = require('./util');
 const { verifySignedManifest } = require('./update-trust');
+const { isStoreBuild, STORE_UPDATES_URL } = require('./distribution');
 
 const DEFAULT_MANIFEST_URL = 'https://img.uulucky.com/han/deepseek/latest.json';
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
@@ -27,6 +28,7 @@ class PortableUpdater {
     this.platform = options.platform || process.platform;
     this.arch = options.arch || process.arch;
     this.portable = options.portable ?? false;
+    this.storeManaged = options.storeManaged ?? isStoreBuild();
     this.appRoot = options.appRoot || null;
     this.executable = options.executable || process.execPath;
     this.dataRoot = options.dataRoot || DIRS.root;
@@ -42,7 +44,7 @@ class PortableUpdater {
     this.checkPromise = null;
     this.installPromise = null;
     this.state = {
-      status: 'idle',
+      status: this.storeManaged ? 'store' : 'idle',
       currentVersion: this.currentVersion,
       availableVersion: null,
       progress: 0,
@@ -50,6 +52,7 @@ class PortableUpdater {
       error: null,
       portable: this.portable,
       manual: this.platform === 'darwin',
+      storeManaged: this.storeManaged,
     };
   }
 
@@ -70,6 +73,7 @@ class PortableUpdater {
   }
 
   async checkNow(manual) {
+    if (this.storeManaged) return this.publish({ status: 'store', checkedAt: Date.now(), error: null });
     const previousAvailable = this.state.status === 'available' ? this.get() : null;
     this.publish({ status: 'checking', error: null });
     try {
@@ -118,6 +122,11 @@ class PortableUpdater {
   }
 
   async installNow() {
+    if (this.storeManaged) {
+      if (typeof this.openExternal !== 'function') throw new Error('无法打开 Microsoft Store');
+      await this.openExternal(STORE_UPDATES_URL);
+      return this.get();
+    }
     if (this.platform === 'darwin') {
       if (!this.manifest || compareVersions(this.manifest.version, this.currentVersion) <= 0) await this.check({ manual: true });
       if (!this.manifest || compareVersions(this.manifest.version, this.currentVersion) <= 0) throw new Error(this.state.error || '当前已是最新版本');

@@ -10,6 +10,8 @@
 
 GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.5-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
+Microsoft Store 渠道正在准备提交，**尚不代表已通过审核或可下载**。商店版采用 MSIX，安装和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
+
 ![DeepSeek Desktop 软件界面](desktop.png)
 
 ## 主要功能

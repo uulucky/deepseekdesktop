@@ -1,0 +1,13 @@
+{
+  "identityName": "11C53232.deepseek",
+  "publisher": "CN=02FF0276-06F3-47E2-83C7-E3AC22BB2D09",
+  "publisherDisplayName": "北京艾特阿尔法科技有限责任公司",
+  "displayName": "deepseek客户端",
+  "familyName": "11C53232.deepseek_r49aafgg8wnqa",
+  "productId": "9NMC44LMCNH1",
+  "packageVersion": "0.3.5.0",
+  "baseVersion": "0.3.5",
+  "baseSourceCommit": "af7dea1faecec2c39a2a7a03b2d6ba2cafe755f3",
+  "basePortableUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-portable.zip",
+  "basePortableSha256": "d120a1c443353a470cdad0175eba52685342096b4f1404b0bc8136cbfa383d3e"
+}

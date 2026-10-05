@@ -200,17 +200,18 @@ const Settings = {
       available: `发现新版本 ${update.availableVersion || ''}`,
       downloading: `正在下载 ${Number(update.progress) || 0}%`, installing: '正在安装并准备重启…',
       error: `检查失败：${update.error || '未知错误'}`,
+      store: '由 Microsoft Store 管理更新',
     })[update.status] || '等待自动检查';
     body.innerHTML = `
       <div class="card">
         <div class="card-head">
-          <div><div class="card-title">软件更新</div><div class="card-sub">${esc(updateLabel)} · 每小时自动检查一次</div></div>
+          <div><div class="card-title">软件更新</div><div class="card-sub">${esc(updateLabel)}${update.storeManaged ? '' : ' · 每小时自动检查一次'}</div></div>
           ${update.status === 'available' ? `<button class="btn primary" data-action="install-update">${update.manual ? '下载' : '更新到'} ${esc(update.availableVersion || '')}</button>` : ''}
         </div>
         ${update.error && update.status === 'available' ? `<div class="banner warn">上次检查：${esc(update.error)}，仍可安装已发现的版本。</div>` : ''}
         <div class="row">
-          <button class="btn small" data-action="check-update" ${['checking', 'downloading', 'installing'].includes(update.status) ? 'disabled' : ''}>立即检查</button>
-          <span class="hint">${update.manual ? 'Mac 版需下载后退出软件，将新应用拖入“应用程序”替换。数据保存在用户的 Application Support 目录，不随应用替换删除；系统可能再次要求确认打开或钥匙串访问。' : '更新只替换程序文件，登录信息、本地对话与设置所在的 data 目录会完整保留。'}</span>
+          <button class="btn small" data-action="${update.storeManaged ? 'store-updates' : 'check-update'}" ${['checking', 'downloading', 'installing'].includes(update.status) ? 'disabled' : ''}>${update.storeManaged ? '打开 Microsoft Store' : '立即检查'}</button>
+          <span class="hint">${update.storeManaged ? '通过 Microsoft Store 下载更新，登录信息、对话和设置保存在当前用户的应用数据目录。' : update.manual ? 'Mac 版需下载后退出软件，将新应用拖入“应用程序”替换。数据保存在用户的 Application Support 目录，不随应用替换删除；系统可能再次要求确认打开或钥匙串访问。' : '更新只替换程序文件，登录信息、本地对话与设置所在的 data 目录会完整保留。'}</span>
         </div>
       </div>
       <div class="card">
@@ -218,14 +219,14 @@ const Settings = {
         <div class="kv">
           <div class="k">本地服务地址</div><div class="mono">${esc(state.baseUrl || '未启动')}</div>
           <div class="k">服务来源</div><div><button class="about-link" data-action="service-source">${PROJECT_URL}</button></div>
-          <div class="k">运行方式</div><div>${world.portable ? '便携版（绿色，数据在软件目录内）' : '安装版（数据在用户目录）'}</div>
+          <div class="k">运行方式</div><div>${update.storeManaged ? 'Microsoft Store 版' : world.portable ? '便携版（绿色，数据在软件目录内）' : '安装版（数据在用户目录）'}</div>
           <div class="k">数据目录</div><div class="mono">${esc(world.dataDir || '')}</div>
           <div class="k">日志文件</div><div class="mono">${esc(world.logFile || '')}</div>
           <div class="k">系统</div><div>${esc(world.platformName || '')} / ${esc(world.arch || '')}</div>
           <div class="k">模型表来源</div><div class="mono">api-docs.deepseek.com/zh-cn/quick_start/pricing</div>
           <div class="k">问题反馈</div><div><button class="feedback-email" data-action="feedback-email">489583561@qq.com</button></div>
           <div class="k">隐私与连接</div><div><button class="about-link" data-action="privacy">隐私、广告与网络说明</button></div>
-          <div class="k">验证状态</div><div>更新清单：Ed25519 签名校验；Windows 程序：暂未代码签名</div>
+          <div class="k">验证状态</div><div>${update.storeManaged ? 'MSIX 安装包：由 Windows 验证包签名；商店发布及更新由 Microsoft Store 管理' : '更新清单：Ed25519 签名校验；Windows 程序：暂未代码签名'}</div>
           <div class="k">许可</div><div>源码可查看，个人非商业免费；企业与工作用途需授权</div>
           <div class="k">广告说明</div><div>包含远程配置广告，约每 30 分钟获取配置，点击后打开外部网站。</div>
         </div>
@@ -302,6 +303,10 @@ const Settings = {
       }
       case 'install-update': {
         await App.installUpdate();
+        return true;
+      }
+      case 'store-updates': {
+        await guard(api.update.install(), '打开 Microsoft Store 失败');
         return true;
       }
       case 'clear-key': {

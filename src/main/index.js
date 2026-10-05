@@ -26,6 +26,7 @@ const { Store } = require('./modules/store');
 const { TranscriptDispatcher } = require('./modules/transcript-dispatcher');
 const { attachWindowRecovery } = require('./modules/window-recovery');
 const { withLiveWindow, focusLiveWindow } = require('./modules/window-lifecycle');
+const { isStoreBuild, STORE_APP_ID } = require('./modules/distribution');
 const { WebChatSurface } = require('./modules/web-chat');
 const { registerIpc } = require('./ipc');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
@@ -73,7 +74,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function main() {
-  app.setAppUserModelId('com.deepseek.desktop');
+  app.setAppUserModelId(isStoreBuild() ? STORE_APP_ID : 'com.deepseek.desktop');
   ensureDirs();
   log('app', `starting ${app.getVersion()} on ${process.platform} (${process.arch})`, {
     dev: isDev(),
@@ -324,6 +325,7 @@ function startPlatformRefreshTimer() {
 /** Check once shortly after launch, then once per hour. A failed check never interrupts boot. */
 function startUpdateRefreshTimer() {
   if (!ctx.updater) return;
+  if (ctx.updater.storeManaged) return;
   if (ctx.updateTimer) clearInterval(ctx.updateTimer);
   if (ctx.updateKickTimer) clearTimeout(ctx.updateKickTimer);
   const check = () => ctx.updater.check().catch((error) => log('update', 'scheduled check failed', String(error)));
@@ -689,6 +691,7 @@ function worldSnapshot() {
     logFile: ctx.logFile,
     portable: isPortable(),
     portableRoot: PORTABLE_ROOT,
+    distribution: isStoreBuild() ? 'microsoft-store' : 'direct',
     execDir: execDir(),
     journal: journalSummary(),
   };

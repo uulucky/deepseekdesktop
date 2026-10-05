@@ -8,6 +8,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { isStoreBuild, storeDataDir } = require('./distribution');
 
 const IS_WINDOWS = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
@@ -48,6 +49,7 @@ function execDir() {
  * app falls back to the per-user app-data directory.
  */
 function portableDataDir() {
+  if (isStoreBuild()) return null;
   // Never store Mac data inside a signed/translocated .app or mounted read-only DMG.
   if (IS_MAC) return null;
   if (process.env.DEEPSEEK_DESKTOP_PORTABLE === '0') return null;
@@ -78,6 +80,8 @@ function isPortable() {
 function dataRoot() {
   const override = process.env.DEEPSEEK_DESKTOP_HOME;
   if (override) return path.resolve(override);
+  const store = storeDataDir();
+  if (store) return store;
   const portable = portableDataDir();
   if (portable) return portable;
   try {
@@ -96,7 +100,7 @@ function dataRoot() {
  */
 function adoptPortablePaths() {
   const portable = process.env.DEEPSEEK_DESKTOP_HOME
-    ? path.resolve(process.env.DEEPSEEK_DESKTOP_HOME) : portableDataDir();
+    ? path.resolve(process.env.DEEPSEEK_DESKTOP_HOME) : (storeDataDir() || portableDataDir());
   if (!portable) return null;
   try {
     const { app } = require('electron');

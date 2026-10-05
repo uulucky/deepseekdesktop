@@ -11,8 +11,9 @@
 | 模型价格目录 | `api-docs.deepseek.com/zh-cn/quick_start/pricing` | 启动时按日缓存、手动同步 | 普通 HTTPS 请求，不附加账户凭据 |
 | 广告配置 | `www.uulucky.com/dsad.json` | 启动及约每 30 分钟 | 普通 HTTPS 请求，不附加对话或账户凭据 |
 | 广告图片 | `img.uulucky.com` | 展示/轮播广告，受缓存影响 | 图片路径；客户端设置无 Referrer |
-| 更新清单 | `img.uulucky.com/han/deepseek/latest.json` | 启动后、每小时、手动检查 | 普通 HTTPS 请求；本机比较版本 |
-| 更新程序、ZIP、Mac DMG | `img.uulucky.com/han/deepseek/` | 用户点击更新/下载 | Windows 先验清单签名再验文件哈希；Mac 验清单后交给浏览器下载，用户自行核对文件哈希 |
+| 直接下载版更新清单 | `img.uulucky.com/han/deepseek/latest.json` | 启动后、每小时、手动检查 | 普通 HTTPS 请求；本机比较版本；Microsoft Store 版不请求此清单 |
+| 直接下载版更新程序、ZIP、Mac DMG | `img.uulucky.com/han/deepseek/` | 用户点击更新/下载 | Windows 先验清单签名再验文件哈希；Mac 验清单后交给浏览器下载；Microsoft Store 版不使用此外部更新器 |
+| Microsoft Store 版安装和更新 | Microsoft Store / Windows 的微软服务 | 由系统商店处理；设置中的更新按钮打开商店 | 由微软处理商店账号、设备、安装与诊断数据；客户端不读取微软账号凭据 |
 | 项目、隐私说明、下载 | `github.com/uulucky/deepseekdesktop` 及 GitHub 下载域名 | 用户点击链接或手动下载 | 浏览器正常请求，由 GitHub 处理 |
 
 DeepSeek 网页登录、聊天和充值可能访问官方页面引用的验证码、CDN、支付、搜索、朗读或分享服务；这些由官方网页随时决定，不能仅凭此表当作完整防火墙策略。外部网页导航会交给系统浏览器，DeepSeek 官方域内导航留在隔离容器。客户端不篡改官方请求正文、验证码或 Cookie；去掉 Electron 和客户端 User-Agent 产品标识仅用于兼容页面加载。官方服务仍可按账号、IP、频率或策略拒绝访问。
