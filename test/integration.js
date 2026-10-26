@@ -139,6 +139,32 @@ async function main() {
     await client.archiveSession(b);
     assert((await client.listWorkspaces()).archivedSessionIds.includes(b), 'Archive state is durable and non-destructive');
     assert((await client.listSessions()).some(item => item.sessionId === b), 'Archived conversation remains in persistence');
+    // Safety guard: a scripted destructive bash call under Full Access must stop at the inline
+    // question card, and a refusal must reach the model as a blocked tool result.
+    const guarded = (await chat.createSession(options)).sessionId;
+    await client.selectModel(guarded, group.id, model, 'off');
+    assert.equal((await client.selectPermission(guarded, 'danger-full-access')).currentValue, 'danger-full-access');
+    let guardQuestion = null;
+    const stopGuardWatch = client.onHostFrame(frame => {
+      if (frame.type === 'question/request' && frame.sessionId === guarded) guardQuestion = frame.question;
+    });
+    const before = provider.requests.length;
+    await chat.send(guarded, 'safety-guard-fixture');
+    const guardTurn = await provider.waitFor('safety-guard-fixture');
+    guardTurn.toolCall('call_guard_fixture', 'bash', { command: 'git reset --hard', description: 'fixture destructive command' });
+    await eventually(() => guardQuestion, 'Safety guard asks before a destructive command');
+    assert.match(JSON.stringify(guardQuestion.questions), /高风险操作确认/);
+    assert.match(JSON.stringify(guardQuestion.questions), /git reset --hard/);
+    await chat.answerQuestion(guarded, guardQuestion.eventId, [{ id: 'desktop-safety-guard', selected: ['不允许'] }]);
+    const findBlocked = () => provider.requests.slice(before).find(request => request.body.messages?.some(message => (
+      message.role === 'tool' && JSON.stringify(message.content).includes('safety guard blocked'))));
+    await eventually(findBlocked, 'Refused command returns a blocked tool result to the model');
+    findBlocked().finish('已按你的要求跳过这条命令');
+    await eventually(async () => !(await client.listSessions()).find(item => item.sessionId === guarded)?.running,
+      'Guarded turn finishes after the refusal');
+    stopGuardWatch?.();
+    console.log('PASS real Harness safety guard: Full Access destructive command waits for the inline confirmation and a refusal blocks it');
+
     // A renamed session with no prompt is still cold after a process restart. The
     // list endpoint must not be assumed to activate its Agent/permission projection.
     const coldSession = await client.createSession(options);
@@ -167,6 +193,7 @@ async function main() {
     await eventually(async () => !(await client.listSessions()).find(item => item.sessionId === coldSession.sessionId)?.running,
       'Restarted cold session finishes a real fixture turn');
     console.log('PASS real Harness cold-session restart, permission discovery and confirmed read-only restoration');
+
     console.log('PASS isolated real Harness: authentication, permissions, credentials, models, context meter, image/file attachments, concurrent tasks, search, rename, workspace, conversation copy and archive; no paid prompts');
   } finally {
     chat?.dispose();

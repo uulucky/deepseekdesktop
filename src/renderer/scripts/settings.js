@@ -125,6 +125,14 @@ const Settings = {
       </div>
 
       <div class="card">
+        <div class="card-head"><div><div class="card-title">安全护栏</div><div class="card-sub">Full Access 下也会先问你的少数高风险操作</div></div></div>
+        <div class="field">
+          <label class="switch"><input type="checkbox" id="ui-safety-guard" ${ui.safetyGuard === false ? '' : 'checked'} /> 高风险命令执行前先确认（推荐）</label>
+          <div class="hint">递归删除系统或主目录、git reset --hard / clean / 强制推送、格式化磁盘、下载脚本直接执行、读取 SSH 密钥和云凭据等操作，会先在对话里弹出确认卡片。其他命令照常执行，权限设置不变；修改立即生效。</div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><div><div class="card-title">启动动画</div><div class="card-sub">打开客户端时、本地服务准备期间显示</div></div></div>
         <div class="field">
           <select class="input" id="ui-splash">
@@ -401,6 +409,11 @@ const Settings = {
     if (target.id === 'ui-theme') {
       state.ui = await api.settings.setUi({ theme: target.value });
       document.documentElement.dataset.theme = state.ui.theme === 'light' ? 'light' : 'dark';
+      return true;
+    }
+    if (target.id === 'ui-safety-guard') {
+      state.ui = await api.settings.setUi({ safetyGuard: target.checked });
+      toast(target.checked ? '安全护栏已开启' : '安全护栏已关闭，高风险命令将不再确认', target.checked ? 'ok' : '');
       return true;
     }
     if (target.id === 'ui-splash') {

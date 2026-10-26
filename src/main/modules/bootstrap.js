@@ -677,9 +677,16 @@ class Bootstrap {
       fs.mkdirSync(presentationDir, { recursive: true });
       const presentationPlugin = path.join(presentationDir, 'plugin.cjs');
       fs.copyFileSync(path.join(__dirname, 'desktop-presentation.cjs'), presentationPlugin);
+      // The safety guard rides in the same patch file so orphan detection stays unchanged. It
+      // re-reads its on/off file per call, so the settings toggle needs no kernel restart.
+      const safetyPlugin = path.join(presentationDir, 'safety-guard.cjs');
+      fs.copyFileSync(path.join(__dirname, 'desktop-safety-guard.cjs'), safetyPlugin);
       const presentationPatch = path.join(presentationDir, 'cordis.patch.json');
       fs.writeFileSync(presentationPatch, JSON.stringify([{ insert: [{
         id: 'desktop-action-summary', name: presentationPlugin,
+      }, {
+        id: 'desktop-safety-guard', name: safetyPlugin,
+        config: { settingsFile: path.join(DIRS.config, 'safety-guard.json') },
       }] }]), 'utf8');
       const args = useNodeEntry
         ? [entry, 'web', '--patch', presentationPatch, '--port', String(port), '--no-open']

@@ -1,5 +1,6 @@
 'use strict';
-// Loopback-only, controlled SSE provider. Never contacts DeepSeek or runs tools.
+// Loopback-only, controlled SSE provider. Never contacts DeepSeek; tool calls it scripts are
+// answered by the isolated kernel's own guards, never by a real model.
 const http = require('node:http');
 const assert = require('node:assert/strict');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -46,6 +47,14 @@ async function startModelServer() {
       reasoning(text) {
         res.write(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk',
           model: body.model, choices: [{ index: 0, delta: { role: 'assistant', reasoning_content: text }, finish_reason: null }] })}\n\n`);
+      },
+      toolCall(id, name, args) {
+        res.write(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: body.model,
+          choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id, type: 'function',
+            function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: null }] })}\n\n`);
+        res.end(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: body.model,
+          choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+          usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 } })}\n\ndata: [DONE]\n\n`);
       },
       finish(text) {
         if (text) this.delta(text);

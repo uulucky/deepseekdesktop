@@ -5,7 +5,8 @@
  * answers with a plain JSON value the renderer can render directly.
  */
 const { ipcMain, shell, dialog, app, clipboard } = require('electron');
-const { log, DIRS } = require('./modules/util');
+const path = require('node:path');
+const { log, DIRS, writeJsonSync } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
 const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
 const { splashStyle, importSplashArt, removeStoredArt, KINDS } = require('./modules/splash-art');
@@ -387,6 +388,11 @@ function registerIpc(services) {
     const safe = { ...(patch ?? {}) };
     if ('defaultPermission' in safe) safe.defaultPermission = reusablePermission(safe.defaultPermission);
     if ('splashStyle' in safe) safe.splashStyle = splashStyle(safe.splashStyle);
+    if ('safetyGuard' in safe) {
+      safe.safetyGuard = safe.safetyGuard !== false;
+      // The kernel-side guard re-reads this file on every risky call; no restart needed.
+      writeJsonSync(path.join(DIRS.config, 'safety-guard.json'), { enabled: safe.safetyGuard });
+    }
     // The stored artwork file is only ever chosen through the picker below.
     delete safe.splashArt;
     delete safe.splashArtName;
