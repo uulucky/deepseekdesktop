@@ -958,7 +958,16 @@ const App = {
     slider.dataset.efforts = JSON.stringify(ids);
     slider.disabled = Boolean(state.sessionLoading || this.sessionView().modelBusy || (state.activeSessionId && (state.streaming || state.stopping)));
     value.textContent = reasoningLabel(active);
-    slider.title = `推理等级：${reasoningLabel(active)}`;
+    this.describeReasoning(control, slider, active);
+  },
+
+  /** The top level is often several times slower; say so where it is chosen. */
+  describeReasoning(control, slider, effort) {
+    const max = effort === 'max';
+    control.classList.toggle('is-max', max);
+    slider.title = max
+      ? `推理等级：${reasoningLabel(effort)} · 回答更慢、消耗更多 tokens，日常任务建议用「高」`
+      : `推理等级：${reasoningLabel(effort)}`;
   },
 
   previewReasoning(slider) {
@@ -966,7 +975,8 @@ const App = {
     const effort = ids[Number(slider.value)];
     const value = document.getElementById('reasoning-value');
     if (value) value.textContent = reasoningLabel(effort);
-    slider.title = `推理等级：${reasoningLabel(effort)}`;
+    const control = document.getElementById('reasoning-control');
+    if (control) this.describeReasoning(control, slider, effort);
   },
 
   async setReasoning(slider) {
@@ -981,7 +991,9 @@ const App = {
       '设置推理等级',
     );
     if (selected) {
-      toast(`推理等级已设为${reasoningLabel(effort)}`, 'ok');
+      toast(effort === 'max'
+        ? `推理等级已设为${reasoningLabel(effort)}：更慢、更费 tokens，适合复杂任务`
+        : `推理等级已设为${reasoningLabel(effort)}`, 'ok');
     }
     this.renderStreamingState();
   },

@@ -506,6 +506,7 @@ html[data-theme="light"] .md-pre { background: #f6f8fc; }
 .reasoning-slider { width: 92px; height: 16px; margin: 0; accent-color: var(--brand); cursor: pointer; }
 .reasoning-slider:disabled { opacity: .5; cursor: default; }
 .reasoning-value { min-width: 22px; color: var(--text); text-align: center; font-weight: 600; }
+.reasoning-control.is-max .reasoning-value { color: var(--warn); }
 .permission-control {
   display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
   padding: 3px 8px; border: 1px solid var(--line-soft); border-radius: 999px;
