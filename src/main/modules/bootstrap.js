@@ -673,6 +673,9 @@ class Bootstrap {
       const useNodeEntry = Boolean(this.nodeBin) && Boolean(entry)
         && (IS_WINDOWS || /\.m?js$/i.test(this.dshBin ?? ''));
       const command = useNodeEntry ? this.nodeBin : this.dshBin;
+      try {
+        this.runningKernelVersion = entry ? JSON.parse(fs.readFileSync(path.resolve(entry, '../../package.json'), 'utf8')).version ?? null : null;
+      } catch { this.runningKernelVersion = null; }
       // A separate insert preserves user persona, tool policy and profile patches. The
       // normal Node runtime cannot read app.asar, so stage this app-owned plugin in data.
       const presentationDir = path.join(DIRS.runtime, 'desktop-presentation');

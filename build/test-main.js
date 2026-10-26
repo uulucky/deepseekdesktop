@@ -229,6 +229,7 @@ function registerStubIpc() {
   ipcMain.handle('extensions:skills', () => ok(extSkills));
   ipcMain.handle('extensions:skill-set', (_event, id, enabled) => { const skill = extSkills.skills.find((item) => item.id === id); if (skill) skill.enabled = enabled; return ok(extSkills); });
   ipcMain.handle('extensions:mcp', () => ok(extMcp));
+  ipcMain.handle('extensions:plugins', () => ok(require(path.join(__dirname, 'src/main/modules/plugin-catalog')).describeCatalog('0.1.5-rc.1')));
   for (const channel of ['extensions:mcp-save', 'extensions:mcp-remove', 'extensions:mcp-toggle', 'extensions:mcp-preset']) ipcMain.handle(channel, () => ok(extMcp));
   ipcMain.handle('settings:splash-art-pick', () => ok(Object.assign(world.ui, { splashStyle: 'custom', splashArt: 'custom-1.png', splashArtName: 'fixture.png' })));
   ipcMain.handle('settings:splash-art-clear', () => ok(Object.assign(world.ui, { splashStyle: 'whale', splashArt: undefined, splashArtName: undefined })));
@@ -496,6 +497,9 @@ app.whenReady().then(async () => {
   await win.webContents.executeJavaScript('document.querySelector("[data-tab=extensions]").click()');
   await new Promise((resolve) => setTimeout(resolve, 1000));
   fs.writeFileSync(shot('-extensions'), (await capture(win)).toPNG());
+  await win.webContents.executeJavaScript('document.getElementById("modal-body").scrollTop = 1e6');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  fs.writeFileSync(shot('-extensions-plugins'), (await capture(win)).toPNG());
 
   await win.webContents.executeJavaScript('document.querySelector("[data-tab=about]").click()');
   await new Promise((resolve) => setTimeout(resolve, 500));

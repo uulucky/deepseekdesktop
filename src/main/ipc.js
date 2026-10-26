@@ -13,6 +13,7 @@ const { splashStyle, importSplashArt, removeStoredArt, KINDS } = require('./modu
 const skillBridge = require('./modules/skill-bridge');
 const imageOcr = require('./modules/image-ocr');
 const mediaTools = require('./modules/media-tools');
+const pluginCatalog = require('./modules/plugin-catalog');
 const mcpServers = require('./modules/mcp-servers');
 
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -465,6 +466,10 @@ function registerIpc(services) {
     return skillBridge.setSkillEnabled(DIRS.root, id, enabled === true);
   });
   handle('extensions:mcp', () => mcpServers.describeServers(DIRS.config));
+  handle('extensions:plugins', () => {
+    const boot = getContext().bootstrap;
+    return pluginCatalog.describeCatalog(boot?.runningKernelVersion ?? boot?.kernelVersion?.() ?? null);
+  });
   handle('extensions:mcp-save', (server) => {
     mcpServers.saveServer(DIRS.config, server);
     return mcpServers.describeServers(DIRS.config);

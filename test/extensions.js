@@ -78,5 +78,24 @@ assert.deepEqual(mcp.mcpPatchEntries(config).map((row) => row.config.serverName)
 mcp.removeServer(config, 'ok');
 assert.deepEqual(mcp.mcpPatchEntries(config), []);
 
+// ── curated plugins ───────────────────────────────────────────────────────
+const plugins = require('../src/main/modules/plugin-catalog');
+const order = ['0.1.0-rc.6', '0.1.5-rc.1', '0.1.7-alpha.1', '0.1.7-rc.1', '0.1.7', '0.2.0-rc.2', '0.2.1-rc.3', '0.10.0'];
+for (let index = 1; index < order.length; index += 1) {
+  assert.ok(plugins.compareVersions(order[index - 1], order[index]) < 0, `${order[index - 1]} < ${order[index]}`);
+}
+assert.equal(plugins.compareVersions('0.1.5-rc.1', '0.1.5-rc.1'), 0);
+const current = plugins.describeCatalog('0.1.5-rc.1');
+assert.deepEqual(current.plugins.filter((plugin) => plugin.compatible).map((plugin) => plugin.name), ['@openviking/dsh-memory-plugin']);
+assert.equal(plugins.describeCatalog('0.2.1-rc.3').plugins.every((plugin) => plugin.compatible), true);
+assert.equal(plugins.describeCatalog(null).plugins.some((plugin) => plugin.compatible), false, 'unknown kernel is never compatible');
+for (const entry of plugins.CATALOG) {
+  assert.match(entry.version, /^\d+\.\d+\.\d+$/, `${entry.name} pins an exact version`);
+  assert.match(entry.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/, `${entry.name} pins an integrity hash`);
+  assert.match(entry.homepage, /^https:\/\//);
+  assert.equal(plugins.WEB_UI_ONLY.includes(entry.name), false);
+}
+assert.equal(JSON.stringify(current).includes('sha512-'), false, 'integrity stays in the main process');
+
 fs.rmSync(root, { recursive: true, force: true });
 console.log('PASS extensions: Claude/Codex skills link and unlink without touching sources; MCP servers validate, stay secret and become launch rows');

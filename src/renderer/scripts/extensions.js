@@ -117,6 +117,11 @@ const ExtensionsPanel = {
     const node = target.closest?.('[data-action]');
     const action = node?.getAttribute('data-action');
     switch (action) {
+      case 'ext-plugin-home': {
+        const url = node.getAttribute('data-url');
+        if (url) await guard(api.app.openExternal(url), '打开主页失败');
+        return true;
+      }
       case 'ext-open-skills':
         if (this.skills?.folder) await guard(api.app.openPath(this.skills.folder), '打开文件夹失败');
         return true;
@@ -171,4 +176,28 @@ const ExtensionsPanel = {
   },
 };
 
+/** Reviewed Harness plugins with their status against the running kernel; read-only for now. */
+const PluginCenter = {
+  async card() {
+    const data = await guard(api.extensions.plugins(), '读取插件列表');
+    if (!data) return '';
+    const rows = data.plugins.map((plugin) => `
+      <div class="ext-server">
+        <span class="ext-main">
+          <span class="ext-name">${esc(plugin.title)} <span class="ext-source">${esc(plugin.name)}@${esc(plugin.version)} · ${esc(plugin.license)}</span></span>
+          <span class="ext-desc">${esc(plugin.description)}</span>
+        </span>
+        <span class="badge ${plugin.compatible ? 'ok' : 'warn'}" title="插件声明的最低内核：${esc(plugin.minKernel)}">${plugin.compatible ? '内核兼容' : `需内核 ≥ ${esc(plugin.minKernel)}`}</span>
+        <button class="btn small" data-action="ext-plugin-home" data-url="${esc(plugin.homepage)}">主页</button>
+      </div>`).join('');
+    return `
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">精选插件</div><div class="card-sub">经过审阅、固定版本的 Harness 插件（当前内核 ${esc(data.kernelVersion ?? '未知')}）</div></div></div>
+        ${rows}
+        <div class="hint">第三方插件以本地服务的权限运行，客户端暂不提供一键安装：会在内核升级并逐个实测后开放。只作用于 Harness 网页界面的插件（如桌宠、余额挂件、壁纸）在客户端里看不到效果，因此不在此列。</div>
+      </div>`;
+  },
+};
+
 window.ExtensionsPanel = ExtensionsPanel;
+window.PluginCenter = PluginCenter;
