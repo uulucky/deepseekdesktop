@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const { app, BrowserWindow, WebContentsView, session, shell, Menu, ipcMain } = require('electron');
 
 const { DIRS, ensureDirs, log, logFilePath, isDev, isPortable, adoptPortablePaths, execDir } = require('./modules/util');
+const { resolveSplashArt } = require('./modules/splash-art');
 const { Bootstrap } = require('./modules/bootstrap');
 const { DeepSeekHarnessClient } = require('./modules/api');
 const { ChatController } = require('./modules/chat');
@@ -344,12 +345,12 @@ function localDayKey(date) {
 
 function createSplash() {
   const win = new BrowserWindow({
-    width: 420,
-    height: 300,
+    width: 640,
+    height: 360,
     frame: false,
     resizable: false,
     show: true,
-    backgroundColor: '#0e1117',
+    backgroundColor: '#040917',
     title: 'DeepSeek',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'main.js'),
@@ -357,7 +358,8 @@ function createSplash() {
       nodeIntegration: false,
     },
   });
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'));
+  const art = resolveSplashArt(ctx.uiStore, DIRS.root);
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'), art ? { query: { art: art.url, kind: art.kind } } : undefined);
   ctx.windows.splash = win;
 }
 

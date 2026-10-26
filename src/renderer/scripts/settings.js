@@ -111,7 +111,7 @@ const Settings = {
     const preset = state.registry?.registry?.[0]?.id ?? 'deepseek-official';
     body.innerHTML = `
       <div class="card">
-        <div class="card-head"><div><div class="card-title">外观</div><div class="card-sub">原来的设置项，重新排版</div></div></div>
+        <div class="card-head"><div><div class="card-title">外观</div><div class="card-sub">主题与侧边栏显示</div></div></div>
         <div class="field">
           <label>主题</label>
           <select class="input" id="ui-theme">
@@ -122,6 +122,22 @@ const Settings = {
         <div class="field">
           <label class="switch"><input type="checkbox" id="ui-sidebar" ${ui.sidebarVisible === false ? '' : 'checked'} /> 显示左侧对话栏</label>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">启动动画</div><div class="card-sub">打开客户端时、本地服务准备期间显示</div></div></div>
+        <div class="field">
+          <select class="input" id="ui-splash">
+            <option value="whale" ${ui.splashStyle !== 'custom' ? 'selected' : ''}>原创蓝色胖鲸（默认）</option>
+            <option value="custom" ${ui.splashStyle === 'custom' ? 'selected' : ''}>自定义图片或视频</option>
+          </select>
+        </div>
+        <div class="row" ${ui.splashStyle === 'custom' ? '' : 'hidden'} id="splash-art-row">
+          <span class="hint" id="splash-art-name">${ui.splashArt ? `当前：${esc(ui.splashArtName || '已选择的文件')}` : '尚未选择文件，启动时仍显示胖鲸'}</span>
+          <button class="btn small" data-action="pick-splash-art">${ui.splashArt ? '更换文件' : '选择文件'}</button>
+          <button class="btn small" data-action="clear-splash-art" ${ui.splashArt ? '' : 'disabled'}>清除</button>
+        </div>
+        <div class="hint">支持 PNG、JPG、WebP、GIF 图片或 MP4、WebM 视频（不超过 200 MB），文件会复制到数据目录的 splash 文件夹。下次启动生效；文件无法播放时自动回到胖鲸。</div>
       </div>
 
       <div class="card">
@@ -323,6 +339,24 @@ const Settings = {
         toast(state.kernelSource ? '已保存，重启后生效' : '已清除', 'ok');
         return true;
       }
+      case 'pick-splash-art': {
+        const ui = await guard(api.settings.pickSplashArt(), '设置启动动画失败');
+        if (ui) {
+          state.ui = ui;
+          toast('启动动画已更新，下次启动生效', 'ok');
+          await this.renderBody();
+        }
+        return true;
+      }
+      case 'clear-splash-art': {
+        const ui = await guard(api.settings.clearSplashArt(), '清除失败');
+        if (ui) {
+          state.ui = ui;
+          toast('已恢复默认的蓝色胖鲸', 'ok');
+          await this.renderBody();
+        }
+        return true;
+      }
       case 'open-log': {
         const world = state.world ?? {};
         if (world.logFile) await api.app.openPath(world.logFile);
@@ -367,6 +401,12 @@ const Settings = {
     if (target.id === 'ui-theme') {
       state.ui = await api.settings.setUi({ theme: target.value });
       document.documentElement.dataset.theme = state.ui.theme === 'light' ? 'light' : 'dark';
+      return true;
+    }
+    if (target.id === 'ui-splash') {
+      state.ui = await api.settings.setUi({ splashStyle: target.value });
+      document.getElementById('splash-art-row')?.toggleAttribute('hidden', state.ui.splashStyle !== 'custom');
+      toast(state.ui.splashStyle === 'custom' && !state.ui.splashArt ? '请选择一张图片或一段视频' : '下次启动生效', 'ok');
       return true;
     }
     if (target.id === 'ui-sidebar') {

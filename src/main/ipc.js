@@ -5,9 +5,10 @@
  * answers with a plain JSON value the renderer can render directly.
  */
 const { ipcMain, shell, dialog, app, clipboard } = require('electron');
-const { log } = require('./modules/util');
+const { log, DIRS } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
 const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
+const { splashStyle, importSplashArt, removeStoredArt, KINDS } = require('./modules/splash-art');
 
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const MAX_ATTACHMENTS = 20;
@@ -385,7 +386,33 @@ function registerIpc(services) {
   handle('settings:ui-set', (patch) => {
     const safe = { ...(patch ?? {}) };
     if ('defaultPermission' in safe) safe.defaultPermission = reusablePermission(safe.defaultPermission);
+    if ('splashStyle' in safe) safe.splashStyle = splashStyle(safe.splashStyle);
+    // The stored artwork file is only ever chosen through the picker below.
+    delete safe.splashArt;
+    delete safe.splashArtName;
     return getContext().uiStore.merge(safe);
+  });
+  handle('settings:splash-art-pick', async () => {
+    const ctx = getContext();
+    const owner = ctx.windows.main && !ctx.windows.main.isDestroyed() ? ctx.windows.main : undefined;
+    const options = {
+      title: '选择启动动画图片或视频',
+      buttonLabel: '使用此文件',
+      properties: ['openFile'],
+      filters: [{ name: '图片或视频', extensions: Object.keys(KINDS).map((ext) => ext.slice(1)) }],
+    };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    const art = importSplashArt(result.filePaths[0], DIRS.root);
+    log('app', 'splash art imported', { kind: art.kind });
+    return ctx.uiStore.merge({ splashStyle: 'custom', splashArt: art.file, splashArtName: art.name });
+  });
+  handle('settings:splash-art-clear', () => {
+    const store = getContext().uiStore;
+    removeStoredArt(DIRS.root);
+    store.delete('splashArt');
+    store.delete('splashArtName');
+    return store.merge({ splashStyle: 'whale' });
   });
 
   // ---------------------------------------------------------------- credentials

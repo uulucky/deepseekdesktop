@@ -69,6 +69,8 @@ contextBridge.exposeInMainWorld('deepseek', {
     setUi: (patch) => invoke('settings:ui-set', patch),
     kernelSource: () => invoke('settings:kernel-source-get'),
     setKernelSource: (value) => invoke('settings:kernel-source-set', value),
+    pickSplashArt: () => invoke('settings:splash-art-pick'),
+    clearSplashArt: () => invoke('settings:splash-art-clear'),
   },
   credentials: {
     describe: (refs) => invoke('credentials:describe', refs),

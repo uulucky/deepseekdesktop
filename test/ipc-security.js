@@ -80,6 +80,10 @@ async function main() {
   permissions.set('legacy', 'read-only');
   await call('sessions:open', 'legacy');
   assert.equal(permissions.get('legacy'), 'read-only', 'Do not escalate a legacy session without a saved choice');
+  const splashPatch = await call('settings:ui-set', { splashStyle: 'bogus', splashArt: '../../secret.png', splashArtName: 'x' });
+  assert.equal(splashPatch.splashStyle, 'whale', 'Unknown splash styles fall back to the whale');
+  assert.equal('splashArt' in splashPatch, false, 'Renderer cannot choose the splash artwork path directly');
+  assert.equal('splashArtName' in splashPatch, false);
   console.log('PASS main-process IPC rejects remote senders, defaults to Full Access and preserves explicit permission choices');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => fs.rmSync(temporary, { recursive: true, force: true }));

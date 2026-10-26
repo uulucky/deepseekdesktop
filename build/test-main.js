@@ -218,6 +218,8 @@ function registerStubIpc() {
   ipcMain.handle('settings:describe', () => ok({ namespaces: [] }));
   ipcMain.handle('settings:kernel-source-get', () => ok(null));
   ipcMain.handle('settings:kernel-source-set', (_event, value) => ok(value || null));
+  ipcMain.handle('settings:splash-art-pick', () => ok(Object.assign(world.ui, { splashStyle: 'custom', splashArt: 'custom-1.png', splashArtName: 'fixture.png' })));
+  ipcMain.handle('settings:splash-art-clear', () => ok(Object.assign(world.ui, { splashStyle: 'whale', splashArt: undefined, splashArtName: undefined })));
   ipcMain.handle('platform:status', () => ok(world.platform));
   ipcMain.handle('platform:login', () => ok(true));
   ipcMain.handle('platform:recharge', () => ok(true));
@@ -320,7 +322,7 @@ app.whenReady().then(async () => {
     await win.loadFile(page('splash.html'));
     setTimeout(() => win.webContents.send('boot:state', { phase: 'install', percent: 63, label: '正在安装运行组件' }), 250);
     await new Promise((resolve) => setTimeout(resolve, Math.max(400, SPLASH_MS)));
-    win.setSize(420, 300);
+    win.setSize(640, 360);
     await new Promise((resolve) => setTimeout(resolve, 250));
     fs.writeFileSync(shot('-splash'), (await capture(win)).toPNG());
     console.log('SPLASH captured');

@@ -2,13 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data: app: ad:;" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data: app: ad: file:; media-src file:;" />
 <title>DeepSeek</title>
 <style>
   :root {
-    --bg: #0b0e14;
-    --panel: #121722;
-    --line: #222a3a;
+    --bg: #040917;
     --text: #e8ecf4;
     --muted: #8b96ad;
     --brand: #4d6bfe;
@@ -16,46 +14,207 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
-    background: radial-gradient(120% 120% at 12% 10%, #16203a 0%, var(--bg) 58%);
+    position: relative; overflow: hidden;
+    background: radial-gradient(130% 100% at 50% 0%, #10224d 0%, #081330 46%, var(--bg) 100%);
     color: var(--text);
     font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-    display: flex; flex-direction: column; justify-content: center;
-    padding: 30px 34px; user-select: none;
+    user-select: none;
     -webkit-app-region: drag;
   }
-  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
-  .mark {
-    width: 34px; height: 34px; border-radius: 10px;
-    background: linear-gradient(140deg, #5a78ff, #3550e0);
-    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
-    box-shadow: 0 6px 20px rgba(77,107,254,.35);
+
+  /* ── Deep-sea scene (built-in "大肥鱼") ──────────────────────────────── */
+  .scene, .art, .shade { position: absolute; inset: 0; }
+  .scene * { transform-box: fill-box; }
+  .ray {
+    position: absolute; top: -30%; width: 90px; height: 120%;
+    background: linear-gradient(180deg, rgba(150, 190, 255, .20), rgba(150, 190, 255, 0) 78%);
+    filter: blur(6px); transform-origin: 50% 0;
+    animation: sway 7s ease-in-out infinite alternate;
   }
-  .name { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
-  .sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-  .track { height: 6px; border-radius: 999px; background: #1b2130; overflow: hidden; margin-top: 4px; }
-  .bar { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #4d6bfe, #7f96ff); transition: width .35s ease; }
-  .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; }
-  .label { color: var(--muted); font-size: 12px; }
-  .percent { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
-  .hint { margin-top: 18px; font-size: 11px; color: #5f6a80; line-height: 1.6; }
-  .error { color: #ff8a8a; margin-top: 12px; font-size: 12px; display: none; }
+  .ray.r1 { left: 18%; transform: rotate(16deg); }
+  .ray.r2 { left: 42%; width: 140px; opacity: .8; transform: rotate(8deg); animation-duration: 9s; }
+  .ray.r3 { left: 66%; width: 70px; transform: rotate(-4deg); animation-duration: 6s; animation-delay: -2s; }
+  .mote {
+    position: absolute; width: 3px; height: 3px; border-radius: 50%;
+    background: rgba(180, 210, 255, .7); box-shadow: 0 0 6px rgba(150, 190, 255, .8);
+    animation: drift 9s linear infinite;
+  }
+  .whale {
+    position: absolute; left: 50%; top: 35%; width: 280px; height: 178px;
+    margin: -89px 0 0 -140px; overflow: visible;
+  }
+  .whale-enter { animation: enter 1.4s cubic-bezier(.2, .9, .25, 1.08) both; transform-origin: center; }
+  .whale-bob { animation: bob 3.2s ease-in-out 1.2s infinite; transform-origin: center; }
+  .tail { animation: tail .7s ease-in-out infinite alternate; transform-origin: 100% 85%; }
+  .fin { animation: fin 1s ease-in-out infinite alternate; transform-origin: 100% 0%; }
+  .eye { animation: blink 4.6s ease-in-out 1.8s infinite; transform-origin: center; }
+  .drop { opacity: 0; animation: spout 2.6s ease-out 1.2s infinite; transform-origin: 50% 100%; }
+  .drop.d2 { animation-delay: 1.32s; }
+  .drop.d3 { animation-delay: 1.44s; }
+  .bubble { opacity: 0; animation: bubble 3.2s ease-in infinite; }
+  .bubble.b2 { animation-delay: 1.05s; }
+  .bubble.b3 { animation-delay: 2.1s; }
+  .shade { background: linear-gradient(180deg, rgba(4, 9, 23, 0) 45%, rgba(4, 9, 23, .55) 72%, rgba(4, 9, 23, .92) 100%); }
+
+  /* Optional user artwork (image or video) replaces the whale scene but keeps the same HUD. */
+  .art { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s ease; }
+  body.has-art .art { opacity: 1; }
+  body.has-art .scene { display: none; }
+
+  .waves { position: absolute; left: 0; top: 57%; width: 100%; height: 34px; overflow: visible; }
+  .wave { animation: wave 6s linear infinite; }
+  .wave.w2 { animation-duration: 9s; animation-direction: reverse; }
+
+  @keyframes wave { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+  @keyframes sway { from { margin-left: -14px; opacity: .55; } to { margin-left: 14px; opacity: 1; } }
+  @keyframes drift {
+    0% { transform: translate(0, 0); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translate(24px, -150px); opacity: 0; }
+  }
+  @keyframes enter {
+    0% { opacity: 0; transform: translateX(-220px) rotate(-8deg) scale(.82); }
+    55% { opacity: 1; }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-8px) rotate(-2.5deg); }
+  }
+  @keyframes tail { from { transform: rotate(-11deg); } to { transform: rotate(9deg); } }
+  @keyframes fin { from { transform: rotate(-6deg); } to { transform: rotate(12deg); } }
+  @keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 96.5% { transform: scaleY(.12); } }
+  @keyframes spout {
+    0%, 30% { opacity: 0; transform: translateY(8px) scale(.4); }
+    42% { opacity: 1; }
+    80% { opacity: .9; transform: translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateY(-14px) scale(1.05); }
+  }
+  @keyframes bubble {
+    0% { opacity: 0; transform: translate(0, 0) scale(.5); }
+    20% { opacity: .85; }
+    100% { opacity: 0; transform: translate(12px, -56px) scale(1.15); }
+  }
+
+  /* ── HUD: stroke-drawn wordmark + hairline progress ───────────────────── */
+  .hud {
+    position: absolute; left: 50%; bottom: 26px; width: 380px; margin-left: -190px;
+    text-align: center;
+  }
+  .wordmark { display: block; width: 100%; height: 34px; overflow: visible; }
+  .wordmark text {
+    font: 300 17px -apple-system, "Segoe UI", system-ui, sans-serif; letter-spacing: 7px;
+    fill: rgba(232, 236, 244, 0); stroke: rgba(200, 214, 255, .9); stroke-width: .7;
+    stroke-dasharray: 90; stroke-dashoffset: 90;
+    animation: write 1.5s cubic-bezier(.25, .1, .25, 1) .5s forwards, ink .7s ease 1.7s forwards;
+  }
+  .wordmark text.harness { animation-delay: .8s, 2s; }
+  .track { position: relative; width: 300px; height: 2px; margin: 8px auto 0; border-radius: 999px; background: rgba(140, 160, 210, .2); overflow: hidden; }
+  .bar {
+    position: relative; height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, rgba(77, 107, 254, .5), #9fb2ff);
+    box-shadow: 0 0 8px rgba(127, 150, 255, .9); transition: width .35s ease;
+  }
+  .row { display: flex; justify-content: space-between; align-items: baseline; width: 300px; margin: 8px auto 0; }
+  .label { color: var(--muted); font-size: 11.5px; }
+  .percent { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; color: #c9d3ec; }
+  .hint { margin-top: 4px; font-size: 11px; color: #66718a; line-height: 1.6; }
+  .error {
+    display: none; margin: 8px auto 0; padding: 6px 10px; max-width: 380px;
+    border: 1px solid rgba(255, 138, 138, .35); border-radius: 8px; background: rgba(60, 14, 20, .55);
+    color: #ff9a9a; font-size: 12px; -webkit-app-region: no-drag; user-select: text;
+  }
+  @keyframes write { to { stroke-dashoffset: 0; } }
+  @keyframes ink { to { fill: rgba(232, 236, 244, .92); stroke: rgba(200, 214, 255, 0); } }
+
+  /* A failed start keeps the scene still and muted; the error text below says what happened. */
+  body[data-phase="error"] .scene *:not(.whale-enter), body[data-phase="stopped"] .scene *:not(.whale-enter) { animation-play-state: paused; }
+  body[data-phase="error"] .art, body[data-phase="stopped"] .art { animation-play-state: paused; }
+  body[data-phase="error"] .scene, body[data-phase="stopped"] .scene,
+  body[data-phase="error"] .art, body[data-phase="stopped"] .art { filter: grayscale(.7) brightness(.7); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene *, .wordmark text { animation: none !important; }
+    .drop, .bubble, .mote { opacity: 0; }
+    .wordmark text { stroke-dashoffset: 0; fill: rgba(232, 236, 244, .92); stroke: none; }
+  }
 </style>
 </head>
 <body>
-  <div class="logo">
-    <div class="mark">D</div>
-    <div>
-      <div class="name">DeepSeek</div>
-      <div class="sub">正在启动本地服务</div>
+  <div class="scene" aria-hidden="true">
+    <div class="ray r1"></div><div class="ray r2"></div><div class="ray r3"></div>
+    <span class="mote" style="left:12%;top:78%;animation-delay:-1s"></span>
+    <span class="mote" style="left:24%;top:64%;animation-delay:-5s;animation-duration:11s"></span>
+    <span class="mote" style="left:35%;top:86%;animation-delay:-3s"></span>
+    <span class="mote" style="left:58%;top:74%;animation-delay:-7s;animation-duration:12s"></span>
+    <span class="mote" style="left:71%;top:60%;animation-delay:-2s"></span>
+    <span class="mote" style="left:83%;top:82%;animation-delay:-6s;animation-duration:10s"></span>
+    <span class="mote" style="left:91%;top:52%;animation-delay:-4s"></span>
+
+    <svg class="whale" viewBox="0 0 220 140">
+      <defs>
+        <linearGradient id="whale-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7a92ff" />
+          <stop offset=".55" stop-color="#4d6bfe" />
+          <stop offset="1" stop-color="#3449d6" />
+        </linearGradient>
+        <linearGradient id="whale-belly" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e3e9ff" />
+          <stop offset="1" stop-color="#b3c2ff" />
+        </linearGradient>
+      </defs>
+      <g class="whale-enter">
+        <g class="whale-bob">
+          <g class="drop"><path d="M118 24 c-3 -6 -3 -12 0 -18 c3 6 3 12 0 18z" fill="#8fd3ff" /></g>
+          <g class="drop d2"><path d="M108 28 c-6 -3 -9 -8 -10 -14 c6 2 9 7 10 14z" fill="#8fd3ff" /></g>
+          <g class="drop d3"><path d="M128 28 c6 -3 9 -8 10 -14 c-6 2 -9 7 -10 14z" fill="#8fd3ff" /></g>
+
+          <g class="tail"><path d="M50 72 C40 68 30 60 24 48 C32 50 38 54 42 59 C40 49 41 39 47 30 C52 43 56 57 57 71 Z" fill="#3e58e8" /></g>
+          <path d="M182 78 C182 106 156 122 122 122 C92 122 72 110 62 94 C57 86 53 79 50 72 C58 71 66 72 76 73 C80 48 100 32 128 32 C160 32 182 52 182 78 Z" fill="url(#whale-body)" />
+          <path d="M82 102 C102 118 150 122 174 94 C156 106 114 110 82 102 Z" fill="url(#whale-belly)" />
+          <path d="M94 110 l4 -6 M106 114 l3 -7 M118 116 l2 -7 M130 116 l1 -7 M142 115 l0 -7" stroke="#9cadf5" stroke-width="1.3" stroke-linecap="round" fill="none" opacity=".7" />
+          <ellipse cx="110" cy="48" rx="20" ry="7" fill="#fff" opacity=".2" transform="rotate(-12 110 48)" />
+          <g class="fin"><path d="M122 90 C112 98 100 106 86 106 C94 98 106 90 122 90 Z" fill="#3a52dc" /></g>
+          <g class="eye">
+            <ellipse cx="156" cy="72" rx="5" ry="5.6" fill="#141a2e" />
+            <circle cx="157.8" cy="70" r="1.7" fill="#fff" />
+          </g>
+          <ellipse cx="163" cy="84" rx="6" ry="3.2" fill="#ff8fb4" opacity=".55" />
+          <path d="M168 91 q6 4 11 -1" stroke="#141a2e" stroke-width="2" stroke-linecap="round" fill="none" />
+          <circle class="bubble" cx="188" cy="86" r="3.2" fill="none" stroke="#9fd6ff" stroke-width="1.3" />
+          <circle class="bubble b2" cx="190" cy="80" r="2.2" fill="none" stroke="#9fd6ff" stroke-width="1.2" />
+          <circle class="bubble b3" cx="186" cy="90" r="4" fill="none" stroke="#9fd6ff" stroke-width="1.3" />
+        </g>
+      </g>
+    </svg>
+
+    <svg class="waves" viewBox="0 0 640 34" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="sea-line" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#4d6bfe" stop-opacity="0" />
+          <stop offset=".5" stop-color="#7f96ff" stop-opacity=".6" />
+          <stop offset="1" stop-color="#4d6bfe" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <g class="wave w2"><path d="M0 12 q15 -6 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="url(#sea-line)" stroke-width="1.4" stroke-linecap="round" opacity=".55" /></g>
+      <g class="wave"><path d="M0 22 q15 -7 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="url(#sea-line)" stroke-width="1.8" stroke-linecap="round" /></g>
+    </svg>
+  </div>
+  <div class="shade" aria-hidden="true"></div>
+
+  <div class="hud">
+    <svg class="wordmark" viewBox="0 0 380 34" role="img" aria-label="DeepSeek Harness">
+      <text x="190" y="24" text-anchor="end" dx="-6">DEEPSEEK</text>
+      <text class="harness" x="190" y="24" text-anchor="start" dx="8">HARNESS</text>
+    </svg>
+    <div class="track"><div class="bar" id="bar"></div></div>
+    <div class="row">
+      <div class="label" id="label">正在检查运行环境</div>
+      <div class="percent" id="percent">0%</div>
     </div>
+    <div class="hint" id="hint">首次启动需要准备本地运行环境，之后启动会很快。</div>
+    <div class="error" id="error"></div>
   </div>
-  <div class="track"><div class="bar" id="bar"></div></div>
-  <div class="row">
-    <div class="label" id="label">正在检查运行环境</div>
-    <div class="percent" id="percent">0%</div>
-  </div>
-  <div class="hint" id="hint">首次启动需要准备本地运行环境，之后启动会很快。</div>
-  <div class="error" id="error"></div>
 
 <script src="scripts/splash.js"></script>
 </body>

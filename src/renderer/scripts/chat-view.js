@@ -269,6 +269,24 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
   return '';
 }
 
+/** The same chubby whale as the splash, drawn small and without the scene around it. */
+const EMPTY_WHALE =
+  '<svg class="empty-whale" viewBox="20 24 172 104" aria-hidden="true">' +
+    '<defs><linearGradient id="empty-whale-body" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#7a92ff" /><stop offset=".55" stop-color="#4d6bfe" /><stop offset="1" stop-color="#3449d6" />' +
+    '</linearGradient></defs>' +
+    '<g class="empty-whale-bob">' +
+      '<path class="empty-whale-tail" d="M50 72 C40 68 30 60 24 48 C32 50 38 54 42 59 C40 49 41 39 47 30 C52 43 56 57 57 71 Z" fill="#3e58e8" />' +
+      '<path d="M182 78 C182 106 156 122 122 122 C92 122 72 110 62 94 C57 86 53 79 50 72 C58 71 66 72 76 73 C80 48 100 32 128 32 C160 32 182 52 182 78 Z" fill="url(#empty-whale-body)" />' +
+      '<path d="M82 102 C102 118 150 122 174 94 C156 106 114 110 82 102 Z" fill="#d6dfff" />' +
+      '<ellipse cx="110" cy="48" rx="20" ry="7" fill="#fff" opacity=".2" transform="rotate(-12 110 48)" />' +
+      '<path d="M122 90 C112 98 100 106 86 106 C94 98 106 90 122 90 Z" fill="#3a52dc" />' +
+      '<ellipse cx="156" cy="72" rx="5" ry="5.6" fill="#141a2e" /><circle cx="157.8" cy="70" r="1.7" fill="#fff" />' +
+      '<ellipse cx="163" cy="84" rx="6" ry="3.2" fill="#ff8fb4" opacity=".55" />' +
+      '<path d="M168 91 q6 4 11 -1" stroke="#141a2e" stroke-width="2" stroke-linecap="round" fill="none" />' +
+    '</g>' +
+  '</svg>';
+
 /** Empty state with starter suggestions. */
 function renderEmpty() {
   const suggestions = [
@@ -279,7 +297,7 @@ function renderEmpty() {
   ];
   return (
     '<div class="empty">' +
-      '<div class="empty-mark">D</div>' +
+      '<div class="empty-mark">' + EMPTY_WHALE + '</div>' +
       '<h1>今天想做什么？</h1>' +
       '<p>直接描述你的任务。DeepSeek 会读取当前工作目录、运行命令并给出结果，全部在本地完成。</p>' +
       '<div class="suggestions">' +
