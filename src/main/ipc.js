@@ -11,6 +11,8 @@ const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules
 const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
 const { splashStyle, importSplashArt, removeStoredArt, KINDS } = require('./modules/splash-art');
 const skillBridge = require('./modules/skill-bridge');
+const imageOcr = require('./modules/image-ocr');
+const mediaTools = require('./modules/media-tools');
 const mcpServers = require('./modules/mcp-servers');
 
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -82,6 +84,30 @@ function handle(channel, fn) {
  * @param {import('./modules/ad').AdSlot} services.ad
  * @param {() => any} services.getContext late-bound app context (windows, client, catalog)
  */
+/**
+ * A text-only model only receives "[image omitted]" for attached images, so append text the
+ * operating system's own OCR finds in them. Opt-out in Settings; any failure sends unchanged.
+ */
+async function withImageText(ctx, sessionId, message, attachments) {
+  const images = attachments.filter((item) => item.kind === 'image');
+  if (!images.length || !imageOcr.ocrSupported() || ctx.uiStore?.get('ocrFallback', true) === false) return message;
+  try {
+    const [models, described] = await Promise.all([
+      ctx.client.sessionModels(sessionId),
+      ctx.client.settingsDescribe().catch(() => null),
+    ]);
+    const deepseekSettings = described?.namespaces?.find((item) => item.ns === 'llm-deepseek')?.value;
+    if (!imageOcr.isTextOnlySelection(models?.current, deepseekSettings)) return message;
+    const results = [];
+    for (const image of images) results.push({ name: image.name, text: await imageOcr.recognizeText(image.bytes, image.mediaType) });
+    log('ipc', 'image text recognised for a text-only model', { images: results.length, withText: results.filter((item) => item.text).length });
+    return `${message}${imageOcr.ocrAppendix(results)}`.trim();
+  } catch (error) {
+    log('ipc', 'image text recognition skipped', String(error?.message ?? error));
+    return message;
+  }
+}
+
 function registerIpc(services) {
   const { getContext } = services;
   // Never snapshot late-created services here. The kernel, chat controller and window-backed
@@ -301,7 +327,7 @@ function registerIpc(services) {
     const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
     if (!message && normalized.length === 0) throw new Error('请输入消息或选择附件');
     await restorePermission(sessionId);
-    return service('chat').send(sessionId, message, normalized);
+    return service('chat').send(sessionId, await withImageText(ctx, sessionId, message, normalized), normalized);
   });
   handle('sessions:attachment', (sessionId, attachmentId) => {
     if (typeof sessionId !== 'string' || !sessionId || typeof attachmentId !== 'string' || !attachmentId) {
@@ -390,6 +416,7 @@ function registerIpc(services) {
     const safe = { ...(patch ?? {}) };
     if ('defaultPermission' in safe) safe.defaultPermission = reusablePermission(safe.defaultPermission);
     if ('splashStyle' in safe) safe.splashStyle = splashStyle(safe.splashStyle);
+    if ('ocrFallback' in safe) safe.ocrFallback = safe.ocrFallback !== false;
     if ('safetyGuard' in safe) {
       safe.safetyGuard = safe.safetyGuard !== false;
       // The kernel-side guard re-reads this file on every risky call; no restart needed.
@@ -422,6 +449,12 @@ function registerIpc(services) {
     store.delete('splashArtName');
     return store.merge({ splashStyle: 'whale' });
   });
+
+  handle('app:media-tools', () => ({
+    tools: mediaTools.detectMediaTools(),
+    installCommand: mediaTools.installCommand(),
+    ocrSupported: imageOcr.ocrSupported(),
+  }));
 
   // ---------------------------------------------------------------- extensions
   // Skills apply live (the kernel watches its skills folder); MCP rows apply on the next

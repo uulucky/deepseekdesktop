@@ -225,6 +225,7 @@ function registerStubIpc() {
   ] };
   const extMcp = { servers: [{ name: 'browser', transport: 'stdio', enabled: true, command: 'npx', args: ['-y', '@playwright/mcp@0.0.83'], url: null, envKeys: [], headerKeys: [] }],
     presets: [{ id: 'browser', label: '浏览器自动化（Playwright）', description: '让 DeepSeek 打开网页、点击、填写表单和截图。', installed: true }] };
+  ipcMain.handle('app:media-tools', () => ok({ tools: { ffmpeg: { path: '/usr/local/bin/ffmpeg', version: '7.1' }, ffprobe: null }, installCommand: 'brew install ffmpeg', ocrSupported: true }));
   ipcMain.handle('extensions:skills', () => ok(extSkills));
   ipcMain.handle('extensions:skill-set', (_event, id, enabled) => { const skill = extSkills.skills.find((item) => item.id === id); if (skill) skill.enabled = enabled; return ok(extSkills); });
   ipcMain.handle('extensions:mcp', () => ok(extMcp));

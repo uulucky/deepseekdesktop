@@ -109,6 +109,13 @@ const Settings = {
     const body = document.getElementById('modal-body');
     const ui = state.ui ?? {};
     if (state.kernelSource === undefined) state.kernelSource = await api.settings.kernelSource().catch(() => null);
+    const media = await api.app.mediaTools().catch(() => null);
+    const toolLine = (name) => {
+      const tool = media?.tools?.[name];
+      return tool
+        ? `<div class="media-tool ok">✓ ${name}${tool.version ? ` ${esc(tool.version)}` : ''}<span>${esc(tool.path)}</span></div>`
+        : `<div class="media-tool missing">✕ ${name}<span>未安装</span></div>`;
+    };
     const credential = state.credentials?.DEEPSEEK_API_KEY;
     const preset = state.registry?.registry?.[0]?.id ?? 'deepseek-official';
     body.innerHTML = `
@@ -131,6 +138,17 @@ const Settings = {
         <div class="field">
           <label class="switch"><input type="checkbox" id="ui-safety-guard" ${ui.safetyGuard === false ? '' : 'checked'} /> 高风险命令执行前先确认（推荐）</label>
           <div class="hint">递归删除系统或主目录、git reset --hard / clean / 强制推送、格式化磁盘、下载脚本直接执行、读取 SSH 密钥和云凭据等操作，会先在对话里弹出确认卡片。其他命令照常执行，权限设置不变；修改立即生效。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">媒体与图片</div><div class="card-sub">音视频处理工具，以及不能看图的模型如何读取图片</div></div></div>
+        ${media ? `${toolLine('ffmpeg')}${toolLine('ffprobe')}
+        ${media.tools?.ffmpeg && media.tools?.ffprobe ? '' : `<div class="row media-install"><code>${esc(media.installCommand)}</code><button class="btn small" data-action="copy-media-install">复制安装命令</button></div>
+        <div class="hint">在终端运行上面的命令安装后，重启本地服务即可被 DeepSeek 使用。</div>`}` : '<div class="hint">无法检测媒体工具。</div>'}
+        <div class="field">
+          <label class="switch"><input type="checkbox" id="ui-ocr-fallback" ${ui.ocrFallback === false ? '' : 'checked'} ${media?.ocrSupported === false ? 'disabled' : ''} /> 模型不能看图时，用本机文字识别读取图片里的文字（推荐）</label>
+          <div class="hint">切换到只支持文字的模型（如 V4-Flash、V4-Pro）并发送图片时，用系统自带的文字识别（macOS Vision / Windows OCR）提取文字一起发送。识别在本机完成，不上传图片。</div>
         </div>
       </div>
 
@@ -368,6 +386,12 @@ const Settings = {
         }
         return true;
       }
+      case 'copy-media-install': {
+        const command = document.querySelector('.media-install code')?.textContent ?? '';
+        if (command) await guard(api.app.copy(command), '复制失败');
+        toast('安装命令已复制', 'ok');
+        return true;
+      }
       case 'open-log': {
         const world = state.world ?? {};
         if (world.logFile) await api.app.openPath(world.logFile);
@@ -414,6 +438,10 @@ const Settings = {
     if (target.id === 'ui-theme') {
       state.ui = await api.settings.setUi({ theme: target.value });
       document.documentElement.dataset.theme = state.ui.theme === 'light' ? 'light' : 'dark';
+      return true;
+    }
+    if (target.id === 'ui-ocr-fallback') {
+      state.ui = await api.settings.setUi({ ocrFallback: target.checked });
       return true;
     }
     if (target.id === 'ui-safety-guard') {

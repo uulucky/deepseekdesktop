@@ -3,7 +3,7 @@
 // Copied outside app.asar for the bundled Node process. No credentials or dependencies.
 exports.name = 'desktop-presentation';
 exports.inject = ['systemPrompt'];
-exports.apply = (ctx) => {
+exports.apply = (ctx, config = {}) => {
   ctx.systemPrompt.section({
     name: 'desktop:action-summary',
     order: 10300,
@@ -14,4 +14,9 @@ Before EVERY tool-using step, begin your ordinary assistant response (not the re
 Write your own task-specific summary: 1–2 short sentences, preferably under 100 Chinese characters. Explain what you are about to do and why it helps the user's request. On later steps, briefly report verified progress and the next action; do not repeat the whole plan. Translate high-level intentions into natural Chinese, not a verbatim transcript of internal reasoning. Do not reveal private deliberations, secrets, credentials or long commands. Do not claim tools have succeeded before their results arrive.
 Do not write a separate pre-tool progress sentence before or after the wrapper. Use this wrapper only once at the START of an assistant message, outside code fences, and always close it before any other response text. The desktop shows its content expanded and tools/details collapsed. Keep final answers outside the wrapper, in the user's language. Simple direct answers need no summary. If the user requests exact machine-readable output or a higher-priority structured output format, preserve that format without adding the wrapper. These are presentation instructions only: they never change permissions, approvals, tool selection or the user's task scope.`,
   });
+  // Real locations of ffmpeg/ffprobe, detected by the desktop at launch, so the agent does not
+  // guess binary paths.
+  if (typeof config.mediaNote === 'string' && config.mediaNote) {
+    ctx.systemPrompt.section({ name: 'desktop:media-tools', order: 10310, text: config.mediaNote });
+  }
 };

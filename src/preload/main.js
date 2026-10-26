@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('deepseek', {
     openPath: (target) => invoke('app:open-path', target),
     copy: (text) => invoke('app:copy', text),
     reportRendererError: (detail) => invoke('app:renderer-error', detail),
+    mediaTools: () => invoke('app:media-tools'),
   },
   sessions: {
     list: () => invoke('sessions:list'),

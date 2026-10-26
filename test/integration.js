@@ -57,6 +57,12 @@ async function main() {
     assert(Array.isArray((await client.history(created.sessionId)).events));
     const catalog = await client.listModels();
     assert(catalog.groups.some(group => group.models.length > 0), 'Pinned kernel exposes models without a paid request');
+    // OCR fallback keys off declared input modalities; the official text models must declare them.
+    // OCR fallback mirrors which official models the pinned kernel lets see images.
+    const llmSource = fs.readFileSync(path.join(path.dirname(require.resolve('@deepseek-ai/dsh-llm-deepseek', { paths: [path.dirname(entry)] })), 'index.js'), 'utf8');
+    const defaults = llmSource.slice(llmSource.indexOf('const DEFAULT_MODELS'), llmSource.indexOf('const MODEL_MODALITIES'));
+    const imageModels = [...defaults.matchAll(/id: "([^"]+)"[^}]*?inputModalities: \["text", "image"\]/g)].map(match => match[1]);
+    assert.deepEqual([...require('../src/main/modules/image-ocr').BUILTIN_IMAGE_MODELS].sort(), imageModels.sort(), 'OCR image-model list matches the pinned kernel');
     const configured = await applyHarnessCredential(client, 'DEEPSEEK_API_KEY', 'sk-isolated-fixture-not-a-real-key');
     assert(configured.configured, 'Credential compatibility path saves a fixture key');
     let ready = false;
@@ -77,6 +83,8 @@ async function main() {
     const offeredTools = (responseA.body.tools ?? []).map(tool => tool.function?.name ?? tool.name);
     assert(offeredTools.includes('mcp__fixture__echo'), `Configured MCP tool reaches the model: ${offeredTools.join(', ')}`);
     console.log('PASS real Harness MCP: a server saved in desktop settings is launched and its tool is offered to the model');
+    assert.match(JSON.stringify(responseA.body.messages), /Media tools on this computer: ffmpeg (?:is installed at|is NOT installed)/,
+      'Detected media tools reach the system prompt');
 
     // A Claude skill linked from Settings is discovered live by the running kernel.
     const fakeHome = path.join(temporary, 'fake-home');

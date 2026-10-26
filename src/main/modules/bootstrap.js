@@ -19,6 +19,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { DIRS, IS_WINDOWS, IS_MAC, isDev, log, clamp, sleep, existsSync, readJsonSync, writeJsonSync } = require('./util');
 const { mcpPatchEntries } = require('./mcp-servers');
+const { augmentedPath, detectMediaTools, mediaPromptNote } = require('./media-tools');
 const { run, runStreaming, killTree, waitFor } = require('./proc');
 const { reapOrphanKernels } = require('./orphan-kernel');
 
@@ -682,9 +683,15 @@ class Bootstrap {
       // re-reads its on/off file per call, so the settings toggle needs no kernel restart.
       const safetyPlugin = path.join(presentationDir, 'safety-guard.cjs');
       fs.copyFileSync(path.join(__dirname, 'desktop-safety-guard.cjs'), safetyPlugin);
+      // Finder/Start-menu launches get a minimal PATH; append package-manager folders and the
+      // bundled Node (for npx-based MCP servers) after whatever the user already has.
+      const kernelPath = augmentedPath(process.env, this.nodeBin ? [path.dirname(this.nodeBin)] : []);
+      const mediaTools = detectMediaTools({ ...process.env, ...kernelPath });
+      log('bootstrap', 'media tools', { ffmpeg: Boolean(mediaTools.ffmpeg), ffprobe: Boolean(mediaTools.ffprobe) });
       const presentationPatch = path.join(presentationDir, 'cordis.patch.json');
       fs.writeFileSync(presentationPatch, JSON.stringify([{ insert: [{
         id: 'desktop-action-summary', name: presentationPlugin,
+        config: { mediaNote: mediaPromptNote(mediaTools) },
       }, {
         id: 'desktop-safety-guard', name: safetyPlugin,
         config: { settingsFile: path.join(DIRS.config, 'safety-guard.json') },
@@ -701,6 +708,7 @@ class Bootstrap {
       const handle = runStreaming(command, args, {
         cwd: DIRS.workspace,
         env: {
+          ...kernelPath,
           DSH_WEB_URL: `http://127.0.0.1:${port}`,
           // Keep profiles, auth secrets and sessions inside the portable/app data root instead
           // of sharing an unrelated global ~/.dsh installation.
