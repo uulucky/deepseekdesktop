@@ -34,6 +34,10 @@ async function main() {
   assert.equal(require(path.resolve(entry, '../../package.json')).version, pins.kernelVersion);
   const port = await freePort();
   const provider = await startModelServer();
+  // A user-added MCP server must reach the kernel through the desktop's launch patch.
+  require('../src/main/modules/mcp-servers').saveServer(path.join(temporary, 'config'), {
+    name: 'fixture', transport: 'stdio', command: process.execPath, args: [path.join(__dirname, 'fixtures/mcp-server.js')],
+  });
   process.env.DEEPSEEK_BASE_URL = provider.baseUrl;
   let boot = new Bootstrap({ port, emit: () => {} });
   let client, chat;
@@ -70,6 +74,24 @@ async function main() {
     await client.selectModel(a, group.id, model, 'off');
     await chat.send(a, 'multitask-fixture-A');
     const responseA = await provider.waitFor('multitask-fixture-A');
+    const offeredTools = (responseA.body.tools ?? []).map(tool => tool.function?.name ?? tool.name);
+    assert(offeredTools.includes('mcp__fixture__echo'), `Configured MCP tool reaches the model: ${offeredTools.join(', ')}`);
+    console.log('PASS real Harness MCP: a server saved in desktop settings is launched and its tool is offered to the model');
+
+    // A Claude skill linked from Settings is discovered live by the running kernel.
+    const fakeHome = path.join(temporary, 'fake-home');
+    const fixtureSkill = path.join(fakeHome, '.claude', 'skills', 'fixture-skill');
+    fs.mkdirSync(fixtureSkill, { recursive: true });
+    fs.writeFileSync(path.join(fixtureSkill, 'SKILL.md'), '---\nname: fixture-skill\ndescription: Desktop integration fixture skill.\n---\n\nSay hello.\n');
+    const bridge = require('../src/main/modules/skill-bridge');
+    const listed = bridge.listSkills(temporary, fakeHome).skills.find(item => item.name === 'fixture-skill');
+    assert(listed && !listed.enabled, 'Claude skill is offered for import');
+    assert(bridge.setSkillEnabled(temporary, listed.id, true, fakeHome).skills.find(item => item.id === listed.id).enabled);
+    const skillNames = async () => JSON.stringify(await client.listSkills(a).catch(error => String(error)));
+    await eventually(async () => (await skillNames()).includes('fixture-skill'), 'Linked skill is discovered by the running kernel');
+    bridge.setSkillEnabled(temporary, listed.id, false, fakeHome);
+    assert(fs.existsSync(path.join(fixtureSkill, 'SKILL.md')), 'Disabling removes only the link, never the source skill');
+    console.log('PASS real Harness skills: a Claude skill linked from desktop settings is discovered live and unlinks cleanly');
     assert(responseA.body.messages.some(message => message.role === 'system'
       && JSON.stringify(message.content).includes('<desktop-summary>')), 'Desktop action summary instruction reaches the actual model request');
     responseA.delta('A partial');

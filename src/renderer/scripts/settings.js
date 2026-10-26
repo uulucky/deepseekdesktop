@@ -5,6 +5,7 @@ const TABS = [
   { id: 'account', label: '账号与 API Key' },
   { id: 'models', label: '模型' },
   { id: 'general', label: '通用' },
+  { id: 'extensions', label: '扩展' },
   { id: 'about', label: '关于' },
 ];
 
@@ -37,6 +38,7 @@ const Settings = {
       if (state.view.tab === 'account') return await AccountPanel.load();
       if (state.view.tab === 'models') return await this.renderModels();
       if (state.view.tab === 'general') return await this.renderGeneral();
+      if (state.view.tab === 'extensions') return await ExtensionsPanel.render();
       return this.renderAbout();
     } catch (error) {
       body.innerHTML = `<div class="banner err">加载失败：${esc(error?.message ?? error)}</div>`;
@@ -273,6 +275,7 @@ const Settings = {
     }
     const action = target.closest?.('[data-action]')?.getAttribute('data-action');
     if (!action) return false;
+    if (action.startsWith('ext-')) return ExtensionsPanel.onClick(target);
     switch (action) {
       case 'sync-catalog': {
         toast('正在从官网更新模型表…');
@@ -392,6 +395,7 @@ const Settings = {
         if (action === 'restart-boot') {
           toast('正在重启本地服务…');
           state.boot = await guard(api.app.retryBoot(), '重启失败');
+          if (state.boot) ExtensionsPanel.restartNeeded = false;
         } else {
           state.world = await api.app.world();
         }
@@ -405,6 +409,7 @@ const Settings = {
 
   /** Persist the general-tab fields (called on input change). */
   async onGeneralChange(target) {
+    if (state.view.tab === 'extensions' && await ExtensionsPanel.onChange(target)) return true;
     if (!target?.id) return false;
     if (target.id === 'ui-theme') {
       state.ui = await api.settings.setUi({ theme: target.value });

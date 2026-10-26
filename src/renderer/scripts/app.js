@@ -226,6 +226,7 @@ const App = {
       });
     }, true);
     document.addEventListener('change', (event) => Settings.onGeneralChange(event.target));
+    document.addEventListener('input', (event) => { if (state.view.modal) ExtensionsPanel.onInput(event.target); });
     document.getElementById('ad-slot').addEventListener('click', () => Sidebar.openCurrentAd());
     window.addEventListener('resize', () => { this.hidePopover(); this.hideSessionPopover(); this.hideSharePopover(); });
   },

@@ -72,6 +72,15 @@ contextBridge.exposeInMainWorld('deepseek', {
     pickSplashArt: () => invoke('settings:splash-art-pick'),
     clearSplashArt: () => invoke('settings:splash-art-clear'),
   },
+  extensions: {
+    skills: () => invoke('extensions:skills'),
+    setSkill: (id, enabled) => invoke('extensions:skill-set', id, enabled),
+    mcp: () => invoke('extensions:mcp'),
+    saveMcp: (server) => invoke('extensions:mcp-save', server),
+    removeMcp: (name) => invoke('extensions:mcp-remove', name),
+    toggleMcp: (name, enabled) => invoke('extensions:mcp-toggle', name, enabled),
+    addMcpPreset: (id) => invoke('extensions:mcp-preset', id),
+  },
   credentials: {
     describe: (refs) => invoke('credentials:describe', refs),
     set: (ref, value) => invoke('credentials:set', ref, value),

@@ -10,6 +10,8 @@ const { log, DIRS, writeJsonSync } = require('./modules/util');
 const { applyHarnessCredential, createAndApplyPlatformKey } = require('./modules/credentials');
 const { isTrustedIpc, reusablePermission, externalUrl } = require('./modules/security');
 const { splashStyle, importSplashArt, removeStoredArt, KINDS } = require('./modules/splash-art');
+const skillBridge = require('./modules/skill-bridge');
+const mcpServers = require('./modules/mcp-servers');
 
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const MAX_ATTACHMENTS = 20;
@@ -419,6 +421,32 @@ function registerIpc(services) {
     store.delete('splashArt');
     store.delete('splashArtName');
     return store.merge({ splashStyle: 'whale' });
+  });
+
+  // ---------------------------------------------------------------- extensions
+  // Skills apply live (the kernel watches its skills folder); MCP rows apply on the next
+  // local-service restart because they become launch-patch configuration.
+  handle('extensions:skills', () => skillBridge.listSkills(DIRS.root));
+  handle('extensions:skill-set', (id, enabled) => {
+    if (typeof id !== 'string' || !id) throw new Error('技能标识无效');
+    return skillBridge.setSkillEnabled(DIRS.root, id, enabled === true);
+  });
+  handle('extensions:mcp', () => mcpServers.describeServers(DIRS.config));
+  handle('extensions:mcp-save', (server) => {
+    mcpServers.saveServer(DIRS.config, server);
+    return mcpServers.describeServers(DIRS.config);
+  });
+  handle('extensions:mcp-remove', (name) => {
+    mcpServers.removeServer(DIRS.config, String(name ?? ''));
+    return mcpServers.describeServers(DIRS.config);
+  });
+  handle('extensions:mcp-toggle', (name, enabled) => {
+    mcpServers.setServerEnabled(DIRS.config, String(name ?? ''), enabled === true);
+    return mcpServers.describeServers(DIRS.config);
+  });
+  handle('extensions:mcp-preset', (id) => {
+    mcpServers.addPreset(DIRS.config, String(id ?? ''));
+    return mcpServers.describeServers(DIRS.config);
   });
 
   // ---------------------------------------------------------------- credentials

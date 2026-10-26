@@ -218,6 +218,17 @@ function registerStubIpc() {
   ipcMain.handle('settings:describe', () => ok({ namespaces: [] }));
   ipcMain.handle('settings:kernel-source-get', () => ok(null));
   ipcMain.handle('settings:kernel-source-set', (_event, value) => ok(value || null));
+  const extSkills = { folder: '/data/harness/skills', localOnly: ['my-notes'], skills: [
+    { id: 'claude:pdf', source: 'Claude', name: 'pdf', description: 'Read, merge, split and fill PDF files.', linkName: 'pdf', enabled: true },
+    { id: 'codex:ffmpeg', source: 'Codex', name: 'ffmpeg', description: 'Cut, convert and inspect audio/video with ffmpeg.', linkName: 'ffmpeg', enabled: false },
+    { id: 'codex-plugins:sites', source: 'Codex 插件', name: 'sites', description: 'Build and preview static sites.', linkName: 'sites', enabled: false },
+  ] };
+  const extMcp = { servers: [{ name: 'browser', transport: 'stdio', enabled: true, command: 'npx', args: ['-y', '@playwright/mcp@0.0.83'], url: null, envKeys: [], headerKeys: [] }],
+    presets: [{ id: 'browser', label: '浏览器自动化（Playwright）', description: '让 DeepSeek 打开网页、点击、填写表单和截图。', installed: true }] };
+  ipcMain.handle('extensions:skills', () => ok(extSkills));
+  ipcMain.handle('extensions:skill-set', (_event, id, enabled) => { const skill = extSkills.skills.find((item) => item.id === id); if (skill) skill.enabled = enabled; return ok(extSkills); });
+  ipcMain.handle('extensions:mcp', () => ok(extMcp));
+  for (const channel of ['extensions:mcp-save', 'extensions:mcp-remove', 'extensions:mcp-toggle', 'extensions:mcp-preset']) ipcMain.handle(channel, () => ok(extMcp));
   ipcMain.handle('settings:splash-art-pick', () => ok(Object.assign(world.ui, { splashStyle: 'custom', splashArt: 'custom-1.png', splashArtName: 'fixture.png' })));
   ipcMain.handle('settings:splash-art-clear', () => ok(Object.assign(world.ui, { splashStyle: 'whale', splashArt: undefined, splashArtName: undefined })));
   ipcMain.handle('platform:status', () => ok(world.platform));
@@ -480,6 +491,10 @@ app.whenReady().then(async () => {
   await new Promise((resolve) => setTimeout(resolve, 1000));
   console.log('GENERAL PANEL', JSON.stringify(await win.webContents.executeJavaScript(PANEL_PROBE), null, 2));
   fs.writeFileSync(shot('-general'), (await capture(win)).toPNG());
+
+  await win.webContents.executeJavaScript('document.querySelector("[data-tab=extensions]").click()');
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  fs.writeFileSync(shot('-extensions'), (await capture(win)).toPNG());
 
   await win.webContents.executeJavaScript('document.querySelector("[data-tab=about]").click()');
   await new Promise((resolve) => setTimeout(resolve, 500));

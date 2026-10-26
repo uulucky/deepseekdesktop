@@ -18,6 +18,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { DIRS, IS_WINDOWS, IS_MAC, isDev, log, clamp, sleep, existsSync, readJsonSync, writeJsonSync } = require('./util');
+const { mcpPatchEntries } = require('./mcp-servers');
 const { run, runStreaming, killTree, waitFor } = require('./proc');
 const { reapOrphanKernels } = require('./orphan-kernel');
 
@@ -687,7 +688,7 @@ class Bootstrap {
       }, {
         id: 'desktop-safety-guard', name: safetyPlugin,
         config: { settingsFile: path.join(DIRS.config, 'safety-guard.json') },
-      }] }]), 'utf8');
+      }, ...mcpPatchEntries(DIRS.config)] }]), 'utf8');
       const args = useNodeEntry
         ? [entry, 'web', '--patch', presentationPatch, '--port', String(port), '--no-open']
         : ['web', '--patch', presentationPatch, '--port', String(port), '--no-open'];

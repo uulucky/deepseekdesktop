@@ -858,9 +858,7 @@ class DeepSeekHarnessClient {
   }
   listAgentPresets() { return this.call('agentPresets/list', {}); }
   listSkills(sessionId) {
-    return this.call('skills/list', { request: {
-      address: { kind: 'session', sessionId },
-    } });
+    return this.call('skills/list', { request: { sessionId } });
   }
 
   listProviders() { return this.call('llm/listProviders', {}); }
