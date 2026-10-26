@@ -85,10 +85,16 @@ for (let index = 1; index < order.length; index += 1) {
   assert.ok(plugins.compareVersions(order[index - 1], order[index]) < 0, `${order[index - 1]} < ${order[index]}`);
 }
 assert.equal(plugins.compareVersions('0.1.5-rc.1', '0.1.5-rc.1'), 0);
-const current = plugins.describeCatalog('0.1.5-rc.1');
-assert.deepEqual(current.plugins.filter((plugin) => plugin.compatible).map((plugin) => plugin.name), ['@openviking/dsh-memory-plugin']);
-assert.equal(plugins.describeCatalog('0.2.1-rc.3').plugins.every((plugin) => plugin.compatible), true);
-assert.equal(plugins.describeCatalog(null).plugins.some((plugin) => plugin.compatible), false, 'unknown kernel is never compatible');
+const current = plugins.describeCatalog('0.1.5-rc.1', { 'dsh-free-search': '0.9.15' });
+assert.deepEqual(current.plugins.filter((plugin) => plugin.installable).map((plugin) => plugin.name), ['dsh-free-search'],
+  'only plugins verified on the exact running kernel install');
+assert.equal(current.plugins.find((plugin) => plugin.name === 'dsh-free-search').installedVersion, '0.9.15');
+assert.equal(current.plugins.find((plugin) => plugin.name === '@dfy-plugins/dsh-image-generation').verdict, 'breaks-kernel');
+assert.deepEqual(current.plugins.filter((plugin) => plugin.declaredCompatible).map((plugin) => plugin.name), ['@openviking/dsh-memory-plugin']);
+const untested = plugins.describeCatalog('0.2.1-rc.3');
+assert.equal(untested.plugins.some((plugin) => plugin.installable), false, 'an untested kernel installs nothing');
+assert.equal(untested.plugins.every((plugin) => plugin.declaredCompatible), true);
+assert.equal(plugins.describeCatalog(null).plugins.some((plugin) => plugin.installable || plugin.declaredCompatible), false);
 for (const entry of plugins.CATALOG) {
   assert.match(entry.version, /^\d+\.\d+\.\d+$/, `${entry.name} pins an exact version`);
   assert.match(entry.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/, `${entry.name} pins an integrity hash`);

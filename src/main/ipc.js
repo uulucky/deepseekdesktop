@@ -14,6 +14,7 @@ const skillBridge = require('./modules/skill-bridge');
 const imageOcr = require('./modules/image-ocr');
 const mediaTools = require('./modules/media-tools');
 const pluginCatalog = require('./modules/plugin-catalog');
+const pluginInstaller = require('./modules/plugin-installer');
 const mcpServers = require('./modules/mcp-servers');
 
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -466,9 +467,26 @@ function registerIpc(services) {
     return skillBridge.setSkillEnabled(DIRS.root, id, enabled === true);
   });
   handle('extensions:mcp', () => mcpServers.describeServers(DIRS.config));
-  handle('extensions:plugins', () => {
+  const runningKernel = () => {
     const boot = getContext().bootstrap;
-    return pluginCatalog.describeCatalog(boot?.runningKernelVersion ?? boot?.kernelVersion?.() ?? null);
+    return boot?.runningKernelVersion ?? boot?.kernelVersion?.() ?? null;
+  };
+  const describePlugins = () => pluginCatalog.describeCatalog(runningKernel(), pluginInstaller.installedPlugins(DIRS.root));
+  handle('extensions:plugins', describePlugins);
+  handle('extensions:plugin-install', async (name) => {
+    await pluginInstaller.installPlugin({
+      dataRoot: DIRS.root, runtimeDir: DIRS.runtime, nodeBin: getContext().bootstrap?.nodeBin,
+      kernelVersion: runningKernel(), name: String(name ?? ''),
+    });
+    log('ipc', 'curated plugin installed', { name });
+    return describePlugins();
+  });
+  handle('extensions:plugin-remove', async (name) => {
+    await pluginInstaller.removePlugin({
+      dataRoot: DIRS.root, runtimeDir: DIRS.runtime, nodeBin: getContext().bootstrap?.nodeBin, name: String(name ?? ''),
+    });
+    log('ipc', 'curated plugin removed', { name });
+    return describePlugins();
   });
   handle('extensions:mcp-save', (server) => {
     mcpServers.saveServer(DIRS.config, server);

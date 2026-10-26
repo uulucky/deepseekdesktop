@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld('deepseek', {
     setSkill: (id, enabled) => invoke('extensions:skill-set', id, enabled),
     mcp: () => invoke('extensions:mcp'),
     plugins: () => invoke('extensions:plugins'),
+    installPlugin: (name) => invoke('extensions:plugin-install', name),
+    removePlugin: (name) => invoke('extensions:plugin-remove', name),
     saveMcp: (server) => invoke('extensions:mcp-save', server),
     removeMcp: (name) => invoke('extensions:mcp-remove', name),
     toggleMcp: (name, enabled) => invoke('extensions:mcp-toggle', name, enabled),

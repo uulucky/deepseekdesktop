@@ -15,7 +15,10 @@ const ExtensionsPanel = {
     ]);
     this.skills = skills ?? { skills: [], localOnly: [], folder: '' };
     this.mcp = mcp ?? { servers: [], presets: [] };
-    body.innerHTML = `${this.skillsCard()}${this.mcpCard()}${typeof PluginCenter !== 'undefined' ? await PluginCenter.card() : ''}`;
+    const banner = this.restartNeeded
+      ? '<div class="banner warn">MCP 或插件设置已更改，重启本地服务后生效。<button class="btn small primary" data-action="restart-boot">立即重启本地服务</button></div>'
+      : '';
+    body.innerHTML = `${banner}${this.skillsCard()}${this.mcpCard()}${typeof PluginCenter !== 'undefined' ? await PluginCenter.card() : ''}`;
   },
 
   skillsCard() {
@@ -67,7 +70,6 @@ const ExtensionsPanel = {
     return `
       <div class="card">
         <div class="card-head"><div><div class="card-title">MCP 服务器</div><div class="card-sub">把外部工具接给 DeepSeek，工具名形如 mcp__名称__工具</div></div></div>
-        ${this.restartNeeded ? `<div class="banner warn">MCP 设置已保存，重启本地服务后生效。<button class="btn small primary" data-action="restart-boot">立即重启本地服务</button></div>` : ''}
         ${list || '<div class="hint">还没有添加 MCP 服务器。</div>'}
         <div class="field"><label>常用预设</label>${presetRows}</div>
         <details class="ext-form">
@@ -117,6 +119,21 @@ const ExtensionsPanel = {
     const node = target.closest?.('[data-action]');
     const action = node?.getAttribute('data-action');
     switch (action) {
+      case 'ext-plugin-install':
+      case 'ext-plugin-remove': {
+        const name = node.getAttribute('data-name');
+        const installing = action === 'ext-plugin-install';
+        node.disabled = true;
+        node.textContent = installing ? '正在安装…' : '正在卸载…';
+        if (installing) toast('正在下载并校验插件，可能需要一两分钟…');
+        const result = await guard(installing ? api.extensions.installPlugin(name) : api.extensions.removePlugin(name), installing ? '安装失败' : '卸载失败');
+        if (result) {
+          this.restartNeeded = true;
+          toast(installing ? '插件已安装，重启本地服务后生效' : '插件已卸载，重启本地服务后生效', 'ok');
+        }
+        await Settings.renderBody();
+        return true;
+      }
       case 'ext-plugin-home': {
         const url = node.getAttribute('data-url');
         if (url) await guard(api.app.openExternal(url), '打开主页失败');
@@ -187,14 +204,18 @@ const PluginCenter = {
           <span class="ext-name">${esc(plugin.title)} <span class="ext-source">${esc(plugin.name)}@${esc(plugin.version)} · ${esc(plugin.license)}</span></span>
           <span class="ext-desc">${esc(plugin.description)}</span>
         </span>
-        <span class="badge ${plugin.compatible ? 'ok' : 'warn'}" title="插件声明的最低内核：${esc(plugin.minKernel)}">${plugin.compatible ? '内核兼容' : `需内核 ≥ ${esc(plugin.minKernel)}`}</span>
+        <span class="badge ${plugin.verdict === 'works' ? 'ok' : 'warn'}" title="${esc(plugin.testNote ?? '')}">${esc(plugin.verdictLabel)}</span>
+        ${plugin.installedVersion
+    ? `<button class="btn small danger" data-action="ext-plugin-remove" data-name="${esc(plugin.name)}">卸载</button>`
+    : plugin.installable ? `<button class="btn small primary" data-action="ext-plugin-install" data-name="${esc(plugin.name)}">安装</button>` : ''}
         <button class="btn small" data-action="ext-plugin-home" data-url="${esc(plugin.homepage)}">主页</button>
-      </div>`).join('');
+      </div>
+      ${plugin.testNote ? `<div class="hint ext-note">${esc(plugin.testNote)}</div>` : ''}`).join('');
     return `
       <div class="card">
         <div class="card-head"><div><div class="card-title">精选插件</div><div class="card-sub">经过审阅、固定版本的 Harness 插件（当前内核 ${esc(data.kernelVersion ?? '未知')}）</div></div></div>
         ${rows}
-        <div class="hint">第三方插件以本地服务的权限运行，客户端暂不提供一键安装：会在内核升级并逐个实测后开放。只作用于 Harness 网页界面的插件（如桌宠、余额挂件、壁纸）在客户端里看不到效果，因此不在此列。</div>
+        <div class="hint">第三方插件以本地服务的权限运行。只有在当前内核上实测通过的插件可以安装：固定版本，下载后核对完整性校验，不运行依赖的安装脚本；安装和卸载都在重启本地服务后生效。只作用于 Harness 网页界面的插件（如桌宠、余额挂件、壁纸）在客户端里看不到效果，因此不在此列。</div>
       </div>`;
   },
 };
