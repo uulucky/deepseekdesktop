@@ -1,7 +1,7 @@
 {
   "name": "deepseek-desktop",
   "productName": "DeepSeek Desktop",
-  "version": "0.3.5",
+  "version": "0.5.1",
   "description": "DeepSeek \u684c\u9762\u5ba2\u6237\u7aef \u2014 \u7528 ChatGPT \u5f0f\u539f\u751f\u754c\u9762\u9a71\u52a8\u672c\u5730 DeepSeek Harness (dsh web) \u5185\u6838",
   "main": "src/main/index.js",
   "author": "uulucky",

@@ -21,9 +21,9 @@ const manifest = {
   version: pkg.version,
   publishedAt: new Date().toISOString(),
   notes: [
-    '修复 Windows 关闭客户端时账号子窗口聚焦已销毁的主窗口，引发主进程 JavaScript 错误弹窗。',
-    '关闭阶段停止账号刷新，并保护窗口聚焦与后台状态推送，避免访问正在销毁的 WebContents。',
-    'Windows、Apple 芯片与 Intel Mac 同版本构建；Mac 功能保持不变。',
+    '安全护栏：Full Access 下少数高风险命令（破坏性删除、丢弃 Git 修改、强制推送、格式化、远程脚本、读取密钥）先确认再执行。',
+    '设置新增“扩展”：复用 Claude/Codex 本机技能、添加 MCP 服务器，并可安装实测通过的免费多引擎联网搜索插件。',
+    '只支持文字的模型收到图片时用系统文字识别在本机提取文字；自动找到 ffmpeg/ffprobe；新的胖鲸启动动画。',
     'Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。',
   ],
   platforms: {

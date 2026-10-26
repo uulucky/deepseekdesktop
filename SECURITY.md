@@ -6,10 +6,11 @@
 
 - 这是可以执行命令、读取文件、调用外部服务的 Agent 客户端，不是仅显示聊天文字的浏览器。
 - 没有保存过权限偏好时默认 Full Access，默认工作目录为 `data/workspace/`；旧的自选目录和低权限偏好保留。Workspace Write 可修改工作目录；Full Access 取消 Harness 沙箱限制，但不会绕过 Windows 账户权限/UAC。**专用工作目录不是 Full Access 的隔离边界。**
-- Full Access 在输入区持续显示风险提醒，不通过阻塞弹窗或单次批准打断操作。三个档位都能保存为新会话默认值；重启、打开或发送旧会话不会自动更改权限。此默认值偏向操作便利，不是最小权限配置；处理不可信内容前请主动选择只读/工作区或使用隔离环境。
+- Full Access 在输入区持续显示风险提醒，日常操作不弹窗。安全护栏（默认开启，可在“设置 → 通用”关闭）只针对一小组高风险操作先弹出确认：递归删除系统/主目录/磁盘根目录、`git reset --hard`/`clean -f`/丢弃全部修改/强制推送、格式化或直接写磁盘、下载脚本直接执行、对根目录递归改权限、关机重启、删除卷影副本或 HKLM 注册表、读取钥匙串密码、SSH 私钥与云凭据文件。没有人可以确认时（例如子 Agent 调用）一律拒绝。它基于命令文本匹配，不能识别经过混淆、拆分或脚本间接执行的危险操作，**不是沙箱**。三个档位都能保存为新会话默认值；重启、打开或发送旧会话不会自动更改权限。此默认值偏向操作便利，不是最小权限配置；处理不可信内容前请主动选择只读/工作区或使用隔离环境。
 - 权限由固定版本 Harness 执行。沙箱可能有上游缺陷，不能当成针对恶意代码的绝对隔离；高风险任务适合专用账户或虚拟机。
 - 工作台 Electron 页面使用 context isolation、关闭 Node integration；特权 IPC 校验来源页面和主 frame，广告图片受 CSP/域名限制。官方网页版另在启用 Chromium sandbox、无 Node integration、无 preload 的远程容器中运行，不能调用桌面客户端 IPC。仅允许 DeepSeek 官方 HTTPS 域在容器内导航，外部 HTTP(S) 链接交给系统浏览器。网页版 User-Agent 去掉 Electron 和客户端产品标识以兼容官方页面，但保留真实系统与 Chromium 版本；这不授予页面桌面权限，也不绕过验证码或账号限制。429 恢复遵守服务器等待时间，自动重试仅一次；403 不遮蔽官方验证页面。它们减少攻击面，但不等于通过独立渗透审计。
 - 本地凭据文件可能明文，详见 [隐私说明](PRIVACY.md)。
+- “设置 → 扩展”添加的 MCP 服务器和启用的技能以你的账户权限在本机运行或被 Agent 读取，只添加你信任的来源；MCP 环境变量（可能含令牌）明文保存在 `config/mcp-servers.json`，界面只显示变量名。精选插件以本地服务权限运行，客户端只允许安装在当前内核版本上实测通过的条目，固定版本、核对 npm 完整性值、不运行依赖安装脚本；不兼容的插件可能导致本地服务无法启动，因此不会开放安装。
 
 ## 三种不同的验证
 
@@ -30,8 +31,8 @@ Mac 每小时验证同一 Ed25519 更新清单，仅提供匹配 CPU 的 DMG 下
 在 Release 下载 ZIP、`SHA256SUMS.txt` 和 `build-info.json`。PowerShell：
 
 ```powershell
-Get-FileHash .\DeepSeekDesktop-0.3.5-portable.zip -Algorithm SHA256
-gh attestation verify .\DeepSeekDesktop-0.3.5-portable.zip --repo uulucky/deepseekdesktop
+Get-FileHash .\DeepSeekDesktop-0.5.1-portable.zip -Algorithm SHA256
+gh attestation verify .\DeepSeekDesktop-0.5.1-portable.zip --repo uulucky/deepseekdesktop
 ```
 
 核对哈希、来源仓库、workflow 及源码提交，而不是仅看文件名。详情见 [构建与验证](BUILDING.md)。源码内公钥位于 `src/main/modules/update-keys.json`。
@@ -39,8 +40,8 @@ gh attestation verify .\DeepSeekDesktop-0.3.5-portable.zip --repo uulucky/deepse
 Mac 终端示例（Intel 将 `arm64` 换为 `x64`）：
 
 ```sh
-shasum -a 256 DeepSeekDesktop-0.3.5-mac-arm64.dmg
-gh attestation verify DeepSeekDesktop-0.3.5-mac-arm64.dmg --repo uulucky/deepseekdesktop
+shasum -a 256 DeepSeekDesktop-0.5.1-mac-arm64.dmg
+gh attestation verify DeepSeekDesktop-0.5.1-mac-arm64.dmg --repo uulucky/deepseekdesktop
 ```
 
 ## 支持范围与未覆盖事项

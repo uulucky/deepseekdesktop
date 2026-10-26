@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.3.5**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.5.1**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.3.5-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.3.5-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.5.1-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 Microsoft Store 渠道正在准备提交，**尚不代表已通过审核或可下载**。商店版采用 MSIX，安装和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
 
@@ -23,6 +23,9 @@ Microsoft Store 渠道正在准备提交，**尚不代表已通过审核或可�
 - **推理滑块**：按当前模型支持的档位选择推理等级。
 - **中文行动摘要**：执行前简短说明准备做什么，后续说明已确认的进展和下一步；摘要展开显示，思考原文与工具详情默认折叠。
 - **权限滑块**：发送按钮旁切换 Read Only、Workspace Write、Full Access；默认 Full Access，输入区持续显示风险提醒，记住你选择的档位。
+- **安全护栏**：即使在 Full Access 下，递归删除系统或主目录、`git reset --hard`、强制推送、格式化磁盘、下载脚本直接执行、读取 SSH 密钥和云凭据等少数高风险操作，也会先弹出确认卡片；其余命令照常执行。可在“设置 → 通用”关闭。
+- **扩展**：“设置 → 扩展”可直接启用本机 Claude、Codex 已有的 Agent Skills，添加 MCP 服务器（含浏览器自动化预设），并安装经实测的精选 Harness 插件。
+- **媒体与图片**：自动找到本机 ffmpeg/ffprobe 告诉 Agent；向只支持文字的模型发送图片时，用系统自带的文字识别在本机提取图中文字一起发送。
 - **多任务对话**：一个会话运行时可以继续新建、发送和切换其他会话；各自保留草稿、模型、权限和运行状态，停止只作用于当前会话。
 - **交互提问**：Agent 需要补充信息时，工作台直接显示待回答卡片，支持选项、自定义回答、多题与取消；侧栏标记待回答会话。
 - **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
@@ -69,13 +72,14 @@ DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许�
 
 Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full Access 取消 Harness 沙箱限制，可能影响工作目录外的文件和系统。Full Access 不绕过 UAC，也不适合把不可信任务当普通聊天直接执行。权限并不意味着没有网络访问。
 
-没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险，不通过反复弹窗打断操作。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
+没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险；日常操作不弹窗，只有安全护栏列出的少数高风险操作会先请你确认（可关闭）。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.3.5 更新
+## 0.5.1 更新
 
-- 修复 Windows 关闭主窗口时，账号子窗口及后台回调仍尝试聚焦或向已销毁的窗口发送消息，导致弹出 Electron 主进程 JavaScript 错误的问题。
-- 退出开始后停止对子窗口的账号刷新；窗口聚焦与消息发送增加生命周期检查，避免关闭过程中的竞争条件。
-- Windows、Mac Apple 芯片和 Mac Intel 使用同一套签名更新清单，本次三端同版本构建；Mac 使用方式与功能保持不变。
+- **安全护栏**：Full Access 下的少数高风险命令（破坏性删除、丢弃 Git 修改、强制推送、格式化磁盘、远程脚本直接执行、读取密钥凭据）先在对话里确认；拒绝后 Agent 会收到被拦截的结果。
+- **设置 → 扩展**：一键复用 Claude/Codex 的本机技能（只建链接，不复制或修改原技能）；添加 MCP 服务器并内置 Playwright 浏览器自动化预设；精选插件列出实测结论，目前“免费多引擎联网搜索”可一键安装（固定版本并核对完整性）。
+- **媒体与图片**：本地服务的 PATH 自动补全 Homebrew、winget 等常见目录，并把 ffmpeg/ffprobe 的实际位置告诉 Agent；V4-Flash、V4-Pro 等只支持文字的模型收到图片时，用 macOS Vision / Windows OCR 在本机识别文字后随消息发送（可关闭）。
+- **界面**：新的蓝色胖鲸启动动画，也可换成自己的图片或视频；提示消息移到右上角，不再遮挡发送按钮；推理调到“最大”时提示更慢、更费 tokens。
 
 网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码、网络出口或官方访问策略。真实账号环境仍可能因官方规则收到 403/429，遇到持续拒绝时请等待倒计时结束，不要反复重启刷新。
 
