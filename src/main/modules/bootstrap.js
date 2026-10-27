@@ -22,6 +22,7 @@ const { mcpPatchEntries } = require('./mcp-servers');
 const { augmentedPath, detectMediaTools, mediaPromptNote } = require('./media-tools');
 const { run, runStreaming, killTree, waitFor } = require('./proc');
 const { reapOrphanKernels } = require('./orphan-kernel');
+const { stagePreset } = require('./companion');
 
 const DEFAULT_PORT = 3080;
 // DSH 0.1.5+ uses `import.meta.main` in its executable entry. That API is available in
@@ -691,6 +692,8 @@ class Bootstrap {
       const kernelPath = augmentedPath(process.env, this.nodeBin ? [path.dirname(this.nodeBin)] : []);
       const mediaTools = detectMediaTools({ ...process.env, ...kernelPath });
       log('bootstrap', 'media tools', { ffmpeg: Boolean(mediaTools.ffmpeg), ffprobe: Boolean(mediaTools.ffprobe) });
+      // 老友 (the main conversation) runs its own agent preset with the companion_* tools.
+      try { stagePreset(); } catch (error) { log('bootstrap', 'companion preset not staged', String(error?.message ?? error)); }
       const presentationPatch = path.join(presentationDir, 'cordis.patch.json');
       fs.writeFileSync(presentationPatch, JSON.stringify([{ insert: [{
         id: 'desktop-action-summary', name: presentationPlugin,

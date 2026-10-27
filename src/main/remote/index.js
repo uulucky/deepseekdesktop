@@ -284,6 +284,12 @@ class RemoteControl {
     const chat = () => ctx().chat;
     const guard = () => rules.requireGuard(this.guardFile());
     const transcriptOf = (sessionId) => chat().transcripts?.get(sessionId) ?? null;
+    // 老友 is desktop-only for now; the work it dispatched is ordinary and phones can drive it.
+    const notCompanion = (sessionId) => {
+      if (ctx().companion?.isCompanion(sessionId)) {
+        throw new rules.RemoteRuleError('老友暂时只能在电脑上用', 403, 'companion-desktop-only');
+      }
+    };
     /** Bring a session down to what the phone may drive before it acts on it. */
     const enforcePermission = async (sessionId, elevated) => {
       const current = (await ctx().client.permissions(sessionId))?.currentValue;
@@ -307,7 +313,7 @@ class RemoteControl {
         if (typeof body?.on === 'boolean') this.setKeepAwake(body.on);
         return { keepAwake: this.keepAwakeWanted(), awake: this.blocker !== null, platform: process.platform };
       },
-      listSessions: async () => ({ items: (await this.sessions.sessionRows()).filter((row) => !row.archived) }),
+      listSessions: async () => ({ items: (await this.sessions.sessionRows()).filter((row) => !row.archived && !row.companion) }),
       createSession: async ({ body, elevated }) => {
         guard();
         const options = ctx().defaultSessionOptions();
@@ -322,18 +328,21 @@ class RemoteControl {
         return { ...created, permission: capped.preset, capped: capped.capped };
       },
       openSession: async ({ params: [sessionId], query }) => {
+        notCompanion(sessionId);
         await this.sessions.restorePermission(sessionId);
         const snapshot = await chat().open(sessionId);
         const limit = Math.min(Math.max(Number(query.get('limit')) || MAX_ITEMS, 1), 500);
         return { ...snapshot, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit };
       },
       sendMessage: async ({ params: [sessionId], body, elevated }) => {
+        notCompanion(sessionId);
         guard();
         const permission = await enforcePermission(sessionId, elevated);
         await this.sessions.prompt(sessionId, body?.text ?? '', decodeAttachments(body?.attachments));
         return { ok: true, permission };
       },
       cancel: async ({ params: [sessionId] }) => {
+        notCompanion(sessionId);
         await chat().cancel(sessionId);
         return { ok: true };
       },
@@ -357,6 +366,7 @@ class RemoteControl {
         max: this.maxPermission(),
       }),
       selectPermission: async ({ params: [sessionId], body, elevated }) => {
+        notCompanion(sessionId);
         const capped = rules.capPermission(body?.preset, this.maxPermission(), { elevated });
         await this.sessions.selectPermission(sessionId, capped.preset);
         return { current: capped.preset, capped: capped.capped };
@@ -381,6 +391,7 @@ class RemoteControl {
         };
       },
       selectModel: async ({ params: [sessionId], body }) => {
+        notCompanion(sessionId);
         const result = await ctx().client.selectModel(sessionId, body?.provider, body?.model, body?.effort);
         return { selected: result?.selected ?? null };
       },

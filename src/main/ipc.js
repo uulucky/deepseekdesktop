@@ -151,6 +151,16 @@ function registerIpc(services) {
     restored.add(sessionId);
     return current;
   };
+  // 老友 (the main conversation) keeps its name, model and read-only permission, and is
+  // never archived or copied; the companion module owns all of that.
+  const companion = () => getContext().companion ?? null;
+  const protectCompanion = (sessionId, action) => {
+    if (companion()?.isCompanion(sessionId)) {
+      const error = new Error(`老友是主对话，不能${action}`);
+      error.code = 'companion-locked';
+      throw error;
+    }
+  };
   const workspaceState = async (client) => client.listWorkspaces().catch((error) => {
     log('ipc', 'workspace projection unavailable', String(error));
     return { items: [], archivedSessionIds: [] };
@@ -180,6 +190,8 @@ function registerIpc(services) {
         running: Boolean(item.running),
         updatedAt: item.updatedAt,
         turns: item.projections?.values?.sessionStats?.turns ?? 0,
+        companion: Boolean(companion()?.isCompanion(item.sessionId)),
+        byCompanion: Boolean(companion()?.dispatched(item.sessionId)),
       }))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
   };
@@ -284,12 +296,14 @@ function registerIpc(services) {
     return created;
   });
   handle('sessions:rename', async (sessionId, title) => {
+    protectCompanion(sessionId, '改名');
     const normalized = typeof title === 'string' ? title.trim() : '';
     if (!normalized) throw new Error('对话名称不能为空');
     const result = await getContext().client.renameSession(sessionId, normalized);
     return result;
   });
   handle('sessions:archive', async (sessionId) => {
+    protectCompanion(sessionId, '归档');
     const ctx = getContext();
     const summary = (await ctx.client.listSessions()).find((item) => item.sessionId === sessionId);
     if (summary?.running) throw new Error('任务运行中，请先停止后再归档');
@@ -298,6 +312,7 @@ function registerIpc(services) {
     return result;
   });
   handle('sessions:fork', async (sessionId) => {
+    protectCompanion(sessionId, '复制');
     const ctx = getContext();
     const [models, permissions] = await Promise.all([
       ctx.client.sessionModels(sessionId).catch(() => null),
@@ -329,7 +344,10 @@ function registerIpc(services) {
     const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
     if (!message && normalized.length === 0) throw new Error('请输入消息或选择附件');
     await restorePermission(sessionId);
-    return service('chat').send(sessionId, await withImageText(ctx, sessionId, message, normalized), normalized);
+    let outgoing = await withImageText(ctx, sessionId, message, normalized);
+    // The fixed model is re-selected and the task progress put in front on every message.
+    if (companion()?.isCompanion(sessionId)) outgoing = await companion().beforePrompt(outgoing);
+    return service('chat').send(sessionId, outgoing, normalized);
   };
   handle('sessions:prompt', prompt);
   handle('sessions:attachment', (sessionId, attachmentId) => {
@@ -351,7 +369,18 @@ function registerIpc(services) {
     return { current: models.current ?? null, routable: models.routable, failures: models.failures ?? [] };
   });
   handle('sessions:permissions', (sessionId) => getContext().client.permissions(sessionId));
-  handle('sessions:select-permission', selectPermission);
+  handle('sessions:select-permission', (sessionId, preset) => {
+    protectCompanion(sessionId, '修改权限');
+    return selectPermission(sessionId, preset);
+  });
+
+  // ------------------------------------------------------------------ 老友
+  handle('companion:get', async () => {
+    await companion().ensure();
+    return companion().snapshot();
+  });
+  handle('companion:acknowledge', (taskId) => companion().acknowledge(String(taskId ?? '')));
+  handle('companion:welcomed', () => companion().markWelcomed());
 
   // ---------------------------------------------------------------- workspaces
   handle('workspaces:list', () => getContext().client.listWorkspaces());
@@ -399,6 +428,7 @@ function registerIpc(services) {
     return result.snapshot ?? null;
   });
   handle('llm:select-model', async (sessionId, provider, model, effort) => {
+    protectCompanion(sessionId, '换模型：它固定使用 DeepSeek V4.1 Flash，思考关闭');
     const ctx = getContext();
     return ctx.client.selectModel(sessionId, provider, model, effort).then((result) => result.selected);
   });

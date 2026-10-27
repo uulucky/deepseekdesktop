@@ -31,6 +31,7 @@ const { isStoreBuild, STORE_APP_ID } = require('./modules/distribution');
 const { WebChatSurface } = require('./modules/web-chat');
 const { registerIpc } = require('./ipc');
 const { RemoteControl } = require('./remote');
+const { Companion, companionPaths } = require('./modules/companion');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
 
 const PLATFORM_PARTITION = 'persist:deepseek-platform';
@@ -107,6 +108,7 @@ function main() {
       if (ctx.updateKickTimer) clearTimeout(ctx.updateKickTimer);
       ctx.webSurface?.dispose();
       ctx.remote?.stop();
+      ctx.companion?.stop();
       ctx.chat?.dispose();
       ctx.transcriptDispatcher?.dispose();
       ctx.client?.dispose();
@@ -186,6 +188,15 @@ function main() {
       get ad() { return ctx.ad; },
       getContext: () => ctx,
     });
+    const companionFiles = companionPaths();
+    ctx.companion = new Companion({
+      getContext: () => ctx,
+      sessions,
+      bridgeFile: companionFiles.bridgeFile,
+      home: companionFiles.home,
+      onState: (state) => sendMainWindow('companion:state', state),
+      log,
+    });
     ctx.remote = new RemoteControl({
       getContext: () => ctx,
       sessions,
@@ -231,6 +242,7 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
     onUpdate: (payload) => {
       ctx.transcriptDispatcher.push(payload);
       ctx.remote?.onTranscript(payload);
+      ctx.companion?.onTranscript(payload);
     },
   });
   ctx.client.onState((state) => {
@@ -239,6 +251,12 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
 
   createMainWindow();
   createWorkerWindow(authenticatedUrl ?? baseUrl);
+  // 老友 needs the session API too: its tools call back into this process.
+  ctx.companion?.startBridge()
+    .then(() => ctx.companion.ensure())
+    .then(() => ctx.companion.snapshot())
+    .then((state) => sendMainWindow('companion:state', state))
+    .catch((error) => log('companion', 'main conversation not ready', String(error?.message ?? error)));
   // The phone remote can only serve phones once sessions exist to drive.
   ctx.remote?.start().catch((error) => log('remote', 'phone remote failed to start', String(error)));
   await refreshCredentialState().catch((error) => log('app', 'credential probe failed', String(error)));

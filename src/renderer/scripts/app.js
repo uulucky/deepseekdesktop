@@ -32,15 +32,23 @@ const App = {
 
     await this.refreshSessions();
     await this.refreshCredentials();
+    await window.CompanionView?.load();
     // The account card is refreshed lazily: only when it is actually visible.
     const rememberedId = typeof state.ui.activeSessionId === 'string' ? state.ui.activeSessionId : null;
     const rememberedSession = state.sessions.find((session) => (
       session.sessionId === rememberedId && !session.archived
     ));
     let opened = false;
+    // The first launch with 老友 lands on it; afterwards the last conversation reopens as before.
+    const companionId = state.companion?.sessionId ?? null;
+    if (companionId && !state.companion.welcomed) {
+      opened = await this.openSession(companionId);
+      api.companion.welcomed().catch(() => {});
+    }
     // A brand-new/blank conversation may not be returned by session/list yet. During renderer
     // recovery, try its remembered ID directly before falling back to the first listed item.
-    if (rememberedSession || rememberedId) opened = await this.openSession(rememberedSession?.sessionId ?? rememberedId);
+    if (!opened && (rememberedSession || rememberedId)) opened = await this.openSession(rememberedSession?.sessionId ?? rememberedId);
+    if (!opened && companionId) opened = await this.openSession(companionId);
     const firstSession = state.sessions.find((session) => !session.archived);
     if (!opened && firstSession) opened = await this.openSession(firstSession.sessionId);
     if (!opened) {
@@ -104,6 +112,11 @@ const App = {
       toast('本地服务已停止，请在设置中重启', 'err');
     });
     api.events.onRemoteState?.((snapshot) => RemoteView.receive(snapshot));
+    api.events.onCompanionState?.((snapshot) => {
+      window.CompanionView?.receive(snapshot);
+      Sidebar.renderChatHeader();
+      if (!state.sessions.some((session) => session.sessionId === snapshot?.tasks?.[0]?.taskId)) this.refreshSessionsThrottled();
+    });
     document.getElementById('remote-chip').addEventListener('click', () => Settings.open('phone'));
     RemoteView.load();
     api.events.onSurfaceState?.((surface) => {
@@ -211,6 +224,7 @@ const App = {
         if (this.actionDialog) this.closeActionDialog(null);
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') { event.preventDefault(); this.newSession(); }
+      if ((event.metaKey || event.ctrlKey) && event.key === '0') { event.preventDefault(); window.CompanionView?.open(); }
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); Settings.open('general'); }
     });
     document.addEventListener('click', (event) => {
@@ -342,6 +356,11 @@ const App = {
     state.selectionRoutable = view.selectionRoutable;
     state.permissionMode = view.permissionMode;
     state.permissionBusy = view.permissionBusy;
+    const input = document.getElementById('input');
+    if (input) input.placeholder = window.CompanionView?.active()
+      ? '跟老友聊聊，或者说说想办的事…（Enter 发送）'
+      : '给 DeepSeek 发送消息…（Enter 发送，Shift+Enter 换行）';
+    window.CompanionView?.renderReceipts();
     this.renderStreamingState();
     Sidebar.renderChatHeader();
     Sidebar.renderModelChip();
@@ -467,7 +486,9 @@ const App = {
     state.creatingSession = true;
     this.renderStreamingState();
     const navigation = state.navigation;
-    const intended = state.pendingSelection ?? state.selection ?? this.localDefaultSelection();
+    const fromCompanion = window.CompanionView?.active();
+    const intended = state.pendingSelection
+      ?? (fromCompanion ? this.localDefaultSelection() : state.selection ?? this.localDefaultSelection());
     const intendedPermission = state.pendingPermission
       ?? defaultPermission(state.ui.defaultPermission);
     try {
@@ -744,6 +765,7 @@ const App = {
   /** Apply a selection to a real session, or remember it for the first/new conversation. */
   async chooseSelection(provider, model, reasoningEffort, context = '切换模型') {
     if (!provider || !model) return false;
+    if (window.CompanionView?.active()) { toast('老友固定使用 DeepSeek V4.1 Flash，思考关闭', 'ok'); return false; }
     if (state.streaming || state.stopping || state.sessionLoading || this.sessionView().modelBusy) return false;
     const request = { provider, model, ...(reasoningEffort ? { reasoningEffort } : {}) };
     if (!state.activeSessionId) {
@@ -948,6 +970,20 @@ const App = {
     const slider = document.getElementById('reasoning-slider');
     const value = document.getElementById('reasoning-value');
     if (!control || !slider || !value) return;
+    if (window.CompanionView?.active()) {
+      control.hidden = false;
+      slider.min = '0';
+      slider.max = '0';
+      slider.value = '0';
+      slider.dataset.efforts = '["off"]';
+      slider.disabled = true;
+      value.textContent = '🔒 关闭';
+      slider.title = '老友固定不开思考';
+      control.title = slider.title;
+      control.classList.remove('is-max');
+      return;
+    }
+    control.title = '';
     const { efforts, defaultEffort } = this.reasoningOptions();
     const visible = Boolean(state.selection && state.selectionRoutable !== false && efforts.length);
     control.hidden = !visible;
@@ -1023,6 +1059,16 @@ const App = {
     const slider = document.getElementById('permission-slider');
     const value = document.getElementById('permission-value');
     if (!slider || !value) return;
+    const locked = window.CompanionView?.active();
+    const control = document.getElementById('permission-control');
+    if (control) control.hidden = locked;
+    const note = document.getElementById('companion-perm-note');
+    if (note) note.hidden = !locked;
+    if (locked) {
+      const warning = document.getElementById('permission-warning');
+      if (warning) warning.hidden = true;
+      return;
+    }
     const mode = PERMISSION_MODES.includes(state.permissionMode)
       ? state.permissionMode
       : 'read-only';
@@ -1160,6 +1206,17 @@ const App = {
   },
 
   renderModelPopover() {
+    const locked = window.CompanionView?.active();
+    for (const id of ['model-head', 'model-list', 'model-foot']) {
+      const element = document.getElementById(id);
+      if (element) element.hidden = locked;
+    }
+    const lock = document.getElementById('companion-lock');
+    if (lock) lock.hidden = !locked;
+    if (locked) {
+      window.CompanionView?.renderLockPopover(lock);
+      return;
+    }
     const body = document.getElementById('model-list');
     const foot = document.getElementById('model-foot');
     const groups = state.registry?.registry ?? [];

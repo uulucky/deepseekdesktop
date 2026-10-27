@@ -184,12 +184,20 @@ function renderQuestion(pending) {
 /** Render one transcript item (user / assistant / tool / turn marker). */
 function renderItem(item, approvals = [], questions = [], rowKey = '') {
   if (item.kind === 'user') {
-    const tags = item.synthetic ? '<span class="tag">系统注入</span>' : '';
+    // Progress the desktop put in front of a message to 老友 is for the model, not the bubble.
+    let updates = 0;
+    const visible = (text) => {
+      const split = window.CompanionView ? CompanionView.splitUpdates(text) : { text, updates: 0 };
+      updates += split.updates;
+      return split.text;
+    };
     const pending = item.pending ? ' pending' : '';
     const failed = item.failed ? ' failed' : '';
     const body = item.parts?.length
-      ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(displayText(part.text, MAX_TEXT_CHARS))}</div>` : renderPart(part))).join('')
-      : `<div class="bubble">${esc(displayText(item.text, MAX_TEXT_CHARS))}</div>`;
+      ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(displayText(visible(part.text), MAX_TEXT_CHARS))}</div>` : renderPart(part))).join('')
+      : `<div class="bubble">${esc(displayText(visible(item.text), MAX_TEXT_CHARS))}</div>`;
+    const tags = (item.synthetic ? '<span class="tag">系统注入</span>' : '')
+      + (updates ? `<span class="tag" title="发给老友时自动附带的派活进展">附带 ${updates} 条进展</span>` : '');
     if (item.synthetic) return `<div class="system-context">${fold('运行环境', '系统上下文', body, `${rowKey}:context`)}</div>`;
     return (
       `<div class="msg user${pending}${failed}">` +
@@ -200,12 +208,14 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
   }
 
   if (item.kind === 'assistant') {
-    const parts = item.parts ?? [];
+    // 老友 speaks for itself: no generic action summary, and its tool calls show as cards.
+    const friend = Boolean(window.CompanionView?.is(renderedSession));
+    const parts = (item.parts ?? []).filter((part) => !(friend && part.kind === 'tool-call' && /^companion_/.test(part.name ?? '')));
     const firstText = parts.findIndex(part => part.kind === 'text');
     const text = firstText < 0 ? '' : parts[firstText].text || '';
     const presentation = splitActionSummary(text, item.streaming);
     const hasReasoning = parts.some(part => part.kind === 'reasoning');
-    const hasToolCall = parts.some(part => part.kind === 'tool-call');
+    const hasToolCall = !friend && parts.some(part => part.kind === 'tool-call');
     const validSummary = presentation.summary && (isChineseSummary(presentation.summary) || !hasToolCall);
     const fallbackSummary = hasToolCall && !validSummary ? fallbackActionSummary(item, parts) : '';
     const summary = validSummary ? actionSummary(presentation.summary)
@@ -228,20 +238,24 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
         return renderPart(part, `${rowKey}:part:${index}`);
       }),
     ].join('');
+    // A step where 老友 only called its tools: the card below says it all.
+    if (friend && !body && !item.streaming) return '';
     const streamingTag = item.streaming ? '<span class="tag">生成中</span>' : '';
     const interrupted = item.interrupted ? '<span class="tag">已中断</span>' : '';
     const usage = item.usage
       ? `<div class="usage-line">输出 ${compact(item.usage.outputTokens)} tokens · 输入 ${compact((item.usage.inputTokens ?? 0) + (item.usage.cacheReadTokens ?? 0))} tokens</div>`
       : '';
     return (
-      '<div class="msg assistant">' +
-        '<div class="msg-avatar">D</div>' +
-        `<div class="msg-body"><div class="msg-name">DeepSeek${streamingTag}${interrupted}</div>${body || '<div class="content"><p>…</p></div>'}</div>` +
+      `<div class="msg assistant${friend ? ' companion' : ''}">` +
+        `<div class="msg-avatar">${friend ? '友' : 'D'}</div>` +
+        `<div class="msg-body"><div class="msg-name">${friend ? '老友' : 'DeepSeek'}${streamingTag}${interrupted}</div>${body || '<div class="content"><p>…</p></div>'}</div>` +
       '</div>' + usage
     );
   }
 
   if (item.kind === 'tool') {
+    const card = window.CompanionView?.renderToolCard(item);
+    if (card) return `<div class="companion-card-row">${card}</div>`;
     const approval = approvals.find((entry) => (
       (entry.callId && entry.callId === item.callId)
       || (!entry.callId && item.running && entry.toolName === item.name)
@@ -317,7 +331,7 @@ const ChatView = {
     const questions = transcript?.questions ?? [];
     renderedSession = transcript?.sessionId ?? '';
     if (!transcript || (!(transcript.items ?? []).length && !approvals.length && !questions.length)) {
-      inner.innerHTML = renderEmpty();
+      inner.innerHTML = window.CompanionView?.is(transcript?.sessionId) ? CompanionView.renderWelcome() : renderEmpty();
       return;
     }
     const allItems = transcript.items.filter((item) => item.kind !== 'turn-start');
@@ -389,6 +403,7 @@ const ChatView = {
     });
     document.addEventListener('click', (event) => {
       const target = event.target;
+      if (window.CompanionView?.onClick(target)) return;
       const questionButton = target.closest?.('[data-question-action]');
       if (questionButton) {
         const eventId = questionButton.getAttribute('data-question-id');

@@ -5,7 +5,10 @@ const Sidebar = {
   renderSessions() {
     const list = document.getElementById('session-list');
     if (!list) return;
-    const sessions = state.sessions ?? [];
+    window.CompanionView?.renderEntry();
+    // 老友 has its own pinned entry above the list and never appears in it.
+    const isCompanion = (session) => Boolean(session.companion) || Boolean(window.CompanionView?.is(session.sessionId));
+    const sessions = (state.sessions ?? []).filter((session) => !isCompanion(session));
     const taskState = (session) => {
       const view = state.sessionViews.get(session.sessionId);
       const waiting = Boolean(view?.transcript?.approvals?.length || view?.transcript?.questions?.length);
@@ -36,11 +39,13 @@ const Sidebar = {
       const label = view?.transcript?.questions?.length ? '待回答' : waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
       const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
       const snippet = session.snippet ? `<span class="session-snippet">${esc(session.snippet)}</span>` : '';
+      const byCompanion = session.byCompanion || window.CompanionView?.task(session.sessionId)
+        ? '<span class="by-companion" title="由老友派出">友</span>' : '';
       return (
         `<div class="session-row${active}" data-session-row="${esc(session.sessionId)}">` +
           `<button class="session-item" data-session="${esc(session.sessionId)}" title="${title}">` +
             (running ? '<span class="s-run" aria-hidden="true"></span>' : '') +
-            `<span class="session-title-wrap"><span class="s-title">${title}</span>${snippet}</span>` +
+            `<span class="session-title-wrap"><span class="s-title">${byCompanion}${title}</span>${snippet}</span>` +
             (session.archived ? '<span class="archived-badge">归档</span>' : `<span class="s-meta${statusClass}">${esc(label)}</span>`) +
           '</button>' +
           `<button class="session-menu" data-session-menu="${esc(session.sessionId)}" title="对话操作" aria-label="${title}的操作">` +
@@ -51,7 +56,7 @@ const Sidebar = {
     };
 
     if (query) {
-      const results = state.sessionSearchResults ?? [];
+      const results = (state.sessionSearchResults ?? []).filter((session) => !isCompanion(session));
       list.innerHTML = results.length
         ? results.map(row).join('') + (state.sessionSearchHasMore ? '<div class="session-empty">仅显示前 20 个内容匹配结果，请输入更具体的关键词。</div>' : '')
         : `<div class="session-empty">${state.sessionSearchBusy ? '正在搜索对话内容…' : '没有找到相关对话。'}</div>`;
@@ -196,7 +201,13 @@ const Sidebar = {
     const nameEl = document.getElementById('model-name');
     const dot = document.getElementById('model-dot');
     const selection = state.selection;
-    if (nameEl) nameEl.textContent = selection ? modelLabel(selection.model) : '模型';
+    const locked = Boolean(window.CompanionView?.active());
+    const chip = document.getElementById('model-chip');
+    if (chip) {
+      chip.classList.toggle('locked', locked);
+      chip.title = locked ? '老友固定使用 DeepSeek V4.1 Flash，思考关闭' : '切换模型';
+    }
+    if (nameEl) nameEl.textContent = locked ? '🔒 V4.1 Flash · 固定' : selection ? modelLabel(selection.model) : '模型';
     if (dot) dot.className = 'dot' + (state.connection === 'connected' ? ' on' : '');
   },
 
@@ -220,6 +231,16 @@ const Sidebar = {
     const sub = document.getElementById('chat-sub');
     const transcript = state.transcript;
     if (!title) return;
+    const back = document.getElementById('back-companion');
+    const companion = window.CompanionView;
+    if (back) back.hidden = !(state.activeSessionId && !companion?.active() && companion?.task(state.activeSessionId));
+    if (companion?.active()) {
+      title.textContent = '老友';
+      const counts = state.companion?.counts ?? {};
+      const busy = (counts.running ?? 0) + (counts.waiting ?? 0);
+      sub.textContent = ['主对话 · V4.1 Flash · 思考关闭', busy ? `正在帮你盯 ${busy} 件事` : ''].filter(Boolean).join(' · ');
+      return;
+    }
     if (!transcript) {
       title.textContent = '新对话';
       sub.textContent = state.ui?.workdir ? `工作目录 ${state.ui.workdir}` : '';

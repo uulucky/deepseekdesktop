@@ -50,6 +50,9 @@
         <span id="new-chat-label">新建对话</span>
       </button>
 
+      <!-- 老友: the one main conversation, pinned above the list -->
+      <div class="companion-entry" id="companion-entry"></div>
+
       <div class="session-toolbar">
         <label class="session-search" for="session-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M16 16l4 4" /></svg>
@@ -106,6 +109,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
         <div class="titlebar-title">
+          <button class="back-companion" id="back-companion" data-back-companion type="button" hidden>← 回老友</button>
           <span id="chat-title">新对话</span>
           <span class="titlebar-sub" id="chat-sub"></span>
         </div>
@@ -136,6 +140,7 @@
       </section>
 
       <footer class="composer-wrap">
+        <div class="companion-receipts" id="companion-receipts" hidden></div>
         <div class="composer" id="composer">
           <div class="attachment-drafts" id="attachment-drafts" hidden></div>
           <textarea id="input" rows="1" placeholder="给 DeepSeek 发送消息…（Enter 发送，Shift+Enter 换行）"></textarea>
@@ -153,6 +158,7 @@
               <span class="composer-hint" id="composer-hint"></span>
             </div>
             <div class="composer-right">
+              <span class="companion-perm-note" id="companion-perm-note" hidden>老友不直接操作文件 · 派出的工作对话最多用「工作区」权限</span>
               <div class="permission-control" id="permission-control">
                 <span class="permission-title">权限</span>
                 <input id="permission-slider" class="permission-slider" type="range" min="0" max="2" step="1" value="2" aria-label="权限等级" aria-describedby="permission-warning" />
@@ -177,9 +183,10 @@
 
   <!-- ── Model picker ────────────────────────────────────────────────────── -->
   <div class="popover" id="model-popover" hidden>
-    <div class="popover-head">选择模型</div>
+    <div class="popover-head" id="model-head">选择模型</div>
     <div class="popover-body" id="model-list"></div>
     <div class="popover-foot" id="model-foot"></div>
+    <div class="companion-lock" id="companion-lock" hidden></div>
   </div>
 
   <!-- ── Share client ────────────────────────────────────────────────────── -->
@@ -261,6 +268,7 @@
   <script src="scripts/state.js"></script>
   <script src="scripts/chat-view.js"></script>
   <script src="scripts/sidebar.js"></script>
+  <script src="scripts/companion.js"></script>
   <script src="scripts/account.js"></script>
   <script src="scripts/extensions.js"></script>
   <script src="scripts/settings.js"></script>

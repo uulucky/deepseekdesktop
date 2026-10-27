@@ -112,6 +112,11 @@ contextBridge.exposeInMainWorld('deepseek', {
     setMaxPermission: (preset) => invoke('remote:set-max-permission', preset),
     setKeepAwake: (on) => invoke('remote:set-keep-awake', on),
   },
+  companion: {
+    get: () => invoke('companion:get'),
+    acknowledge: (taskId) => invoke('companion:acknowledge', taskId),
+    welcomed: () => invoke('companion:welcomed'),
+  },
   update: {
     status: () => invoke('update:status'),
     check: () => invoke('update:check'),
@@ -132,6 +137,7 @@ contextBridge.exposeInMainWorld('deepseek', {
   events: {
     onBootState: (listener) => subscribe('boot:state', listener),
     onTranscript: (listener) => subscribe('chat:transcript', listener),
+    onCompanionState: (listener) => subscribe('companion:state', listener),
     onServerStop: (listener) => subscribe('server:stopped', listener),
     onPlatformState: (listener) => subscribe('platform:state', listener),
     onDomMirror: (listener) => subscribe('dsh:dom-mirror', listener),
