@@ -30,6 +30,7 @@ const { withLiveWindow, focusLiveWindow } = require('./modules/window-lifecycle'
 const { isStoreBuild, STORE_APP_ID } = require('./modules/distribution');
 const { WebChatSurface } = require('./modules/web-chat');
 const { registerIpc } = require('./ipc');
+const { RemoteControl } = require('./remote');
 const { externalUrl, isPlatformUrl } = require('./modules/security');
 
 const PLATFORM_PARTITION = 'persist:deepseek-platform';
@@ -105,6 +106,7 @@ function main() {
       if (ctx.updateTimer) clearInterval(ctx.updateTimer);
       if (ctx.updateKickTimer) clearTimeout(ctx.updateKickTimer);
       ctx.webSurface?.dispose();
+      ctx.remote?.stop();
       ctx.chat?.dispose();
       ctx.transcriptDispatcher?.dispose();
       ctx.client?.dispose();
@@ -177,12 +179,19 @@ function main() {
 
     createSplash();
     signalUpdateStartupReady();
-    registerIpc({
+    const sessions = registerIpc({
       get bootstrap() { return ctx.bootstrap; },
       get chat() { return ctx.chat; },
       get platform() { return ctx.platform; },
       get ad() { return ctx.ad; },
       getContext: () => ctx,
+    });
+    ctx.remote = new RemoteControl({
+      getContext: () => ctx,
+      sessions,
+      version: app.getVersion(),
+      onState: (state) => sendMainWindow('remote:state', state),
+      log,
     });
 
     // Catalog sync runs in parallel with the kernel boot: it must never block the UI.
@@ -218,7 +227,10 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
     sendMainWindow('chat:transcript', payload);
   });
   ctx.chat = new ChatController(ctx.client, {
-    onUpdate: (payload) => ctx.transcriptDispatcher.push(payload),
+    onUpdate: (payload) => {
+      ctx.transcriptDispatcher.push(payload);
+      ctx.remote?.onTranscript(payload);
+    },
   });
   ctx.client.onState((state) => {
     if (state === 'reconnecting') log('app', 'harness connection reconnecting');
@@ -226,6 +238,8 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
 
   createMainWindow();
   createWorkerWindow(authenticatedUrl ?? baseUrl);
+  // The phone remote can only serve phones once sessions exist to drive.
+  ctx.remote?.start().catch((error) => log('remote', 'phone remote failed to start', String(error)));
   await refreshCredentialState().catch((error) => log('app', 'credential probe failed', String(error)));
   // Quietly probe the persistent platform session so the account card already knows whether
   // the user is signed in; the window itself stays hidden.

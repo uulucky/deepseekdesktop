@@ -110,6 +110,10 @@
           <span class="titlebar-sub" id="chat-sub"></span>
         </div>
         <div class="titlebar-right">
+          <button class="remote-chip" id="remote-chip" type="button" title="手机连接" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
+            <span>手机已连接</span>
+          </button>
           <div class="model-chip" id="model-chip" role="button" tabindex="0" title="切换模型">
             <span class="dot" id="model-dot"></span>
             <span id="model-name">模型</span>
@@ -260,6 +264,7 @@
   <script src="scripts/account.js"></script>
   <script src="scripts/extensions.js"></script>
   <script src="scripts/settings.js"></script>
+  <script src="scripts/remote.js"></script>
   <script src="scripts/app.js"></script>
 </body>
 </html>

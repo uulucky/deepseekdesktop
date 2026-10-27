@@ -103,6 +103,14 @@ contextBridge.exposeInMainWorld('deepseek', {
     usage: () => invoke('platform:usage'),
     logout: () => invoke('platform:logout'),
   },
+  remote: {
+    status: () => invoke('remote:status'),
+    setEnabled: (on) => invoke('remote:set-enabled', on),
+    pair: () => invoke('remote:pair'),
+    cancelPair: () => invoke('remote:cancel-pair'),
+    revoke: (phone) => invoke('remote:revoke', phone),
+    setMaxPermission: (preset) => invoke('remote:set-max-permission', preset),
+  },
   update: {
     status: () => invoke('update:status'),
     check: () => invoke('update:check'),
@@ -129,5 +137,6 @@ contextBridge.exposeInMainWorld('deepseek', {
     onAdState: (listener) => subscribe('ad:state', listener),
     onUpdateState: (listener) => subscribe('update:state', listener),
     onSurfaceState: (listener) => subscribe('surface:state', listener),
+    onRemoteState: (listener) => subscribe('remote:state', listener),
   },
 });

@@ -30,6 +30,10 @@
     {
       "from": "vendor/kernel",
       "to": "vendor/kernel"
+    },
+    {
+      "from": "vendor/dmuse",
+      "to": "vendor/dmuse"
     }
   ],
   "asar": true,

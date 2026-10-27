@@ -33,6 +33,10 @@ Mac 的 DMG 和 ZIP 包含同一 `.app`。测试从正式 ZIP 解包，验证递
 
 打包测试覆盖本版完整 ZIP 的本地更新解包、文件替换和数据保留；**不是所有旧版本升级链路、杀毒软件和 Windows 配置的认证**。需要真实账户的登录、充值和付费响应不在无人值守 CI 中执行。
 
+## 手机连接组件（dmuse sidecar）
+
+`npm run sidecar:stage -- --platform <darwin|win32> --arch <arm64|x64>` 从 Celium 源码（`CELIUM_SRC`，默认同级目录 `celium-dmuse-phase0`）用纯 Go（不需要 cgo）编译 `vendor/dmuse/dmuse-sidecar`，打包时作为额外资源放进 `vendor/dmuse`。没有这个组件的构建仍可正常使用，只是“设置 → 手机连接”不可用。开发时可用 `DMUSE_SIDECAR` 指定组件路径，`DMUSE_SERVER`、`DMUSE_CONTROL_KEY` 指向本机协调服务器；`test/remote-sidecar.js` 在这些变量和 `DMUSE_PHONE`（手机模拟器）都设置时做端到端联调，否则跳过。开发 dmuse 手机 App 时，`node test/fixtures/remote-fake-desktop.js <电脑名>` 用真实的 sidecar 和网关加上模拟会话充当电脑（消息含「删除/delete」触发高风险确认，含「权限/permission」触发审批）。
+
 ## 本地测试
 
 ```sh

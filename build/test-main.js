@@ -259,7 +259,23 @@ function registerStubIpc() {
   ipcMain.handle('window:close', () => ok(true));
   ipcMain.handle('window:is-maximized', () => ok(false));
   ipcMain.handle('dialog:message', () => ok({ response: 0 }));
+  ipcMain.handle('remote:status', () => ok(remoteState));
+  ipcMain.handle('remote:set-enabled', (_event, on) => ok(Object.assign(remoteState, { enabled: on })));
+  ipcMain.handle('remote:pair', () => ok(remoteState));
+  ipcMain.handle('remote:cancel-pair', () => ok(Object.assign(remoteState, { invite: null })));
+  ipcMain.handle('remote:revoke', (_event, phone) => ok(Object.assign(remoteState, { phones: remoteState.phones.filter((p) => p !== phone) })));
+  ipcMain.handle('remote:set-max-permission', (_event, preset) => ok(Object.assign(remoteState, { maxPermission: preset })));
 }
+
+const remoteState = {
+  enabled: true, available: true, status: 'online', joined: true, name: 'yiming-mac', error: null, guard: true,
+  maxPermission: 'workspace-write', phones: ['Pixel 9', '华为 P30 Pro'],
+  connected: [{ phone: 'Pixel 9', connected: true, lastSeen: Date.now() }],
+  invite: {
+    kind: 'phone', code: 'k7pm-29xq', expiresAt: Math.floor(Date.now() / 1000) + 590,
+    svg: require('./src/main/remote/qr').toSvg('dmuse:1:eyJ2IjoxLCJzZXJ2ZXIiOiJodHRwczovL2xvZ2luLmNlbGl1bS5jbiIsImRlc2t0b3AiOiJ5aW1pbmctbWFjIiwic2VjcmV0IjoiUWxkbXNfMkRvZTd4aGo5RkZlTnFQUmZEczN4VnJ6VWYifQ'),
+  },
+};
 
 const PROBE = [
   '(() => {',
@@ -503,6 +519,17 @@ app.whenReady().then(async () => {
   await win.webContents.executeJavaScript('document.getElementById("modal-body").scrollTop = 1e6');
   await new Promise((resolve) => setTimeout(resolve, 300));
   fs.writeFileSync(shot('-extensions-plugins'), (await capture(win)).toPNG());
+
+  await win.webContents.executeJavaScript('document.querySelector("[data-tab=phone]").click()');
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  console.log('PHONE PANEL', JSON.stringify(await win.webContents.executeJavaScript(`(() => ({
+    titles: [...document.querySelectorAll('.card-title')].map((t) => t.textContent.trim()),
+    qr: (() => { const img = document.querySelector('.phone-qr img'); if (!img) return null; const r = img.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), loaded: img.complete && img.naturalWidth > 0 }; })(),
+    code: document.querySelector('.phone-code')?.textContent,
+    phones: [...document.querySelectorAll('.phone-row')].map((r) => r.innerText.replace(/\\s+/g, ' ').trim()),
+    chip: (() => { const c = document.getElementById('remote-chip'); return c ? { hidden: c.hidden, text: c.innerText.trim() } : null; })(),
+  }))()`), null, 2));
+  fs.writeFileSync(shot('-phone'), (await capture(win)).toPNG());
 
   await win.webContents.executeJavaScript('document.querySelector("[data-tab=about]").click()');
   await new Promise((resolve) => setTimeout(resolve, 500));

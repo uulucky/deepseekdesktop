@@ -103,6 +103,9 @@ const App = {
     api.events.onServerStop(() => {
       toast('本地服务已停止，请在设置中重启', 'err');
     });
+    api.events.onRemoteState?.((snapshot) => RemoteView.receive(snapshot));
+    document.getElementById('remote-chip').addEventListener('click', () => Settings.open('phone'));
+    RemoteView.load();
     api.events.onSurfaceState?.((surface) => {
       if (!surface) return;
       state.webSurface = { ...state.webSurface, ...surface };

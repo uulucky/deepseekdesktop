@@ -323,14 +323,15 @@ function registerIpc(services) {
     return { ...created, warnings };
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  handle('sessions:prompt', async (sessionId, text, attachments = []) => {
+  const prompt = async (sessionId, text, attachments = []) => {
     const ctx = getContext();
     const message = typeof text === 'string' ? text.trim() : '';
     const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
     if (!message && normalized.length === 0) throw new Error('请输入消息或选择附件');
     await restorePermission(sessionId);
     return service('chat').send(sessionId, await withImageText(ctx, sessionId, message, normalized), normalized);
-  });
+  };
+  handle('sessions:prompt', prompt);
   handle('sessions:attachment', (sessionId, attachmentId) => {
     if (typeof sessionId !== 'string' || !sessionId || typeof attachmentId !== 'string' || !attachmentId) {
       throw new Error('图片标识无效');
@@ -611,6 +612,20 @@ function registerIpc(services) {
     const win = getContext().windows.main;
     return dialog.showMessageBox(win, options ?? {});
   });
+
+  // ---------------------------------------------------------------- phone remote
+  // Desktop-only controls: the phone API has no way to reach any of these.
+  const remote = () => getContext().remote;
+  handle('remote:status', () => remote().snapshot());
+  handle('remote:set-enabled', (on) => remote().setEnabled(on === true));
+  handle('remote:pair', () => remote().pair());
+  handle('remote:cancel-pair', () => remote().cancelPair());
+  handle('remote:revoke', (phone) => remote().revoke(String(phone ?? '')));
+  handle('remote:set-max-permission', (preset) => remote().setMaxPermission(preset));
+
+  // The phone remote drives sessions through these same functions, so its prompts get the
+  // same attachment limits, permission restore and image OCR as the desktop window's.
+  return { sessionRows, restorePermission, selectPermission, prompt };
 }
 
 /** Current platform sign-in / balance snapshot without any network round-trip. */

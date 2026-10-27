@@ -776,3 +776,19 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c9cedb; backgr
 .media-install { margin-top: 8px; }
 .media-install code { padding: 4px 8px; border-radius: 6px; background: var(--panel-2); font-family: var(--mono); font-size: 12px; }
 .ext-note { margin: -4px 0 8px; }
+
+/* ── Phone remote (dmuse) ─────────────────────────────────────────────── */
+.titlebar .remote-chip { -webkit-app-region: no-drag; }
+.remote-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border: 1px solid var(--brand-line); border-radius: 999px;
+  font-size: 12.5px; color: var(--text); background: var(--panel); white-space: nowrap;
+}
+.remote-chip[hidden] { display: none; }
+.remote-chip svg { width: 14px; height: 14px; fill: none; stroke: var(--brand); stroke-width: 1.8; }
+.phone-qr { display: flex; justify-content: center; padding: 12px 0; }
+.phone-qr img { width: 240px; height: 240px; image-rendering: pixelated; border-radius: 8px; background: #fff; }
+.phone-code { font-size: 15px; letter-spacing: 1px; }
+.phone-row { align-items: center; gap: 10px; padding: 6px 0; }
+.phone-row .phone-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.btn.small.danger { color: var(--danger); }
