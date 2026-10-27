@@ -141,7 +141,11 @@ const sessionOps = {
   sessionRows: async () => [...sessions.values()].map((t) => ({ sessionId: t.sessionId, title: t.title, cwd: workdir, running: t.running, updatedAt: t.updatedAt, turns: t.items.filter((i) => i.kind === 'user').length, archived: false })),
   restorePermission: async () => {},
   selectPermission: async (id, preset) => { permissions.set(id, preset); return { currentValue: preset }; },
-  prompt: async (id, text) => { send(id, text); return {}; },
+  prompt: async (id, text) => {
+    if (!sessions.has(id)) throw Object.assign(new Error('没有这个对话'), { status: 404, code: 'not-found' });
+    send(id, text);
+    return {};
+  },
 };
 
 (async () => {

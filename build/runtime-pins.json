@@ -4,11 +4,11 @@
   "nodeDarwinArm64Sha256": "372331b969779ab5d15b949884fc6eaf88d5afe87bde8ba881d6400b9100ffc4",
   "nodeDarwinX64Sha256": "ffd5ee293467927f3ee731a553eb88fd1f48cf74eebc2d74a6babe4af228673b",
   "kernelVersion": "0.1.5-rc.1",
-  "dmuseSidecarVersion": "0.1.0",
+  "dmuseSidecarVersion": "0.1.1",
   "dmuseSidecarBase": "https://img.uulucky.com/han/deepseek/dmuse",
   "dmuseSidecarSha256": {
-    "darwin-arm64": "cfe155df31da285d67aa2e6353493e8f6415214471c79dca9bd4e46f11fbf10b",
-    "darwin-x64": "77e897dd39b60dc7328afe66656d115e37b15041d06d83b9962937e00bf659c3",
-    "win32-x64": "7d740a842ca784267bd8d1acbdb13c8c4b321e711506eb23080830aab5dd01b1"
+    "darwin-arm64": "4f2e54a597ce38b6d2b002e756883a0f602f4b560bb05ddb2de1cc1d5faba3b4",
+    "darwin-x64": "4aea0db7f8aad26d66839f13e00c14eb12c2210b35bee8377061e8d48adce780",
+    "win32-x64": "c9d93c3a208773cc56cdc5b6ae3c429321657408f5ef0d493e7666f6e28fa458"
   }
 }
