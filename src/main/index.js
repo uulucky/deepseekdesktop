@@ -12,7 +12,7 @@
  */
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, WebContentsView, session, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, shell, Menu, ipcMain, powerSaveBlocker } = require('electron');
 
 const { DIRS, ensureDirs, log, logFilePath, isDev, isPortable, adoptPortablePaths, execDir } = require('./modules/util');
 const { resolveSplashArt } = require('./modules/splash-art');
@@ -190,6 +190,7 @@ function main() {
       getContext: () => ctx,
       sessions,
       version: app.getVersion(),
+      power: powerSaveBlocker,
       onState: (state) => sendMainWindow('remote:state', state),
       log,
     });

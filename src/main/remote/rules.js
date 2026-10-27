@@ -7,7 +7,9 @@
  *    only on the computer). Full Access additionally needs the phone to have just re-verified
  *    its owner (biometrics) and only lasts for the session it was asked for.
  *  - No settings, extensions, MCP servers, API keys, recharges or safety-guard switches are
- *    reachable from the phone at all: the remote API simply has no such endpoints.
+ *    reachable from the phone at all: the remote API simply has no such endpoints. The one
+ *    exception is "keep the computer awake while the phone remote is on", which changes
+ *    nothing about what the agent may do.
  *  - A phone cannot start work or approve a risky command while the safety guard is off on
  *    the computer, because the guard's question card is the last line of defence for
  *    commands nobody is watching.

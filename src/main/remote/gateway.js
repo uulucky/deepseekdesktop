@@ -134,6 +134,8 @@ const ROUTES = [
   ['GET', /^\/v1\/pending$/, 'pending'],
   ['POST', /^\/v1\/unpair$/, 'unpair'],
   ['GET', /^\/v1\/catalog$/, 'catalog'],
+  ['GET', /^\/v1\/keep-awake$/, 'keepAwake'],
+  ['POST', /^\/v1\/keep-awake$/, 'keepAwake'],
   ['GET', /^\/v1\/sessions\/([^/]+)$/, 'openSession'],
   ['POST', /^\/v1\/sessions\/([^/]+)\/messages$/, 'sendMessage'],
   ['POST', /^\/v1\/sessions\/([^/]+)\/cancel$/, 'cancel'],

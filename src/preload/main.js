@@ -110,6 +110,7 @@ contextBridge.exposeInMainWorld('deepseek', {
     cancelPair: () => invoke('remote:cancel-pair'),
     revoke: (phone) => invoke('remote:revoke', phone),
     setMaxPermission: (preset) => invoke('remote:set-max-permission', preset),
+    setKeepAwake: (on) => invoke('remote:set-keep-awake', on),
   },
   update: {
     status: () => invoke('update:status'),

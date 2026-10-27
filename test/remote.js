@@ -124,7 +124,7 @@ function rawConnection(port, firstLine) {
   assert.equal(await rawConnection(port, `DMUSE/1 ${'e'.repeat(64)} "pixel"\n`), '');
   const info = await call('GET', '/v1/info');
   assert.equal(info.status, 200);
-  assert.deepEqual(info.json, { desktop: os.hostname(), version: '9.9.9', maxPermission: 'workspace-write', guard: true, phone: 'pixel' });
+  assert.deepEqual(info.json, { desktop: os.hostname(), version: '9.9.9', platform: process.platform, maxPermission: 'workspace-write', guard: true, keepAwake: false, phone: 'pixel' });
   assert.equal(connected.find((entry) => entry.phone === 'pixel')?.phone, 'pixel');
 
   // Lists hide archived sessions; transcripts are trimmed for a phone.
@@ -205,6 +205,22 @@ function rawConnection(port, firstLine) {
   });
   const frame = JSON.parse(events.split('event: session\ndata: ')[1].split('\n')[0]);
   assert.deepEqual(frame, { sessionId: 's1', title: '整理报告', running: false, approvals: 0, questions: 1, lastSeq: 7, last: { kind: 'assistant', text: '报告已生成', streaming: false } });
+
+  // Keep-awake: the one setting a phone may change, held only while the remote runs.
+  const held = [];
+  control.power = { start: (type) => { held.push(type); return 7; }, stop: (id) => held.push(`stop:${id}`) };
+  control.child = { stdin: { write() {}, end() {} } };
+  ui.set('remoteEnabled', true);
+  const awake = await call('POST', '/v1/keep-awake', { on: true });
+  assert.deepEqual([awake.json.keepAwake, awake.json.awake, held], [true, true, ['prevent-app-suspension']]);
+  assert.equal((await call('GET', '/v1/info')).json.keepAwake, true);
+  assert.equal((await call('POST', '/v1/keep-awake', { on: false })).json.awake, false);
+  assert.deepEqual(held, ['prevent-app-suspension', 'stop:7']);
+  control.setKeepAwake(true);
+  control.child = null;
+  control.applyKeepAwake();
+  assert.equal(control.snapshot().awake, false, 'released when the remote stops');
+  ui.delete('remoteEnabled');
 
   const catalog = (await call('GET', '/v1/catalog')).json;
   assert.deepEqual(catalog.groups[0].models[0].efforts, [{ id: 'high', label: '高' }, { id: 'max', label: 'max' }]);

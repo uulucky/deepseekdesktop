@@ -73,8 +73,12 @@ class RemoteControl {
    * @param {(state: object) => void} options.onState pushes state to the desktop window
    * @param {(...args: any[]) => void} options.log
    * @param {string} [options.version]
+   * @param {{ start(type: string): number, stop(id: number): void }} [options.power] Electron's
+   *   powerSaveBlocker, for keeping the computer awake while phones may need it
    */
-  constructor({ getContext, sessions, onState, log, version = '' }) {
+  constructor({ getContext, sessions, onState, log, version = '', power = null }) {
+    this.power = power;
+    this.blocker = null;
     this.getContext = getContext;
     this.sessions = sessions;
     this.onState = onState ?? (() => {});
@@ -94,7 +98,34 @@ class RemoteControl {
   guardFile() { return path.join(DIRS.config, 'safety-guard.json'); }
 
   snapshot() {
-    return { ...this.state, enabled: this.enabled(), maxPermission: this.maxPermission(), guard: rules.guardEnabled(this.guardFile()) };
+    return {
+      ...this.state, enabled: this.enabled(), maxPermission: this.maxPermission(), guard: rules.guardEnabled(this.guardFile()),
+      keepAwake: this.keepAwakeWanted(), awake: this.blocker !== null,
+    };
+  }
+
+  // ---------------------------------------------------------------- keep awake
+  keepAwakeWanted() { return this.store()?.get('remoteKeepAwake', false) === true; }
+
+  /**
+   * Hold a "prevent app suspension" power assertion while the phone remote is on and the
+   * owner asked for it: the system does not idle-sleep (the display still may). Closing a
+   * laptop lid still sleeps it; the phone shows how to change that in the OS settings.
+   */
+  applyKeepAwake() {
+    const want = Boolean(this.child) && this.enabled() && this.keepAwakeWanted() && this.power;
+    if (want && this.blocker === null) this.blocker = this.power.start('prevent-app-suspension');
+    if (!want && this.blocker !== null) {
+      try { this.power.stop(this.blocker); } catch { /* already released */ }
+      this.blocker = null;
+    }
+  }
+
+  setKeepAwake(on) {
+    this.store().set('remoteKeepAwake', Boolean(on));
+    this.applyKeepAwake();
+    this.onState(this.snapshot());
+    return this.snapshot();
   }
 
   update(patch) {
@@ -128,6 +159,7 @@ class RemoteControl {
     });
     this.child = child;
     this.update({ status: 'starting', error: null });
+    this.applyKeepAwake();
     let buffer = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
@@ -148,6 +180,7 @@ class RemoteControl {
       this.child = null;
       this.gateway?.close();
       this.gateway = null;
+      this.applyKeepAwake();
       const crashed = code !== 0 && code !== null;
       if (crashed) this.log('remote', 'sidecar exited', { code, tail: errors.slice(-800) });
       this.update({ status: crashed ? 'error' : 'off', invite: null, connected: [], error: crashed ? '手机连接组件意外退出' : null });
@@ -164,6 +197,7 @@ class RemoteControl {
     }
     this.gateway?.close();
     this.gateway = null;
+    this.applyKeepAwake();
     this.update({ status: 'off', invite: null, connected: [] });
   }
 
@@ -261,10 +295,18 @@ class RemoteControl {
       info: ({ phone }) => ({
         desktop: this.state.name,
         version: this.version,
+        platform: process.platform,
         maxPermission: this.maxPermission(),
         guard: rules.guardEnabled(this.guardFile()),
+        keepAwake: this.keepAwakeWanted(),
         phone,
       }),
+      // The one desktop setting a phone may change: staying awake has no security effect,
+      // and right after pairing is when the owner decides about it.
+      keepAwake: ({ body }) => {
+        if (typeof body?.on === 'boolean') this.setKeepAwake(body.on);
+        return { keepAwake: this.keepAwakeWanted(), awake: this.blocker !== null, platform: process.platform };
+      },
       listSessions: async () => ({ items: (await this.sessions.sessionRows()).filter((row) => !row.archived) }),
       createSession: async ({ body, elevated }) => {
         guard();

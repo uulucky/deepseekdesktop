@@ -84,6 +84,10 @@ const RemoteView = {
           <div class="hint">手机和电脑之间走加密的私有网络（Celium），电脑不开放局域网或公网端口。dmuse 不是 DeepSeek 官方产品。</div>
         </div>
         ${remote.enabled ? `<div class="row"><button class="btn primary small" data-action="phone-pair" ${remote.status === 'starting' || remote.status === 'off' ? 'disabled' : ''}>${remote.joined ? '添加手机' : '显示配对二维码'}</button></div>` : ''}
+        ${remote.enabled ? `<div class="field" style="margin-top:12px">
+          <label class="switch"><input type="checkbox" id="remote-keep-awake" ${remote.keepAwake ? 'checked' : ''} /> 手机连接期间阻止电脑自动休眠</label>
+          <div class="hint">开启后电脑不会因空闲自动睡眠（屏幕仍可关闭），手机随时能连上。笔记本合盖仍会睡眠，需要在系统电源设置里调整。${remote.keepAwake ? (remote.awake ? ' · 生效中' : ' · 手机连接启动后生效') : ''}</div>
+        </div>` : ''}
         ${remote.guard ? '' : '<div class="banner err" style="margin-top:10px">安全护栏已关闭：手机暂时不能发起任务或批准操作。到「通用 → 安全护栏」重新开启。</div>'}
       </div>
       ${inviteCard}
@@ -119,6 +123,11 @@ const RemoteView = {
   async onChange(target) {
     if (target?.id === 'remote-enabled') {
       state.remote = (await guard(api.remote.setEnabled(target.checked), '操作失败')) ?? state.remote;
+      this.render();
+      return true;
+    }
+    if (target?.id === 'remote-keep-awake') {
+      state.remote = (await guard(api.remote.setKeepAwake(target.checked), '保存失败')) ?? state.remote;
       this.render();
       return true;
     }

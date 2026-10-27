@@ -622,6 +622,7 @@ function registerIpc(services) {
   handle('remote:cancel-pair', () => remote().cancelPair());
   handle('remote:revoke', (phone) => remote().revoke(String(phone ?? '')));
   handle('remote:set-max-permission', (preset) => remote().setMaxPermission(preset));
+  handle('remote:set-keep-awake', (on) => remote().setKeepAwake(on === true));
 
   // The phone remote drives sessions through these same functions, so its prompts get the
   // same attachment limits, permission restore and image OCR as the desktop window's.
