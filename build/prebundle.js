@@ -121,6 +121,41 @@ async function stageNode() {
   log('node runtime staged: ' + dest + ' (' + (dirSize(dest) / 1048576).toFixed(1) + ' MB)');
 }
 
+/**
+ * The dmuse sidecar (phone remote), downloaded at the pinned version and checked against the
+ * pinned SHA-256 for this target. A build without pins simply ships without the phone remote.
+ */
+async function stageSidecar() {
+  const version = pins.dmuseSidecarVersion;
+  const expected = pins.dmuseSidecarSha256?.[target];
+  if (!version || !expected) {
+    log('dmuse sidecar not pinned for ' + target + '; this build has no phone remote');
+    return;
+  }
+  const exeName = platform === 'win32' ? 'dmuse-sidecar.exe' : 'dmuse-sidecar';
+  const dest = path.join(VENDOR, 'dmuse', exeName);
+  const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  if (fs.existsSync(dest) && hash(dest) === expected) {
+    log('dmuse sidecar already staged: ' + dest);
+    return;
+  }
+  const fileName = `dmuse-sidecar-${version}-${target}${platform === 'win32' ? '.exe' : ''}`;
+  const download_ = path.join(VENDOR, fileName);
+  if (!fs.existsSync(download_)) {
+    const url = (process.env.DEEPSEEK_DESKTOP_DMUSE_MIRROR || pins.dmuseSidecarBase).replace(/\/$/, '') + '/' + fileName;
+    log('downloading ' + url);
+    await download(url, download_);
+  }
+  if (hash(download_) !== expected) {
+    fs.rmSync(download_, { force: true });
+    throw new Error('dmuse sidecar SHA-256 mismatch; refusing to package it');
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(download_, dest);
+  fs.chmodSync(dest, 0o755);
+  log('dmuse sidecar ' + version + ' staged: ' + dest);
+}
+
 /** Fail packaging when the staged runtime cannot execute the staged kernel entry. */
 function verifyRuntimeContract() {
   const markerFile = path.join(VENDOR, 'node', '.deepseek-runtime.json');
@@ -242,7 +277,8 @@ async function main() {
   fs.mkdirSync(VENDOR, { recursive: true });
   if (only === 'all' || only === 'node') await stageNode();
   if (only === 'all' || only === 'kernel') stageKernel();
-  verifyRuntimeContract();
+  if (only === 'all' || only === 'dmuse') await stageSidecar();
+  if (only !== 'dmuse') verifyRuntimeContract();
   log('vendor total: ' + (dirSize(VENDOR) / 1048576).toFixed(1) + ' MB');
 }
 
