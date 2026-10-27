@@ -284,10 +284,12 @@ class RemoteControl {
     const chat = () => ctx().chat;
     const guard = () => rules.requireGuard(this.guardFile());
     const transcriptOf = (sessionId) => chat().transcripts?.get(sessionId) ?? null;
-    // 老友 is desktop-only for now; the work it dispatched is ordinary and phones can drive it.
+    // The main conversation is shared with phones, but its model and permission stay fixed, and
+    // whatever it dispatches for a phone stays under the phone's ceiling (see companion.js).
+    const companion = () => ctx().companion ?? null;
     const notCompanion = (sessionId) => {
-      if (ctx().companion?.isCompanion(sessionId)) {
-        throw new rules.RemoteRuleError('老友暂时只能在电脑上用', 403, 'companion-desktop-only');
+      if (companion()?.isCompanion(sessionId)) {
+        throw new rules.RemoteRuleError('主对话固定使用 DeepSeek V4.1 Flash、只读权限，不能修改', 403, 'companion-fixed');
       }
     };
     /** Bring a session down to what the phone may drive before it acts on it. */
@@ -313,7 +315,18 @@ class RemoteControl {
         if (typeof body?.on === 'boolean') this.setKeepAwake(body.on);
         return { keepAwake: this.keepAwakeWanted(), awake: this.blocker !== null, platform: process.platform };
       },
-      listSessions: async () => ({ items: (await this.sessions.sessionRows()).filter((row) => !row.archived && !row.companion) }),
+      listSessions: async () => {
+        const rows = (await this.sessions.sessionRows()).filter((row) => !row.archived);
+        const friend = await companion()?.snapshot().catch(() => null);
+        if (!friend?.sessionId) return { items: rows.filter((row) => !row.companion) };
+        // A main conversation nobody has written in yet is not listed by the kernel.
+        const own = rows.find((row) => row.sessionId === friend.sessionId);
+        const pinned = { ...(own ?? { sessionId: friend.sessionId, running: false, updatedAt: Date.now(), turns: 0 }), companion: true, title: friend.name };
+        return {
+          items: [pinned, ...rows.filter((row) => row.sessionId !== friend.sessionId)],
+          companion: { sessionId: friend.sessionId, name: friend.name, counts: friend.counts, receipts: friend.receipts.map((task) => ({ taskId: task.taskId, title: task.title, status: task.status })) },
+        };
+      },
       createSession: async ({ body, elevated }) => {
         guard();
         const options = ctx().defaultSessionOptions();
@@ -328,21 +341,18 @@ class RemoteControl {
         return { ...created, permission: capped.preset, capped: capped.capped };
       },
       openSession: async ({ params: [sessionId], query }) => {
-        notCompanion(sessionId);
         await this.sessions.restorePermission(sessionId);
         const snapshot = await chat().open(sessionId);
         const limit = Math.min(Math.max(Number(query.get('limit')) || MAX_ITEMS, 1), 500);
         return { ...snapshot, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit };
       },
       sendMessage: async ({ params: [sessionId], body, elevated }) => {
-        notCompanion(sessionId);
         guard();
         const permission = await enforcePermission(sessionId, elevated);
-        await this.sessions.prompt(sessionId, body?.text ?? '', decodeAttachments(body?.attachments));
+        await this.sessions.prompt(sessionId, body?.text ?? '', decodeAttachments(body?.attachments), { origin: 'phone' });
         return { ok: true, permission };
       },
       cancel: async ({ params: [sessionId] }) => {
-        notCompanion(sessionId);
         await chat().cancel(sessionId);
         return { ok: true };
       },

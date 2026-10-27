@@ -70,7 +70,7 @@ const sessions = {
   sessionRows: async () => [{ sessionId: 's1', cwd: workdir, archived: false }, { sessionId: 'old', archived: true }],
   restorePermission: async () => {},
   selectPermission: async (id, preset) => { permissions.set(id, preset); return { currentValue: preset }; },
-  prompt: async (id, text, attachments) => { prompts.push({ id, text, attachments, permission: permissions.get(id) }); },
+  prompt: async (id, text, attachments, options) => { prompts.push({ id, text, attachments, permission: permissions.get(id), origin: options?.origin }); },
 };
 
 function request(port, secret, phone, method, route, body, headers = {}) {
@@ -133,6 +133,25 @@ function rawConnection(port, firstLine) {
   assert.equal(opened.items.length, 50);
   assert.equal(opened.items[49].text, 'm299');
   assert.equal(opened.truncated, true);
+
+  // The main conversation is shared with the phone: pinned first, messages marked as the phone's,
+  // its model and permission fixed.
+  ctx.companion = {
+    isCompanion: (id) => id === 'friend',
+    snapshot: async () => ({ sessionId: 'friend', name: '阿鲸', counts: { running: 1, waiting: 0, finished: 0 }, receipts: [] }),
+  };
+  const shared = (await call('GET', '/v1/sessions')).json;
+  assert.deepEqual(shared.items.map((row) => row.sessionId), ['friend', 's1'], 'pinned first even before its first message');
+  assert.equal(shared.items[0].companion, true);
+  assert.equal(shared.items[0].title, '阿鲸');
+  assert.equal(shared.companion.name, '阿鲸');
+  setGuard(true);
+  assert.equal((await call('POST', '/v1/sessions/friend/messages', { text: '帮我整理发票' })).status, 200);
+  assert.equal(prompts.at(-1).origin, 'phone', 'phone messages carry their origin for the dispatch rules');
+  assert.equal((await call('POST', '/v1/sessions/friend/model', { provider: 'deepseek-official', model: 'deepseek-v4-pro' })).status, 403);
+  assert.equal((await call('POST', '/v1/sessions/friend/permission', { preset: 'danger-full-access' })).status, 403);
+  delete ctx.companion;
+  prompts.length = 0;
 
   // A Full Access session is brought down to the ceiling before the phone's prompt runs.
   const sent = await call('POST', '/v1/sessions/s1/messages', { text: '整理一下', attachments: [{ name: 'a.txt', mediaType: 'text/plain', data: Buffer.from('hi').toString('base64') }] });
@@ -244,6 +263,7 @@ function rawConnection(port, firstLine) {
   gateway.close();
   fs.rmSync(temporary, { recursive: true, force: true });
   fs.rmSync(workdir, { recursive: true, force: true });
+
   console.log('PASS phone remote: sidecar secret, permission ceiling, guard, risky confirmations, file containment, events, revoke, QR');
 })().catch((error) => {
   console.error(error);

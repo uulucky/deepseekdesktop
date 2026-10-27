@@ -15,7 +15,7 @@ delete process.env.DEEPSEEK_API_KEY;
 delete process.env.DSH_HOME;
 
 const companionModule = require('../src/main/modules/companion');
-const { Companion, statusOf, dispatchPermission, writePreset, companionPaths, PRESET_ID, MODEL } = companionModule;
+const { Companion, statusOf, dispatchPermission, writePreset, companionPaths, profileText, PRESET_ID, MODEL, AUTO_MARKER } = companionModule;
 const tools = require('../src/main/modules/companion/companion-tools.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -70,9 +70,10 @@ async function unit() {
   assert.match(composition, /"\/x\/companion-tools\.cjs"/);
   assert.doesNotMatch(composition, /dsh-tool-(bash|fs|web|subagent|pwsh|workflow)/);
   assert.deepEqual(tools.TOOLS.map((tool) => tool.name).sort(), [
-    'companion_cancel', 'companion_dispatch', 'companion_list_tasks', 'companion_list_workspaces',
-    'companion_send', 'companion_task_result', 'companion_task_status',
+    'companion_cancel', 'companion_dispatch', 'companion_forget', 'companion_list_tasks', 'companion_list_workspaces',
+    'companion_remember', 'companion_send', 'companion_set_profile', 'companion_task_result', 'companion_task_status',
   ]);
+  assert.match(composition, /\{\{companion_profile\}\}/, 'persona takes the live profile');
 
   // Bridge: token, caller and tool name are all checked; limits refuse before creating anything.
   const uiStore = memoryStore();
@@ -95,6 +96,8 @@ async function unit() {
     sessions: { sessionRows: async () => rows, selectPermission: async () => {}, prompt: async () => {} },
     bridgeFile: path.join(temporary, 'unit-bridge.json'),
     home: path.join(temporary, 'unit-home'),
+    memoryFile: path.join(temporary, 'unit-memory.json'),
+    profileFile: path.join(temporary, 'unit-profile.txt'),
   });
   await companion.startBridge();
   try {
@@ -124,10 +127,101 @@ async function unit() {
     const snapshot = await companion.snapshot();
     assert.equal(snapshot.receipts.length, 0, 'reported changes are not receipts any more');
     assert.equal(snapshot.counts.running, 2);
+
+    // Name, what to call the user, and long-term memory, all local and fed to the persona.
+    assert.equal(snapshot.name, '老朋友', 'default name');
+    assert.match(fs.readFileSync(companion.profileFile, 'utf8'), /第一次聊天/);
+    const named = await post(bridge.port, 'companion_set_profile', { sessionId: 'friend', args: { name: '阿鲸', userName: '老王' } }, bridge.token);
+    assert.equal(named.body.name, '阿鲸');
+    assert.equal((await companion.snapshot()).name, '阿鲸');
+    const kept = await post(bridge.port, 'companion_remember', { sessionId: 'friend', args: { text: '在做 dmuse 手机端' } }, bridge.token);
+    assert.equal(kept.body.id, 'm1');
+    assert.equal((await post(bridge.port, 'companion_remember', { sessionId: 'friend', args: { text: '我的密码是 hunter2' } }, bridge.token)).body.code, 'sensitive');
+    assert.equal((await post(bridge.port, 'companion_remember', { sessionId: 'friend', args: { text: 'key sk-abcdefghijklmnopqrstuv' } }, bridge.token)).body.code, 'sensitive');
+    const profile = fs.readFileSync(companion.profileFile, 'utf8');
+    assert.match(profile, /你的名字：阿鲸\n用户的称呼：老王/);
+    assert.match(profile, /- \[m1\] 在做 dmuse 手机端/);
+    assert.doesNotMatch(profile, /第一次聊天/, 'asks names only once');
+    assert.equal((fs.statSync(companion.memoryFile).mode & 0o777).toString(8), '600');
+    assert.equal((await post(bridge.port, 'companion_forget', { sessionId: 'friend', args: { id: 'm1' } }, bridge.token)).body.ok, true);
+    assert.match(fs.readFileSync(companion.profileFile, 'utf8'), /长期记忆：暂时还没有/);
+    companion.setProfile({ name: '' });
+    assert.equal(companion.name(), '老朋友', 'an empty name goes back to the default');
+    assert.throws(() => companion.setProfile({ name: '一二三四五六七八九十一二三' }), /最多 12 个字/);
+    assert.match(profileText({ name: '老朋友', named: false, userName: '', introduced: false, facts: [] }), /想叫你什么/);
   } finally {
     companion.stop();
   }
   assert(!fs.existsSync(companion.bridgeFile), 'bridge file removed on stop');
+
+  // A finished task wakes the companion once; that turn cannot dispatch; a daily cap applies.
+  {
+    const sent = [];
+    const tasks = new Map([['w1', transcript({ running: true, items: [{ kind: 'user' }] })]]);
+    const store = memoryStore();
+    store.set('companion', { sessionId: 'friend', dispatches: [{ taskId: 'w1', title: '整理发票', createdAt: 1 }], notified: {} });
+    const auto = new Companion({
+      getContext: () => ({
+        uiStore: store,
+        client: { sessionModels: async () => ({ current: { ...MODEL } }), listWorkspaces: async () => ({ items: [] }) },
+        chat: { transcripts: tasks, send: async (id, text) => { sent.push({ id, text }); }, createSession: async () => assert.fail('no dispatch in an auto turn') },
+        defaultSessionOptions: () => ({ cwd: temporary }),
+      }),
+      sessions: { sessionRows: async () => [{ sessionId: 'w1', title: '整理发票' }], selectPermission: async () => {}, prompt: async () => {} },
+      bridgeFile: path.join(temporary, 'auto-bridge.json'), home: temporary,
+      memoryFile: path.join(temporary, 'auto-memory.json'), profileFile: path.join(temporary, 'auto-profile.txt'),
+    });
+    assert.equal(await auto.autoReport(), false, 'nothing to report while running');
+    tasks.set('w1', transcript({ items: [{ kind: 'user' }, { kind: 'assistant', parts: [{ kind: 'text', text: '归档好了' }] }, { kind: 'turn-end', reason: 'completed' }] }));
+    tasks.set('friend', transcript({ running: true }));
+    assert.equal(await auto.autoReport(), false, 'waits while the companion is answering');
+    clearTimeout(auto.autoTimer);
+    tasks.set('friend', transcript({}));
+    assert.equal(await auto.autoReport(), true);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].id, 'friend');
+    assert.match(sent[0].text, /「整理发票」（w1）：已完成，最后一句：归档好了/);
+    assert(sent[0].text.endsWith(AUTO_MARKER));
+    assert.equal(await auto.autoReport(), false, 'one report per change');
+    await assert.rejects(auto.dispatch({ title: 'x', brief: 'y' }), /自动进展通知/);
+    await auto.beforePrompt('hi');
+    store.set('companion', { ...store.get('companion'), autoReports: { day: new Date().toISOString().slice(0, 10), count: 20 }, notified: {} });
+    assert.equal(await auto.autoReport(), false, 'daily cap');
+    auto.setAutoReport(false);
+    store.set('companion', { ...store.get('companion'), autoReports: { day: '', count: 0 }, notified: {} });
+    assert.equal(await auto.autoReport(), false, 'switched off');
+    auto.stop();
+  }
+
+  // Asked for from a phone: the phone's ceiling and the safety guard apply to the dispatch.
+  {
+    const store = memoryStore();
+    store.set('companion', { sessionId: 'friend', dispatches: [], notified: {} });
+    const guardFile = path.join(temporary, 'guard.json');
+    const selected = [];
+    let remoteMax = 'read-only';
+    const phoneCtx = {
+      uiStore: store,
+      remote: { maxPermission: () => remoteMax, guardFile: () => guardFile },
+      client: { sessionModels: async () => ({ current: { ...MODEL } }), listWorkspaces: async () => ({ items: [] }), renameSession: async () => {}, listModels: async () => null },
+      chat: { transcripts: new Map(), createSession: async () => ({ sessionId: `p${selected.length}` }) },
+      defaultSessionOptions: () => ({ cwd: temporary }),
+    };
+    const phone = new Companion({
+      getContext: () => phoneCtx,
+      sessions: { sessionRows: async () => [], selectPermission: async (id, preset) => { selected.push(preset); }, prompt: async () => {} },
+      bridgeFile: path.join(temporary, 'phone-bridge.json'), home: temporary,
+      memoryFile: path.join(temporary, 'phone-memory.json'), profileFile: path.join(temporary, 'phone-profile.txt'),
+    });
+    await phone.beforePrompt('从手机', { origin: 'phone' });
+    assert.equal((await phone.dispatch({ title: '手机派的', brief: '做点事' })).permission, 'read-only');
+    fs.writeFileSync(guardFile, JSON.stringify({ enabled: false }));
+    await assert.rejects(phone.dispatch({ title: '护栏关了', brief: '做点事' }), /安全护栏/);
+    await phone.beforePrompt('从电脑');
+    remoteMax = 'read-only';
+    assert.equal((await phone.dispatch({ title: '电脑派的', brief: '做点事' })).permission, 'workspace-write');
+    phone.stop();
+  }
   console.log('companion unit: ok');
 }
 
@@ -173,7 +267,10 @@ async function endToEnd(entry) {
       selectPermission: (sessionId, preset) => client.selectPermission(sessionId, preset),
       prompt: (sessionId, text) => chat.send(sessionId, text, []),
     };
-    companion = new Companion({ getContext: () => ctx, sessions, bridgeFile: paths.bridgeFile, home: paths.home });
+    companion = new Companion({
+      getContext: () => ctx, sessions, bridgeFile: paths.bridgeFile, home: paths.home,
+      memoryFile: paths.memoryFile, profileFile: paths.profileFile,
+    });
     await companion.startBridge();
 
     // The conversation exists once, on its preset, with the fixed model and read-only permission.
@@ -195,13 +292,14 @@ async function endToEnd(entry) {
     assert.deepEqual(toolNames, tools.TOOLS.map((tool) => tool.name).sort(), `only companion tools: ${toolNames}`);
     assert.notEqual(turn.body.thinking?.type, 'enabled', 'thinking is off');
     const system = JSON.stringify(turn.body.messages.find((message) => message.role === 'system')?.content ?? '');
-    assert.match(system, /老友/);
+    assert.match(system, /你的名字：老朋友/, 'live profile in the persona');
+    assert.match(system, /第一次聊天/, 'first chat asks for names');
     turn.toolCall('call_dispatch_fixture', 'companion_dispatch', {
       title: '整理发票', brief: '把工作目录里的发票按月份归档，完成后列出每个月的文件数。', userQuote: '帮我把发票整理一下',
     });
 
     // The work conversation is an ordinary one: standard tools, the default model, workspace-write.
-    const task = await provider.waitFor('老友派来的任务');
+    const task = await provider.waitFor('老朋友派来的任务');
     assert((task.body.tools ?? []).some((tool) => (tool.function?.name ?? tool.name) === 'bash'), 'work conversation has the standard tools');
     const dispatch = companion.ledger().dispatches[0];
     assert(dispatch?.taskId, 'dispatch recorded');
@@ -217,12 +315,26 @@ async function endToEnd(entry) {
     followUp.finish('好，我开了个工作对话去整理，弄好了告诉你。');
     task.finish('发票已经按月份整理好了：2026-09 有 4 个，2026-10 有 7 个。');
     await eventually(async () => { await companion.refreshRows(); return companion.describe(dispatch.taskId).status === 'done'; }, 'task done');
-    const snapshot = await companion.snapshot();
-    assert.equal(snapshot.receipts[0]?.taskId, dispatch.taskId, 'finished task shows as a receipt');
     const result = await companion.call('companion_task_result', { taskId: dispatch.taskId });
     assert.match(result.finalText, /<task-output>\n发票已经按月份整理好了/);
-    const block = await companion.updatesBlock();
-    assert.match(block, /「整理发票」.*已完成/);
+
+    // The finished task wakes the companion by itself, once, with the progress block.
+    const report = await provider.waitFor(AUTO_MARKER);
+    const reportText = JSON.stringify(report.body.messages);
+    assert.match(reportText, /「整理发票」.*已完成/);
+    report.finish('发票整理好了：9 月 4 个、10 月 7 个。');
+    await eventually(async () => !(await companion.snapshot()).receipts.length, 'reported tasks leave the receipts');
+    assert.equal(await companion.updatesBlock(), '', 'already reported');
+
+    // A rename and a memory reach the next model step without restarting anything.
+    companion.setProfile({ name: '阿鲸', userName: '老王' });
+    companion.remember({ text: '喜欢简短的回答' });
+    await chat.send(id, await companion.beforePrompt('companion-fixture-again'), []);
+    const again = await provider.waitFor('companion-fixture-again');
+    const againSystem = JSON.stringify(again.body.messages);
+    assert.match(againSystem, /你的名字：阿鲸/);
+    assert.match(againSystem, /\[m1\] 喜欢简短的回答/);
+    again.finish('好的老王。');
     console.log('companion end-to-end: ok');
   } finally {
     companion?.stop();

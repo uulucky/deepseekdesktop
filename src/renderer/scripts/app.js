@@ -39,7 +39,7 @@ const App = {
       session.sessionId === rememberedId && !session.archived
     ));
     let opened = false;
-    // The first launch with 老友 lands on it; afterwards the last conversation reopens as before.
+    // The first launch with the main conversation lands on it; afterwards the last conversation reopens as before.
     const companionId = state.companion?.sessionId ?? null;
     if (companionId && !state.companion.welcomed) {
       opened = await this.openSession(companionId);
@@ -150,6 +150,7 @@ const App = {
     document.getElementById('modal-backdrop').addEventListener('mousedown', (event) => {
       if (event.target.id === 'modal-backdrop') Settings.close();
     });
+    document.getElementById('companion-entry')?.addEventListener('dblclick', () => window.CompanionView?.rename());
     document.getElementById('session-list').addEventListener('click', (event) => {
       const menu = event.target.closest('[data-session-menu]');
       if (menu) {
@@ -358,7 +359,7 @@ const App = {
     state.permissionBusy = view.permissionBusy;
     const input = document.getElementById('input');
     if (input) input.placeholder = window.CompanionView?.active()
-      ? '跟老友聊聊，或者说说想办的事…（Enter 发送）'
+      ? `跟${window.CompanionView.name()}聊聊，或者说说想办的事…（Enter 发送）`
       : '给 DeepSeek 发送消息…（Enter 发送，Shift+Enter 换行）';
     window.CompanionView?.renderReceipts();
     this.renderStreamingState();
@@ -765,7 +766,7 @@ const App = {
   /** Apply a selection to a real session, or remember it for the first/new conversation. */
   async chooseSelection(provider, model, reasoningEffort, context = '切换模型') {
     if (!provider || !model) return false;
-    if (window.CompanionView?.active()) { toast('老友固定使用 DeepSeek V4.1 Flash，思考关闭', 'ok'); return false; }
+    if (window.CompanionView?.active()) { toast(`${window.CompanionView.name()}固定使用 DeepSeek V4.1 Flash，思考关闭`, 'ok'); return false; }
     if (state.streaming || state.stopping || state.sessionLoading || this.sessionView().modelBusy) return false;
     const request = { provider, model, ...(reasoningEffort ? { reasoningEffort } : {}) };
     if (!state.activeSessionId) {
@@ -978,7 +979,7 @@ const App = {
       slider.dataset.efforts = '["off"]';
       slider.disabled = true;
       value.textContent = '🔒 关闭';
-      slider.title = '老友固定不开思考';
+      slider.title = '主对话固定不开思考';
       control.title = slider.title;
       control.classList.remove('is-max');
       return;

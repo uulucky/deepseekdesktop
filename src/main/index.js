@@ -194,6 +194,8 @@ function main() {
       sessions,
       bridgeFile: companionFiles.bridgeFile,
       home: companionFiles.home,
+      memoryFile: companionFiles.memoryFile,
+      profileFile: companionFiles.profileFile,
       onState: (state) => sendMainWindow('companion:state', state),
       log,
     });

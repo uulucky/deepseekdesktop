@@ -184,8 +184,12 @@ function renderQuestion(pending) {
 /** Render one transcript item (user / assistant / tool / turn marker). */
 function renderItem(item, approvals = [], questions = [], rowKey = '') {
   if (item.kind === 'user') {
-    // Progress the desktop put in front of a message to 老友 is for the model, not the bubble.
+    // Progress the desktop put in front of a message to the main conversation is for the model,
+    // not the bubble; a message the desktop sent by itself shows as a notice.
     let updates = 0;
+    const raw = item.parts?.length ? item.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('') : item.text;
+    const automatic = window.CompanionView ? CompanionView.splitUpdates(raw) : null;
+    if (automatic?.auto) return CompanionView.renderAutoNotice(automatic.lines);
     const visible = (text) => {
       const split = window.CompanionView ? CompanionView.splitUpdates(text) : { text, updates: 0 };
       updates += split.updates;
@@ -197,7 +201,7 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
       ? item.parts.map((part) => (part.kind === 'text' ? `<div class="bubble">${esc(displayText(visible(part.text), MAX_TEXT_CHARS))}</div>` : renderPart(part))).join('')
       : `<div class="bubble">${esc(displayText(visible(item.text), MAX_TEXT_CHARS))}</div>`;
     const tags = (item.synthetic ? '<span class="tag">系统注入</span>' : '')
-      + (updates ? `<span class="tag" title="发给老友时自动附带的派活进展">附带 ${updates} 条进展</span>` : '');
+      + (updates ? `<span class="tag" title="发给主对话时自动附带的派活进展">附带 ${updates} 条进展</span>` : '');
     if (item.synthetic) return `<div class="system-context">${fold('运行环境', '系统上下文', body, `${rowKey}:context`)}</div>`;
     return (
       `<div class="msg user${pending}${failed}">` +
@@ -208,7 +212,7 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
   }
 
   if (item.kind === 'assistant') {
-    // 老友 speaks for itself: no generic action summary, and its tool calls show as cards.
+    // The main conversation speaks for itself: no generic action summary, and its tool calls show as cards.
     const friend = Boolean(window.CompanionView?.is(renderedSession));
     const parts = (item.parts ?? []).filter((part) => !(friend && part.kind === 'tool-call' && /^companion_/.test(part.name ?? '')));
     const firstText = parts.findIndex(part => part.kind === 'text');
@@ -238,7 +242,7 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
         return renderPart(part, `${rowKey}:part:${index}`);
       }),
     ].join('');
-    // A step where 老友 only called its tools: the card below says it all.
+    // A step where the main conversation only called its tools: the card below says it all.
     if (friend && !body && !item.streaming) return '';
     const streamingTag = item.streaming ? '<span class="tag">生成中</span>' : '';
     const interrupted = item.interrupted ? '<span class="tag">已中断</span>' : '';
@@ -247,15 +251,15 @@ function renderItem(item, approvals = [], questions = [], rowKey = '') {
       : '';
     return (
       `<div class="msg assistant${friend ? ' companion' : ''}">` +
-        `<div class="msg-avatar">${friend ? '友' : 'D'}</div>` +
-        `<div class="msg-body"><div class="msg-name">${friend ? '老友' : 'DeepSeek'}${streamingTag}${interrupted}</div>${body || '<div class="content"><p>…</p></div>'}</div>` +
+        `<div class="msg-avatar">${friend ? esc(CompanionView.initial()) : 'D'}</div>` +
+        `<div class="msg-body"><div class="msg-name">${friend ? esc(CompanionView.name()) : 'DeepSeek'}${streamingTag}${interrupted}</div>${body || '<div class="content"><p>…</p></div>'}</div>` +
       '</div>' + usage
     );
   }
 
   if (item.kind === 'tool') {
     const card = window.CompanionView?.renderToolCard(item);
-    if (card) return `<div class="companion-card-row">${card}</div>`;
+    if (typeof card === 'string') return card.startsWith('<div class="companion-note') || !card ? card : `<div class="companion-card-row">${card}</div>`;
     const approval = approvals.find((entry) => (
       (entry.callId && entry.callId === item.callId)
       || (!entry.callId && item.running && entry.toolName === item.name)

@@ -54,6 +54,24 @@ const TOOLS = [
     }, ['taskId']),
   },
   {
+    name: 'companion_set_profile',
+    description: 'Record your own name (when the user names or renames you) and/or what to call the user. Pass only what you learned; an empty name goes back to the default 老朋友.',
+    parameters: object({
+      name: string('Your new name, at most 12 characters.'),
+      userName: string('How to address the user, at most 20 characters.'),
+    }),
+  },
+  {
+    name: 'companion_remember',
+    description: 'Keep one short fact about the user for future chats (identity, preferences, ongoing projects, important people and dates, things they asked you to remember). Never passwords, keys, codes, card or ID numbers.',
+    parameters: object({ text: string('The fact, one short sentence, at most 200 characters.') }, ['text']),
+  },
+  {
+    name: 'companion_forget',
+    description: 'Forget one remembered fact by its id (shown in your profile as [m1], [m2], ...).',
+    parameters: object({ id: string('The fact id, e.g. m3.') }, ['id']),
+  },
+  {
     name: 'companion_cancel',
     description: 'Stop a work conversation you dispatched. Only when the user asked in this turn to stop it.',
     parameters: object({ taskId: string('The work conversation id.') }, ['taskId']),
@@ -92,9 +110,21 @@ function post(bridge, tool, body, signal) {
 }
 
 exports.name = 'desktop-companion-tools';
-exports.inject = ['tools'];
+exports.inject = ['tools', 'systemPrompt'];
 exports.TOOLS = TOOLS;
+const DEFAULT_PROFILE = '你的名字：老朋友（默认名字，用户还没给你起过名）\n用户的称呼：还不知道\n长期记忆：暂时还没有。';
+
 exports.apply = (ctx, config = {}) => {
+  // Name, what to call the user and the long-term memory, re-read for every model step so a
+  // rename or a new memory takes effect without restarting anything.
+  ctx.systemPrompt.variable('companion_profile', () => {
+    try {
+      const text = fs.readFileSync(config.profileFile, 'utf8').trim();
+      return text || DEFAULT_PROFILE;
+    } catch {
+      return DEFAULT_PROFILE;
+    }
+  });
   for (const tool of TOOLS) {
     ctx.tools.register({
       name: tool.name,

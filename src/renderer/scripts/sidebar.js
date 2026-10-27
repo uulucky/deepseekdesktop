@@ -6,7 +6,7 @@ const Sidebar = {
     const list = document.getElementById('session-list');
     if (!list) return;
     window.CompanionView?.renderEntry();
-    // 老友 has its own pinned entry above the list and never appears in it.
+    // The main conversation has its own pinned entry above the list and never appears in it.
     const isCompanion = (session) => Boolean(session.companion) || Boolean(window.CompanionView?.is(session.sessionId));
     const sessions = (state.sessions ?? []).filter((session) => !isCompanion(session));
     const taskState = (session) => {
@@ -40,7 +40,7 @@ const Sidebar = {
       const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
       const snippet = session.snippet ? `<span class="session-snippet">${esc(session.snippet)}</span>` : '';
       const byCompanion = session.byCompanion || window.CompanionView?.task(session.sessionId)
-        ? '<span class="by-companion" title="由老友派出">友</span>' : '';
+        ? `<span class="by-companion" title="由${esc(window.CompanionView.name())}派出">${esc(window.CompanionView.initial())}</span>` : '';
       return (
         `<div class="session-row${active}" data-session-row="${esc(session.sessionId)}">` +
           `<button class="session-item" data-session="${esc(session.sessionId)}" title="${title}">` +
@@ -205,7 +205,7 @@ const Sidebar = {
     const chip = document.getElementById('model-chip');
     if (chip) {
       chip.classList.toggle('locked', locked);
-      chip.title = locked ? '老友固定使用 DeepSeek V4.1 Flash，思考关闭' : '切换模型';
+      chip.title = locked ? '主对话固定使用 DeepSeek V4.1 Flash，思考关闭' : '切换模型';
     }
     if (nameEl) nameEl.textContent = locked ? '🔒 V4.1 Flash · 固定' : selection ? modelLabel(selection.model) : '模型';
     if (dot) dot.className = 'dot' + (state.connection === 'connected' ? ' on' : '');
@@ -233,9 +233,12 @@ const Sidebar = {
     if (!title) return;
     const back = document.getElementById('back-companion');
     const companion = window.CompanionView;
-    if (back) back.hidden = !(state.activeSessionId && !companion?.active() && companion?.task(state.activeSessionId));
+    if (back) {
+      back.hidden = !(state.activeSessionId && !companion?.active() && companion?.task(state.activeSessionId));
+      back.textContent = `← 回${companion?.name() ?? '老朋友'}`;
+    }
     if (companion?.active()) {
-      title.textContent = '老友';
+      title.textContent = companion.name();
       const counts = state.companion?.counts ?? {};
       const busy = (counts.running ?? 0) + (counts.waiting ?? 0);
       sub.textContent = ['主对话 · V4.1 Flash · 思考关闭', busy ? `正在帮你盯 ${busy} 件事` : ''].filter(Boolean).join(' · ');

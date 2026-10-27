@@ -156,7 +156,7 @@ function registerIpc(services) {
   const companion = () => getContext().companion ?? null;
   const protectCompanion = (sessionId, action) => {
     if (companion()?.isCompanion(sessionId)) {
-      const error = new Error(`老友是主对话，不能${action}`);
+      const error = new Error(`主对话不能${action}`);
       error.code = 'companion-locked';
       throw error;
     }
@@ -338,7 +338,7 @@ function registerIpc(services) {
     return { ...created, warnings };
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  const prompt = async (sessionId, text, attachments = []) => {
+  const prompt = async (sessionId, text, attachments = [], { origin = 'desktop' } = {}) => {
     const ctx = getContext();
     const message = typeof text === 'string' ? text.trim() : '';
     const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
@@ -346,10 +346,10 @@ function registerIpc(services) {
     await restorePermission(sessionId);
     let outgoing = await withImageText(ctx, sessionId, message, normalized);
     // The fixed model is re-selected and the task progress put in front on every message.
-    if (companion()?.isCompanion(sessionId)) outgoing = await companion().beforePrompt(outgoing);
+    if (companion()?.isCompanion(sessionId)) outgoing = await companion().beforePrompt(outgoing, { origin });
     return service('chat').send(sessionId, outgoing, normalized);
   };
-  handle('sessions:prompt', prompt);
+  handle('sessions:prompt', (sessionId, text, attachments) => prompt(sessionId, text, attachments));
   handle('sessions:attachment', (sessionId, attachmentId) => {
     if (typeof sessionId !== 'string' || !sessionId || typeof attachmentId !== 'string' || !attachmentId) {
       throw new Error('图片标识无效');
@@ -381,6 +381,14 @@ function registerIpc(services) {
   });
   handle('companion:acknowledge', (taskId) => companion().acknowledge(String(taskId ?? '')));
   handle('companion:welcomed', () => companion().markWelcomed());
+  handle('companion:profile', () => companion().publicProfile());
+  handle('companion:set-profile', (patch) => companion().setProfile({
+    name: typeof patch?.name === 'string' ? patch.name : undefined,
+    userName: typeof patch?.userName === 'string' ? patch.userName : undefined,
+  }));
+  handle('companion:forget', (id) => companion().forget({ id: String(id ?? '') }));
+  handle('companion:clear-memory', () => companion().clearMemory());
+  handle('companion:set-auto-report', (on) => companion().setAutoReport(on === true));
 
   // ---------------------------------------------------------------- workspaces
   handle('workspaces:list', () => getContext().client.listWorkspaces());
@@ -428,7 +436,7 @@ function registerIpc(services) {
     return result.snapshot ?? null;
   });
   handle('llm:select-model', async (sessionId, provider, model, effort) => {
-    protectCompanion(sessionId, '换模型：它固定使用 DeepSeek V4.1 Flash，思考关闭');
+    protectCompanion(sessionId, '换模型：固定使用 DeepSeek V4.1 Flash，思考关闭');
     const ctx = getContext();
     return ctx.client.selectModel(sessionId, provider, model, effort).then((result) => result.selected);
   });

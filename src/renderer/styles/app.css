@@ -858,3 +858,12 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c9cedb; backgr
 .companion-lock { padding: 14px 16px; max-width: 300px; font-size: 13px; }
 .companion-lock-title { font-weight: 600; margin-bottom: 6px; }
 .companion-lock p { color: var(--text-dim); line-height: 1.55; margin: 0 0 10px; }
+.companion-auto-notice {
+  margin: 8px auto 4px 41px; max-width: 520px; padding: 8px 12px; border-radius: 10px;
+  border: 1px dashed var(--brand-line); color: var(--text-dim); font-size: 12.5px; line-height: 1.6;
+}
+.companion-auto-label { display: block; font-size: 11px; color: var(--brand); margin-bottom: 2px; }
+.companion-note { margin: 2px 0 6px 41px; font-size: 12px; color: var(--text-muted); }
+.companion-note.muted { color: var(--warn); }
+.friend-fact { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.friend-fact > span { flex: 1 1 auto; }

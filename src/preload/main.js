@@ -116,6 +116,11 @@ contextBridge.exposeInMainWorld('deepseek', {
     get: () => invoke('companion:get'),
     acknowledge: (taskId) => invoke('companion:acknowledge', taskId),
     welcomed: () => invoke('companion:welcomed'),
+    profile: () => invoke('companion:profile'),
+    setProfile: (patch) => invoke('companion:set-profile', patch),
+    forget: (id) => invoke('companion:forget', id),
+    clearMemory: () => invoke('companion:clear-memory'),
+    setAutoReport: (on) => invoke('companion:set-auto-report', on),
   },
   update: {
     status: () => invoke('update:status'),

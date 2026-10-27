@@ -6,6 +6,7 @@ const TABS = [
   { id: 'models', label: '模型' },
   { id: 'general', label: '通用' },
   { id: 'extensions', label: '扩展' },
+  { id: 'companion', label: '主对话' },
   { id: 'phone', label: '手机连接' },
   { id: 'about', label: '关于' },
 ];
@@ -41,6 +42,7 @@ const Settings = {
       if (state.view.tab === 'general') return await this.renderGeneral();
       if (state.view.tab === 'extensions') return await ExtensionsPanel.render();
       if (state.view.tab === 'phone') { await RemoteView.load(); return RemoteView.render(); }
+      if (state.view.tab === 'companion') return await CompanionView.renderSettings();
       return this.renderAbout();
     } catch (error) {
       body.innerHTML = `<div class="banner err">加载失败：${esc(error?.message ?? error)}</div>`;
@@ -297,6 +299,7 @@ const Settings = {
     if (!action) return false;
     if (action.startsWith('ext-')) return ExtensionsPanel.onClick(target);
     if (action.startsWith('phone-')) return RemoteView.onClick(target);
+    if (action.startsWith('friend-')) return CompanionView.onSettingsClick(target);
     switch (action) {
       case 'sync-catalog': {
         toast('正在从官网更新模型表…');
@@ -438,6 +441,7 @@ const Settings = {
   async onGeneralChange(target) {
     if (state.view.tab === 'extensions' && await ExtensionsPanel.onChange(target)) return true;
     if (state.view.tab === 'phone' && await RemoteView.onChange(target)) return true;
+    if (state.view.tab === 'companion' && await CompanionView.onSettingsChange(target)) return true;
     if (!target?.id) return false;
     if (target.id === 'ui-theme') {
       state.ui = await api.settings.setUi({ theme: target.value });
