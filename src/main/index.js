@@ -196,7 +196,10 @@ function main() {
       home: companionFiles.home,
       memoryFile: companionFiles.memoryFile,
       profileFile: companionFiles.profileFile,
-      onState: (state) => sendMainWindow('companion:state', state),
+      onState: (state) => {
+        sendMainWindow('companion:state', state);
+        ctx.remote?.onCompanionState(state);
+      },
       log,
     });
     ctx.remote = new RemoteControl({
@@ -257,7 +260,7 @@ async function onKernelReady(baseUrl, authCookie = null, authenticatedUrl = null
   ctx.companion?.startBridge()
     .then(() => ctx.companion.ensure())
     .then(() => ctx.companion.snapshot())
-    .then((state) => sendMainWindow('companion:state', state))
+    .then((state) => { sendMainWindow('companion:state', state); ctx.remote?.onCompanionState(state); })
     .catch((error) => log('companion', 'main conversation not ready', String(error?.message ?? error)));
   // The phone remote can only serve phones once sessions exist to drive.
   ctx.remote?.start().catch((error) => log('remote', 'phone remote failed to start', String(error)));

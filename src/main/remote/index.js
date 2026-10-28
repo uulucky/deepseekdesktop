@@ -261,6 +261,17 @@ class RemoteControl {
     return this.snapshot();
   }
 
+  /**
+   * Phones title the main conversation by its name; a rename on the computer touches no
+   * transcript, so tell open phones to reload when the name changes.
+   */
+  onCompanionState(state) {
+    if (!state?.sessionId || !state.name) return;
+    const previous = this.companionName;
+    this.companionName = state.name;
+    if (previous && previous !== state.name) this.gateway?.publish({ sessionId: state.sessionId, title: state.name, urgent: true });
+  }
+
   /** Feed transcript updates from ChatController to the phones' event streams. */
   onTranscript(payload) {
     if (!this.gateway || !payload?.transcript) return;
@@ -344,7 +355,9 @@ class RemoteControl {
         await this.sessions.restorePermission(sessionId);
         const snapshot = await chat().open(sessionId);
         const limit = Math.min(Math.max(Number(query.get('limit')) || MAX_ITEMS, 1), 500);
-        return { ...snapshot, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit };
+        // The main conversation is titled by its current name, so a rename shows up on an open phone.
+        const friend = companion()?.isCompanion(sessionId) ? { companion: true, title: companion().name() } : {};
+        return { ...snapshot, ...friend, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit };
       },
       sendMessage: async ({ params: [sessionId], body, elevated }) => {
         guard();

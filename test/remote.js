@@ -138,6 +138,7 @@ function rawConnection(port, firstLine) {
   // its model and permission fixed.
   ctx.companion = {
     isCompanion: (id) => id === 'friend',
+    name: () => '阿鲸',
     snapshot: async () => ({ sessionId: 'friend', name: '阿鲸', counts: { running: 1, waiting: 0, finished: 0 }, receipts: [] }),
   };
   const shared = (await call('GET', '/v1/sessions')).json;
@@ -145,6 +146,10 @@ function rawConnection(port, firstLine) {
   assert.equal(shared.items[0].companion, true);
   assert.equal(shared.items[0].title, '阿鲸');
   assert.equal(shared.companion.name, '阿鲸');
+  const friendOpened = (await call('GET', '/v1/sessions/friend?limit=5')).json;
+  assert.equal(friendOpened.title, '阿鲸', 'an open phone picks up a rename');
+  assert.equal(friendOpened.companion, true);
+  assert.equal((await call('GET', '/v1/sessions/s1?limit=5')).json.companion, undefined);
   setGuard(true);
   assert.equal((await call('POST', '/v1/sessions/friend/messages', { text: '帮我整理发票' })).status, 200);
   assert.equal(prompts.at(-1).origin, 'phone', 'phone messages carry their origin for the dispatch rules');
@@ -224,6 +229,28 @@ function rawConnection(port, firstLine) {
   });
   const frame = JSON.parse(events.split('event: session\ndata: ')[1].split('\n')[0]);
   assert.deepEqual(frame, { sessionId: 's1', title: '整理报告', running: false, approvals: 0, questions: 1, lastSeq: 7, last: { kind: 'assistant', text: '报告已生成', streaming: false } });
+
+  // Renaming the main conversation on the computer reaches open phones; an unchanged name does not.
+  const renamed = await new Promise((resolve) => {
+    const req = http.request({
+      path: '/v1/events',
+      createConnection: () => { const s = net.connect(port, '127.0.0.1'); s.write(`DMUSE/1 ${secret} "pixel"\n`); return s; },
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+        if (data.includes('event: hello')) {
+          control.onCompanionState({ sessionId: 'friend', name: '老朋友' });
+          control.onCompanionState({ sessionId: 'friend', name: '老朋友' });
+          control.onCompanionState({ sessionId: 'friend', name: '阿鲸' });
+        }
+        if (data.includes('event: session')) { req.destroy(); resolve(data); }
+      });
+    });
+    req.end();
+  });
+  assert.equal(renamed.split('event: session').length, 2, 'one event for one rename');
+  assert.deepEqual(JSON.parse(renamed.split('event: session\ndata: ')[1].split('\n')[0]), { sessionId: 'friend', title: '阿鲸' });
 
   // Keep-awake: the one setting a phone may change, held only while the remote runs.
   const held = [];
