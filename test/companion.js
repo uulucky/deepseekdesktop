@@ -302,7 +302,8 @@ async function endToEnd(entry) {
 
     // The work conversation is an ordinary one: standard tools, the default model, workspace-write.
     const task = await provider.waitFor('老朋友派来的任务');
-    assert((task.body.tools ?? []).some((tool) => (tool.function?.name ?? tool.name) === 'bash'), 'work conversation has the standard tools');
+    const nativeShell = process.platform === 'win32' ? 'pwsh' : 'bash';
+    assert((task.body.tools ?? []).some((tool) => (tool.function?.name ?? tool.name) === nativeShell), `work conversation has the native ${nativeShell} tool`);
     const dispatch = companion.ledger().dispatches[0];
     assert(dispatch?.taskId, 'dispatch recorded');
     assert.equal((await client.permissions(dispatch.taskId)).currentValue, 'workspace-write');
