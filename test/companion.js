@@ -102,7 +102,9 @@ async function unit() {
   await companion.startBridge();
   try {
     const bridge = JSON.parse(fs.readFileSync(companion.bridgeFile, 'utf8'));
-    assert.equal((fs.statSync(companion.bridgeFile).mode & 0o777).toString(8), '600');
+    // Windows represents inherited ACL access as synthetic mode bits; it does
+    // not implement POSIX 0600. Keep every token/role check on both platforms.
+    if (process.platform !== 'win32') assert.equal((fs.statSync(companion.bridgeFile).mode & 0o777).toString(8), '600');
     assert.equal((await post(bridge.port, 'companion_list_tasks', { sessionId: 'friend', args: {} })).status, 403, 'no token');
     assert.equal((await post(bridge.port, 'companion_list_tasks', { sessionId: 'friend', args: {} }, 'f'.repeat(64))).status, 403, 'wrong token');
     assert.equal((await post(bridge.port, 'companion_list_tasks', { sessionId: 'mine', args: {} }, bridge.token)).status, 403, 'not the companion');

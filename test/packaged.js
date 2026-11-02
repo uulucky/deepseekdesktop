@@ -348,7 +348,19 @@ async function main() {
   assert.equal(await page.locator('#manual-key-input').inputValue(), 'sk-ui-fixture-not-submitted');
   await page.locator('#modal-close').click();
   await page.screenshot({ path: path.join(results, 'packaged-windows.png') });
-  await multitaskUi(page, provider);
+  const previousBounds = await application.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('/renderer/index.html'));
+    const bounds = win.getBounds(); win.setBounds({ ...bounds, height: 620 }); return bounds;
+  });
+  try {
+    await page.waitForFunction(() => document.querySelector('#session-list').clientHeight >= 40
+      && document.querySelector('.rail-foot').getBoundingClientRect().bottom <= window.innerHeight + 1);
+    await multitaskUi(page, provider);
+  } finally {
+    await application.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('/renderer/index.html')).setBounds(bounds);
+    }, previousBounds);
+  }
   await page.screenshot({ path: path.join(results, 'packaged-multitask.png') });
   await actionSummaryUi(page, provider);
   await page.screenshot({ path: path.join(results, 'packaged-action-summary.png') });

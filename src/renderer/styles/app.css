@@ -109,6 +109,7 @@ a { color: var(--brand); }
   background: var(--rail);
   border-right: 1px solid var(--line-soft);
   display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
   transition: margin-left .22s ease;
   -webkit-app-region: no-drag;
 }
@@ -164,8 +165,10 @@ a { color: var(--brand); }
 .workspace-add:disabled { opacity: .55; cursor: wait; }
 .workspace-add svg { width: 16px; height: 16px; }
 
-.rail-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 8px; }
+.rail > :not(.rail-section) { flex-shrink: 0; }
+.rail-section { flex: 1 1 0; min-height: 48px; overflow: hidden; display: flex; flex-direction: column; padding: 0 8px; }
 .rail-section-head {
+  flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 6px 6px 8px; font-size: 11.5px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: .08em;
@@ -173,8 +176,8 @@ a { color: var(--brand); }
 .rail-section-actions { display: inline-flex; align-items: center; gap: 1px; }
 .rail-section-actions .ghost-icon { width: 25px; height: 25px; }
 #toggle-archived.active { color: var(--brand); background: var(--brand-soft); }
-.session-list { overflow-y: auto; padding-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
-.workspace-group { display: flex; flex-direction: column; gap: 2px; }
+.session-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
+.workspace-group { flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; }
 .workspace-head {
   display: flex; align-items: center; gap: 7px; min-width: 0;
   margin-top: 7px; padding: 4px 7px 3px; color: var(--text-muted);
@@ -189,7 +192,7 @@ a { color: var(--brand); }
 .workspace-new:hover { background: var(--panel-2); color: var(--text); }
 .workspace-new svg { width: 13px; height: 13px; }
 .workspace-empty { padding: 3px 9px 7px 27px; color: var(--text-muted); font-size: 11.5px; }
-.session-row { display: flex; align-items: center; position: relative; border-radius: 9px; }
+.session-row { flex-shrink: 0; display: flex; align-items: center; position: relative; border-radius: 9px; }
 .session-row:hover, .session-row.active { background: var(--panel); }
 .session-row.active { background: var(--panel-2); }
 .session-item {
@@ -814,6 +817,23 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c9cedb; backgr
 .companion-status.running, .companion-status.unread { color: var(--ok); }
 .companion-status.waiting { color: var(--warn); }
 .companion-status .s-run { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
+/* Keep conversations clickable at the supported 620px minimum window height.
+   The ad becomes a compact card instead of covering a squeezed scroll area. */
+@media (max-height: 740px) {
+  .rail-head { padding-top: 8px; padding-bottom: 6px; }
+  .new-chat { padding-top: 7px; padding-bottom: 7px; margin-bottom: 6px; }
+  .session-toolbar { margin-bottom: 5px; }
+  .companion-entry { padding-top: 0; padding-bottom: 4px; }
+  .companion-item { padding-top: 4px; padding-bottom: 4px; }
+  .rail-foot { padding-top: 4px; padding-bottom: 4px; }
+  .rail-row { padding-top: 6px; padding-bottom: 6px; }
+  .ad-slot { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 2px 8px; margin-top: 5px; margin-bottom: 5px; padding: 6px; }
+  .ad-frame { width: 64px; height: 40px; grid-row: span 2; aspect-ratio: auto; }
+  .ad-title { margin: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ad-body { display: none; }
+  .ad-dots { margin-top: 2px; }
+  .ad-badge { top: 2px; right: 2px; font-size: 9px; }
+}
 .by-companion {
   display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 5px; vertical-align: 1px;
   border-radius: 4px; background: var(--brand-soft); color: var(--brand); font-size: 10px; font-weight: 600;
