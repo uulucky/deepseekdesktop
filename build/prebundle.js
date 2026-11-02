@@ -129,8 +129,7 @@ async function stageSidecar() {
   const version = pins.dmuseSidecarVersion;
   const expected = pins.dmuseSidecarSha256?.[target];
   if (!version || !expected) {
-    log('dmuse sidecar not pinned for ' + target + '; this build has no phone remote');
-    return;
+    throw new Error('dmuse sidecar is required but not pinned for ' + target);
   }
   const exeName = platform === 'win32' ? 'dmuse-sidecar.exe' : 'dmuse-sidecar';
   const dest = path.join(VENDOR, 'dmuse', exeName);

@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.5.1**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.6.0**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.5.1-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.5.1-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.0-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 Microsoft Store 渠道正在准备提交，**尚不代表已通过审核或可下载**。商店版采用 MSIX，安装和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
 
@@ -16,6 +16,8 @@ Microsoft Store 渠道正在准备提交，**尚不代表已通过审核或可�
 
 ## 主要功能
 
+- **主对话“老朋友”**：在固定入口聊天和安排任务，最多同时协调三个工作对话；支持改名、管理长期记忆和任务回执。主动汇报可关闭，开启时每天最多20次，每次会产生一轮 API 调用费用。主对话固定 Flash、关闭推理，派出的工作对话最高使用工作区权限。
+- **dmuse 手机互联**：电脑中开启“设置 → 手机连接”，手机用 dmuse 独立账号扫码或输入配对码，即可继续主对话、派任务、查看进度、回答问题、确认操作和接收结果。任务始终在电脑运行；电脑需开机联网，手机后台不保证持续连接或推送。可在电脑限制手机权限、撤销配对和选择是否防休眠。
 - **双模式**：左上角在“工作台（Harness）”与“网页版（免费）”之间切换。网页版直接加载隔离的 DeepSeek 官方页面，登录和对话由官方页面处理；两个模式的会话、滚动位置和未关闭页面状态互不混用。
 - **上下文与附件**：工作台输入框下显示当前会话上下文 Token 用量；可直接粘贴图片，或点左下角“+”选择图片和文件后随消息发送。
 - **余额与当天用量**：每 10 分钟自动刷新，可手动刷新；金额、Token 和请求数以平台可返回数据为准，不是逐秒计费仪表。
@@ -74,7 +76,7 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险；日常操作不弹窗，只有安全护栏列出的少数高风险操作会先请你确认（可关闭）。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.5.1 更新
+## 0.6.0 更新
 
 - **安全护栏**：Full Access 下的少数高风险命令（破坏性删除、丢弃 Git 修改、强制推送、格式化磁盘、远程脚本直接执行、读取密钥凭据）先在对话里确认；拒绝后 Agent 会收到被拦截的结果。
 - **设置 → 扩展**：一键复用 Claude/Codex 的本机技能（只建链接，不复制或修改原技能）；添加 MCP 服务器并内置 Playwright 浏览器自动化预设；精选插件列出实测结论，目前“免费多引擎联网搜索”可一键安装（固定版本并核对完整性）。
