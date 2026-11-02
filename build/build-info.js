@@ -10,13 +10,20 @@ const mac = process.argv.includes('--mac');
 const prefix = mac ? `mac-${process.arch}-` : '';
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex');
 const commit = process.env.GITHUB_SHA || execFileSync('git',['rev-parse','HEAD'],{ cwd: root, encoding: 'utf8' }).trim();
+const platform = mac ? 'darwin' : 'win32';
+const arch = mac ? process.arch : 'x64';
+const sidecarName = `dmuse-sidecar${mac ? '' : '.exe'}`;
+const sidecarHash = hash(`vendor/dmuse/${sidecarName}`);
+if (sidecarHash !== pins.dmuseSidecarSha256?.[`${platform}-${arch}`]) throw new Error('Packaged phone sidecar differs from the reviewed runtime pin');
 const info = {
   product: 'DeepSeek Desktop', version: pkg.version, sourceCommit: commit,
   sourceRepository: 'https://github.com/uulucky/deepseekdesktop',
   workflow: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
   builtAt: new Date().toISOString(), node: pins.nodeVersion, harness: pins.kernelVersion,
   go: mac ? null : execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
-  platform: mac ? 'darwin' : 'win32', arch: mac ? process.arch : 'x64',
+  platform, arch,
+  dmuseSidecar: { version: pins.dmuseSidecarVersion, sha256: sidecarHash,
+    source: `${pins.dmuseSidecarBase}/dmuse-sidecar-${pins.dmuseSidecarVersion}-${platform}-${arch}${mac ? '' : '.exe'}` },
   electron: pkg.devDependencies.electron, authenticode: mac ? 'not-applicable' : 'unsigned',
   ...(mac ? { appleSigning: 'ad-hoc', notarized: false } : {}),
   locks: { application: hash('package-lock.json'), harness: hash('build/kernel/package-lock.json') },
@@ -35,5 +42,9 @@ for (const [scope,file] of [['application','package-lock.json'],['harness','buil
   }
 }
 packages.push({type:'application', name:'Electron',version:info.electron},{type:'application', name:'Node.js',version:info.node.slice(1)});
+packages.push({ type: 'application', name: 'dmuse-sidecar', version: info.dmuseSidecar.version,
+  hashes: [{ alg: 'SHA-256', content: sidecarHash }],
+  externalReferences: [{ type: 'distribution', url: info.dmuseSidecar.source }],
+  description: 'Pinned Celium userspace networking component. Go transitive dependencies are not enumerated in this npm dependency inventory.' });
 fs.writeFileSync(path.join(root,'dist',prefix+'sbom.cdx.json'),JSON.stringify({bomFormat:'CycloneDX',specVersion:'1.6',version:1,metadata:{component:{type:'application',name:pkg.name,version:pkg.version}},components:packages},null,2)+'\n');
 console.log('Build metadata and production dependency inventory generated:', commit);

@@ -2,6 +2,8 @@
 
 本项目源码可查看，不是 OSI 开源许可。自行构建的用途仍受 [LICENSE](LICENSE) 约束；未修改源码的安全检查不等于获得修改、商业使用或分发权。
 
+手机连接使用额外的 `dmuse-sidecar` 原生组件；CI按目标平台下载固定版本，并在暂存和生成构建信息时校验SHA-256，缺少组件或校验不符会终止构建。`build-info.json` 与SBOM记录其版本、下载来源与实际哈希。该Go组件的传递依赖未列入npm依赖清单，不能把这份SBOM称作完整的Go依赖审计。
+
 ## Windows 干净构建
 
 使用 Node.js **24.15.0**、npm、Go **1.27.1**，在 Windows x64 PowerShell 中：
