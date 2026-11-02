@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "version": "0.6.0",
+  "publishedAt": "2026-11-02T10:30:37.793Z",
+  "notes": [
+    "新增主对话“老朋友”：统一安排工作对话、记住你明确提供的偏好，并主动汇报任务完成、失败和待处理事项。可在设置中改名、关闭主动汇报和管理记忆。",
+    "新增 dmuse 手机互联：设置中启用手机连接，用独立账号扫码或输入配对码，远程发任务、看进展、回答问题和批准操作。",
+    "手机默认工作区权限，受电脑设置上限约束；敏感操作需机主验证，手机不能修改 API Key、充值、扩展或关闭安全护栏。",
+    "Windows、Apple 芯片与 Intel Mac 同步发布；Mac 版未使用 Apple Developer ID 签名或公证，需按说明手动信任。"
+  ],
+  "platforms": {
+    "win32-x64": {
+      "format": "portable-zip",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-update.zip",
+      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-portable.zip",
+      "size": 2740675,
+      "sha256": "b3361447c16404e117972823df6316e9426bd1b051f752ce1e1650bb6edca16f",
+      "bootstrap": {
+        "format": "bootstrap-exe",
+        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-update-bootstrap.exe",
+        "size": 6373376,
+        "sha256": "89ab30eef02eefb20a9584511ecaf60f1ab7e6af9ccb0a53ab4ce3574211a69c"
+      }
+    },
+    "darwin-arm64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-arm64.dmg",
+      "size": 227102468,
+      "sha256": "01b089293ac5be75a7c11f64e984f7a664a36828225c0255b6f7faf596a7ee73"
+    },
+    "darwin-x64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-x64.dmg",
+      "size": 232914103,
+      "sha256": "e4679cb7845ae129c08b750cb954d9b8fdc879761136293401d1f0216c93d22b"
+    }
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "2dc3a1563d303a42c92f5289",
+    "value": "UtzDPQAcLqpAOl4t6P5ukbu6l/X2E/TRv7UULuyV3+/hZ6dhU0PKBkDKY7vNeJLaKPbOzBJfToTQRNXba1pTCg=="
+  }
+}
