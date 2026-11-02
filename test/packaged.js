@@ -239,6 +239,14 @@ async function main() {
   } finally {
     await application.evaluate(({ clipboard }, value) => clipboard.writeText(value), previousClipboard);
   }
+  // First launch now lands on the read-only main conversation. Verify that
+  // surface first, then exercise the independent work-conversation controls.
+  await page.waitForFunction(() => state.companion?.sessionId && state.activeSessionId === state.companion.sessionId);
+  await page.locator('#companion-perm-note').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#permission-control').isVisible(), false);
+  assert.equal((await page.evaluate(() => api.remote.status())).available, true, 'Native package includes the matching dmuse sidecar');
+  await page.locator('#new-chat').click();
+  await page.waitForFunction(() => state.activeSessionId && state.activeSessionId !== state.companion.sessionId && !state.sessionLoading);
   assert.equal(await page.locator('#permission-slider').inputValue(), '2');
   await page.locator('#permission-warning').waitFor({ state: 'visible' });
   await page.locator('#model-chip').click();
