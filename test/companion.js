@@ -144,7 +144,7 @@ async function unit() {
     assert.match(profile, /你的名字：阿鲸\n用户的称呼：老王/);
     assert.match(profile, /- \[m1\] 在做 dmuse 手机端/);
     assert.doesNotMatch(profile, /第一次聊天/, 'asks names only once');
-    assert.equal((fs.statSync(companion.memoryFile).mode & 0o777).toString(8), '600');
+    if (process.platform !== 'win32') assert.equal((fs.statSync(companion.memoryFile).mode & 0o777).toString(8), '600');
     assert.equal((await post(bridge.port, 'companion_forget', { sessionId: 'friend', args: { id: 'm1' } }, bridge.token)).body.ok, true);
     assert.match(fs.readFileSync(companion.profileFile, 'utf8'), /长期记忆：暂时还没有/);
     companion.setProfile({ name: '' });
