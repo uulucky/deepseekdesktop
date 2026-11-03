@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "version": "0.6.1",
+  "publishedAt": "2026-11-03T02:59:10.874Z",
+  "notes": [
+    "主对话收到明确任务直接创建工作对话，无需二次确认；按任务复杂度自动选择推理等级，简单查询关闭推理，常规工作采用适中档位，复杂任务提高推理。",
+    "dmuse iOS、Android、鸿蒙 0.1.2 新增“本对话全部允许”，机主验证后减少重复审批，可随时撤销；普通问题仍需回答，权限不扩展到其他对话。",
+    "手机打开长对话直接显示最新回复，阅读历史时普通刷新保留位置；iOS 通过原 TestFlight 内测组、鸿蒙通过原 AppTest 分发，审核状态以平台为准。",
+    "Mac 新增逐步安装向导：打开 DMG 中的 PKG，关闭旧版后安装并启动新版，保留登录、设置和对话；安装前请保存正在处理的文件。",
+    "Windows、Apple 芯片与 Intel Mac 同步更新，Microsoft Store 本次不更新。Windows 无 Authenticode；Mac 为 ad-hoc 签名，无 Developer ID 或 Apple 公证。"
+  ],
+  "platforms": {
+    "win32-x64": {
+      "format": "portable-zip",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-update.zip",
+      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-portable.zip",
+      "size": 2740674,
+      "sha256": "7116ecd28baf79818b8f830972e3fa78a9fe10add453986f252ad00e3082bd2b",
+      "bootstrap": {
+        "format": "bootstrap-exe",
+        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-update-bootstrap.exe",
+        "size": 6373376,
+        "sha256": "bc21c6bc627f8766c2923b472d157687abd94c8e0439b09a12f99a8083bd308f"
+      }
+    },
+    "darwin-arm64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-arm64.dmg",
+      "size": 225883501,
+      "sha256": "63b82da517a21a2f233888f8585980cc4a2d82564e2f0cb08711355ea62559e9"
+    },
+    "darwin-x64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-x64.dmg",
+      "size": 234207928,
+      "sha256": "38c2f5703c148adea4e70f87569ce13a354974868461e09df11e419f9c0fc434"
+    }
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "2dc3a1563d303a42c92f5289",
+    "value": "Wz7KUgkmVh7I+dTvSOwTDxxSWjptRgH+fhxkZ/H/49lud7WrHbqGt18CpYc/lFiGnzzefoz/G/rNRFWLcLCXAA=="
+  }
+}
