@@ -27,13 +27,14 @@ const TOOLS = [
   },
   {
     name: 'companion_dispatch',
-    description: 'Start a new work conversation that does a task for the user and send it a complete brief. The work conversation uses the user\'s default model and at most workspace-write permission. At most 3 per turn and 3 running at once.',
+    description: 'Directly start a work conversation when the user asks you to inspect this computer, run commands, search, edit files, or perform other work. The user request authorizes dispatch: do not ask again whether to create a work conversation. Use the default folder for computer status checks. Send a complete brief. Uses the user\'s default model, automatically selects reasoning from task complexity (not the saved default effort), and at most workspace-write permission. At most 3 per turn and 3 running at once.',
     parameters: object({
       title: string('Short title, at most 20 characters.'),
       brief: string('A complete, self-contained task description: goal, background, scope, deliverable, cautions. The work conversation has not seen this chat.'),
+      complexity: string('Assess the work, not the length of the brief: simple = direct status/lookups or a known single-step operation (thinking off); standard = routine multi-step editing, summaries or execution (medium); complex = ambiguous debugging, root-cause analysis, architecture, algorithms or substantial cross-file changes (high). Do not ask the user to choose.', { enum: ['simple', 'standard', 'complex'] }),
       userQuote: string('The user\'s own words that asked for this, quoted briefly.'),
       workspaceId: string('A workspace id from companion_list_workspaces; omit to use the default folder.'),
-    }, ['title', 'brief']),
+    }, ['title', 'brief', 'complexity']),
   },
   {
     name: 'companion_send',

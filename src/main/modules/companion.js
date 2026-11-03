@@ -45,6 +45,30 @@ const STATUS_TEXT = {
   failed: '失败', stopped: '已停止', idle: '还没开始', archived: '已归档', missing: '已不存在',
 };
 
+// The main conversation makes the semantic assessment in its existing tool call. Older
+// callers without that field get a conservative local fallback; no extra model request.
+function taskComplexity({ complexity, title, userQuote, brief } = {}) {
+  if (complexity !== undefined) {
+    if (['simple', 'standard', 'complex'].includes(complexity)) return complexity;
+    throw new CompanionError('任务复杂度必须是 simple、standard 或 complex', 'bad_arguments');
+  }
+  const text = `${title ?? ''}\n${userQuote || brief || ''}`;
+  if (/根因|排查|排错|架构|重构|算法|死锁|内存泄漏|跨文件|复杂分析|root.?cause|debug|architect|refactor|algorithm|deadlock|memory leak/i.test(text)) return 'complex';
+  if (/(查|看|检查|获取|显示|列出|check|show|list|query).*(电脑状态|负载|cpu|内存|磁盘|剩余空间|版本|进程|系统信息|状态|load|memory|disk|version|process|status)/is.test(text)) return 'simple';
+  return 'standard';
+}
+
+function taskEffort(complexity, efforts) {
+  const preferred = {
+    simple: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+    standard: ['medium', 'low', 'high', 'minimal', 'xhigh', 'max', 'off'],
+    complex: ['high', 'xhigh', 'max', 'medium', 'low', 'minimal', 'off'],
+  }[complexity];
+  if (!Array.isArray(efforts)) return preferred[0];
+  const available = new Set(efforts.map(e => typeof e === 'string' ? e : e.id));
+  return preferred.find(id => available.has(id));
+}
+
 const PERSONA = `你是 DeepSeek Desktop 里的主对话，是用户认识多年的老朋友。
 说话：口语、简短、真诚，默认 1–4 句；可以开点小玩笑但不油腻，不叫“主人”“亲”。跟随用户的语言，默认简体中文。
 
@@ -57,12 +81,14 @@ const PERSONA = `你是 DeepSeek Desktop 里的主对话，是用户认识多年
 - 长期记忆只在需要时自然地用上，不要每次都复述。
 
 你的工作方式：
-- 你自己只聊天、答短问题、帮用户理清需求。你没有读写文件、运行命令、上网的能力。
+- 你自己负责聊天、答短问题、理清需求和调度；需要读写文件、运行命令或上网时，直接调用工作对话完成。
 - 遇到下面任意一种，就派给工作对话做（companion_dispatch）：要动文件或项目、要跑命令、要上网查、要写长文（超过 800 字）或长代码（超过 15 行）、要多步操作、需要深度推理、用户明确让你派出去。
-- 只是聊天、吐槽、讨论时不派；拿不准就先说一句你的打算，再问“要我开个工作对话去做吗？”
+- 用户明确要求查看、检查、查询、处理、修改、制作或执行，就是本次任务的授权。直接调用 companion_dispatch，成功后简短告知已经开始；不要再问“要我开一个吗”“要不要我去做”，不要先以“我没法自己查”结束回答。例如“查一下当前电脑的状态、负载情况”：直接派一个工作对话检查 CPU、内存、磁盘和负载并汇总结论，不需要项目目录，用默认目录即可。
+- 只是聊天、吐槽、讨论可行性时不派。只有缺少无法合理推断的必要信息（如必须修改的项目有多个候选），才问那个具体问题；不要把是否开工作对话本身作为第二次确认。
 - 派活前确认在哪个工作区做、交付什么；用户已经说清楚、或者用默认目录就行时不要再问。涉及项目但有多个候选工作区时先问。
-- 一句话里有好几件事：先列出来，问用户要不要分成几个工作对话同时做。和还在跑的工作对话重复时，先问要不要追加给它（companion_send）。
+- 一句话里有好几件事：相关步骤合并派单，独立任务可直接分成工作对话同时做，无需用户再批准拆分。明确延续已派任务时，直接用 companion_send 追加；仅在目标或范围确实冲突时澄清，不重复派同一件事。
 - 任务说明要让一个完全没看过你们聊天的人也能直接开工：目标、背景、范围、交付物、注意事项。
+- 派活时按任务本身评估 complexity：simple（查电脑状态、负载、磁盘、版本等直接查询或已知单步操作）关闭推理；standard（常规多步操作、整理或局部修改）中等推理；complex（未知根因排错、架构设计、算法、复杂分析或跨文件改造）高推理。不要按任务说明字数判断，不沿用默认推理等级，也不用用户选；工作对话里的推理滑条仍可手动调整。
 - 一次最多派 3 件事，同时在跑的最多 3 件。
 
 诚实：
@@ -216,7 +242,7 @@ function profileText(profile) {
     `用户的称呼：${profile.userName || '还不知道'}`,
   ];
   if (!profile.introduced) {
-    lines.push('这是你们第一次聊天：先简短打个招呼，自然地问两件事——想叫你什么（不想起名就继续叫“老朋友”），以及你该怎么称呼对方。用户回答后用 companion_set_profile 记下；用户不想说也没关系，同样调用一次（只传已知的部分）。');
+    lines.push('这是你们第一次聊天：闲聊时先简短打个招呼，自然地问两件事——想叫你什么（不想起名就继续叫“老朋友”），以及你该怎么称呼对方。如果用户已经给了明确任务，先直接安排任务，称呼等闲聊时再问，不要阻塞任务。用户回答后用 companion_set_profile 记下；用户不想说也没关系，同样调用一次（只传已知的部分）。');
   }
   if (profile.facts.length) {
     lines.push('你记得的事（用户告诉过你的，编号可用于 companion_forget）：');
@@ -719,27 +745,28 @@ class Companion {
     };
   }
 
-  async defaultSelection() {
+  async taskSelection(complexity) {
     const ctx = this.getContext();
+    const registry = await ctx.client.listModels().catch(() => null);
     const ui = ctx.uiStore;
     let provider = ui?.get('defaultProvider', null);
     let model = ui?.get('defaultModel', null);
-    let effort = ui?.get('defaultEffort', null);
     if (!provider || !model) {
-      const registry = await ctx.client.listModels().catch(() => null);
       provider = registry?.default?.provider ?? null;
       model = registry?.default?.model ?? null;
-      effort = registry?.default?.reasoningEffort ?? null;
     }
-    return provider && model ? { provider, model, reasoningEffort: effort || undefined } : null;
+    if (!provider || !model) throw new CompanionError('无法读取工作对话的默认模型，请稍后重试', 'model_unavailable');
+    const entry = (registry?.registry ?? registry?.groups ?? []).find(group => group.id === provider)?.models?.find(item => item.id === model);
+    return { provider, model, reasoningEffort: taskEffort(complexity, entry ? (entry.reasoning?.efforts ?? entry.efforts ?? []) : undefined) };
   }
 
-  async dispatch({ title, brief, userQuote, workspaceId } = {}) {
+  async dispatch({ title, brief, userQuote, workspaceId, complexity } = {}) {
     const ctx = this.getContext();
     const name = excerpt(title, 20);
     const text = String(brief ?? '').trim();
     if (!name || !text) throw new CompanionError('派活需要标题和完整的任务说明', 'bad_arguments');
     if (text.length > MAX_BRIEF) throw new CompanionError(`任务说明太长（${text.length} 字），请压缩到 ${MAX_BRIEF} 字以内`, 'bad_arguments');
+    const assessed = taskComplexity({ title, brief, userQuote, complexity });
     if (this.turnOrigin === 'auto') throw new CompanionError('这是自动进展通知，这一轮不派新活', 'auto_turn');
     const phone = this.turnOrigin === 'phone';
     if (phone && ctx.remote && !rules.guardEnabled(ctx.remote.guardFile())) {
@@ -763,21 +790,24 @@ class Companion {
       options.workspaceId = target.workspaceId;
       workspace = target.path;
     }
+    const selection = await this.taskSelection(assessed);
     this.dispatchedThisTurn += 1;
     const created = await ctx.chat.createSession(options);
     const taskId = created.sessionId;
     // Recorded before anything else can fail, so a half-made task is still visible and stoppable.
-    const entry = { taskId, title: name, workspace, createdAt: Date.now() };
+    const entry = { taskId, title: name, workspace, complexity: assessed, reasoningEffort: selection.reasoningEffort ?? null, createdAt: Date.now() };
     this.saveLedger({ dispatches: [...this.ledger().dispatches, entry] });
     await ctx.client.renameSession(taskId, name).catch((error) => this.log('companion', 'rename failed', String(error?.message ?? error)));
     let permission = dispatchPermission(ctx.uiStore?.get('defaultPermission', null));
     // A task asked for from the phone stays under the phone's permission ceiling.
     if (phone && ctx.remote) permission = rules.capPermission(permission, ctx.remote.maxPermission()).preset;
     await this.sessions.selectPermission(taskId, permission);
-    const selection = await this.defaultSelection();
-    if (selection) {
-      await ctx.client.selectModel(taskId, selection.provider, selection.model, selection.reasoningEffort)
-        .catch((error) => this.log('companion', 'model selection failed', String(error?.message ?? error)));
+    // Never prompt a task with a silently inherited effort after a selection failure.
+    try {
+      await ctx.client.selectModel(taskId, selection.provider, selection.model, selection.reasoningEffort);
+    } catch (error) {
+      this.log('companion', 'task model selection failed', String(error?.message ?? error));
+      throw new CompanionError('工作对话已创建，但自动设置推理等级失败，尚未开始执行。请在工作对话中检查模型设置。', 'model_selection_failed');
     }
     const quote = String(userQuote ?? '').trim();
     const message = [
@@ -788,7 +818,7 @@ class Companion {
     ].join('\n');
     await this.sessions.prompt(taskId, message, []);
     this.push();
-    return { ok: true, taskId, title: name, workspace, model: selection?.model ?? null, permission, status: 'started' };
+    return { ok: true, taskId, title: name, workspace, model: selection.model, complexity: assessed, reasoningEffort: selection.reasoningEffort ?? null, permission, status: 'started' };
   }
 
   requireOwn(taskId) {
@@ -852,5 +882,5 @@ class Companion {
 
 module.exports = {
   Companion, CompanionError, writePreset, stagePreset, companionPaths, statusOf, dispatchPermission, lastLine, profileText,
-  PRESET_ID, MODEL, DEFAULT_NAME, AUTO_MARKER, MAX_ACTIVE,
+  PRESET_ID, MODEL, DEFAULT_NAME, AUTO_MARKER, MAX_ACTIVE, taskComplexity, taskEffort,
 };

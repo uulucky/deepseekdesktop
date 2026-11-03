@@ -19,7 +19,7 @@ node build/verify-update.js latest.json
 
 注意：Windows Authenticode、GitHub 构建来源证明和更新清单 Ed25519 是不同层次；当前前者未配置，不得宣称已验证 Windows 发布者。旧客户端首次迁移的信任边界见 SECURITY.md。
 
-Mac 当前采用 ad-hoc 签名，不需要开发者账号，也不得宣称为 Developer ID 签名/Apple 公证。分别保留匹配架构的 Node、原生依赖；打包后 `codesign --verify --deep --strict` 和真实应用测试必须通过。DMG 与 ZIP 均从同一签名 `.app` 生成。未来如申请 Apple Developer Program，应另行配置 Developer ID Application、公证和受保护 CI 凭据；Ed25519 清单私钥不能替代 Apple 证书。
+Mac 当前采用 ad-hoc 签名，不需要开发者账号，也不得宣称为 Developer ID 签名/Apple 公证。分别保留匹配架构的 Node、原生依赖；打包后 `codesign --verify --deep --strict` 和真实应用测试必须通过。PKG、DMG 与 ZIP 均从同一签名 `.app` 生成；DMG 内只放逐步安装 PKG 和说明。Installer 在替换前关闭当前控制台用户的已验证旧主进程，安装后以该用户身份启动新版，不以 root 运行客户端，不修改用户资料。两种 Mac 架构的 CI 必须执行真实 Installer 两次升级、进程重启及资料保留测试。未来如申请 Apple Developer Program，应另行配置 Developer ID Application、公证和受保护 CI 凭据；Ed25519 清单私钥不能替代 Apple 证书。
 
 ## Windows 代码签名尚需发行者提供
 

@@ -111,7 +111,7 @@ jobs:
           mkdir -p test-results
           set -o pipefail
           npm run test:integration 2>&1 | tee test-results/integration-console.log
-      - name: Build ad-hoc signed DMG and ZIP (no Developer ID or notarization)
+      - name: Build guided PKG installer, DMG and ZIP (no Developer ID or notarization)
         run: npm run dist:mac
       - name: Real packaged Mac UI, replacement and data retention
         timeout-minutes: 10
@@ -119,6 +119,13 @@ jobs:
           mkdir -p test-results
           set -o pipefail
           npm run test:packaged 2>&1 | tee test-results/packaged-console.log
+      - name: Actual guided Installer upgrade on the disposable Mac
+        timeout-minutes: 8
+        env:
+          DEEPSEEK_DESKTOP_TEST_SYSTEM_INSTALL: '1'
+        run: |
+          set -o pipefail
+          node test/mac-installation.js 2>&1 | tee test-results/mac-installer-console.log
       - name: Preserve public Mac test evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -133,6 +140,7 @@ jobs:
           path: |
             dist/DeepSeekDesktop-*-mac-${{ matrix.arch }}.dmg
             dist/DeepSeekDesktop-*-mac-${{ matrix.arch }}.zip
+            dist/DeepSeekDesktop-*-mac-${{ matrix.arch }}.pkg
             dist/mac-${{ matrix.arch }}-*.json
             dist/mac-${{ matrix.arch }}-SHA256SUMS.txt
           if-no-files-found: error
@@ -163,7 +171,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for asset in dist/DeepSeekDesktop-*.zip dist/DeepSeekDesktop-*.dmg dist/DeepSeekDesktop-*-update-bootstrap.exe; do
+          for asset in dist/DeepSeekDesktop-*.zip dist/DeepSeekDesktop-*.dmg dist/DeepSeekDesktop-*.pkg dist/DeepSeekDesktop-*-update-bootstrap.exe; do
             gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY"
           done
       - name: Publish verified source-built release

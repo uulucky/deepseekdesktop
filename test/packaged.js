@@ -99,8 +99,15 @@ function extract() {
       const attached = spawnSync('hdiutil', ['attach', '-readonly', '-nobrowse', '-mountpoint', mount, dmg], { encoding: 'utf8', timeout: 90000 });
       assert.equal(attached.status, 0, attached.stderr || attached.error?.message);
       try {
-        assert.equal(fs.readlinkSync(path.join(mount, 'Applications')), '/Applications');
-        result = spawnSync('ditto', [path.join(mount, 'DeepSeek Desktop.app'), appBundle], { encoding: 'utf8', timeout: 180000 });
+        const pkg = path.join(mount, '安装 DeepSeek Desktop.pkg');
+        assert(fs.existsSync(pkg), 'DMG contains the guided Installer package');
+        assert(fs.readFileSync(pkg).equals(fs.readFileSync(archive.replace(/\.zip$/, '.pkg'))), 'DMG and standalone PKG match');
+        const expanded = path.join(temporary, 'expanded-installer');
+        result = spawnSync('pkgutil', ['--expand-full', pkg, expanded], { encoding: 'utf8', timeout: 180000 });
+        assert.equal(result.status, 0, result.stderr || result.error?.message);
+        const payload = path.join(expanded, 'application.pkg/Payload/Applications/DeepSeek Desktop.app');
+        assert(fs.existsSync(path.join(payload, 'Contents/Info.plist')));
+        result = spawnSync('ditto', [payload, appBundle], { encoding: 'utf8', timeout: 180000 });
       } finally {
         const detached = spawnSync('hdiutil', ['detach', mount], { encoding: 'utf8', timeout: 30000 });
         assert.equal(detached.status, 0, detached.stderr);

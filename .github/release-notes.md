@@ -1,16 +1,12 @@
-# DeepSeek Desktop 0.5.1
+# DeepSeek Desktop 0.6.1
 
-Windows、Mac Apple 芯片和 Mac Intel 同步发布。
+Windows 便携版、Mac Apple 芯片与 Mac Intel 同步更新；Microsoft Store 版本本次不更新。
 
-## 新功能
+- 主对话收到明确任务直接创建工作对话，不再二次确认；简单任务关闭推理，常规任务选择适中档位，复杂排错、设计和分析提高推理，适配所用模型的实际能力。默认模型保留，仍可手动调整推理。
+- dmuse iOS、Android、鸿蒙 0.1.2 增加“本对话全部允许”，机主验证一次后放行本对话后续工具与安全护栏确认，可随时撤销；普通提问仍需回答，不改变其他对话权限。
+- 手机打开长对话直接显示最新回复，上翻历史时普通刷新保留阅读位置。
+- Mac 新增逐步安装向导：打开 DMG 中的 PKG，安装前关闭旧实例，安装后启动新版，登录、设置和对话保留；同时提供独立 PKG 与 ZIP。
 
-- **安全护栏**：Full Access 下，递归删除系统或主目录、`git reset --hard` / `clean -f` / 强制推送、格式化磁盘、下载脚本直接执行、读取 SSH 密钥与云凭据等少数高风险操作会先在对话里弹出确认卡片；拒绝后 Agent 收到被拦截的结果。其余命令照常执行，权限设置不变，可在“设置 → 通用”关闭。
-- **设置 → 扩展**：启用本机 Claude、Codex 已有的 Agent Skills（只建链接，不改原技能）；添加 MCP 服务器，内置 Playwright 浏览器自动化预设；精选插件显示在当前内核上的实测结论，“免费多引擎联网搜索”可一键安装（固定版本、核对完整性、不运行依赖安装脚本）。
-- **媒体与图片**：本地服务自动补全 Homebrew、winget 等常见路径并告诉 Agent ffmpeg/ffprobe 的实际位置；只支持文字的模型收到图片时，用系统自带文字识别在本机提取文字随消息发送（可关闭）。
-- **界面**：蓝色胖鲸启动动画（可换成自己的图片或视频）；提示消息移到右上角不再遮挡发送按钮；推理调到“最大”时提示更慢、更费 tokens。
+Android APK：https://img.uulucky.com/han/deepseek/dmuse-0.1.2-Android.apk 。iOS 通过原 TestFlight 内测组、鸿蒙通过原 AppTest 更新；处理或审核未完成前不能安装的状态以平台为准。
 
-## 延续功能与安全提示
-
-工作台仍支持余额、官方充值、推理及权限滑块、上下文用量、图片/文件附件、多任务与对话管理；网页版继续在隔离的容器内加载 DeepSeek 官方服务。默认 Full Access，请留意输入区风险提示；安全护栏基于命令文本匹配，不是沙箱。
-
-Windows 暂无 Authenticode 代码签名；Mac 仅为 ad-hoc 签名，没有 Apple Developer ID 或公证。请从可信来源下载并核对 SHA-256；Mac 更新需手动替换应用。隐私、网络连接和许可边界见 README、PRIVACY.md、NETWORK.md、SECURITY.md。
+Windows 暂无 Authenticode；Mac 应用为 ad-hoc 签名，安装包没有 Developer ID 或 Apple 公证。请从可信发布页下载并核对 SHA-256。默认 Full Access 的风险提醒继续显示，权限与隐私说明见仓库文档。

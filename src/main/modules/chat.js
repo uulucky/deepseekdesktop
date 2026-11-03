@@ -389,6 +389,7 @@ class ChatController {
     this.pollers = new Map();
     this.opening = new Map();
     this.disposed = false;
+    this.pendingReplies = new Map();
     this.unsubscribe = this.client.onFrame((frame) => this.handleFrame(frame));
     this.hostUnsubscribe = this.client.onHostFrame?.((frame) => this.handleHostFrame(frame));
   }
@@ -661,7 +662,21 @@ class ChatController {
   }
 
   /** Settle one visible approval and let the blocked tool continue or fail immediately. */
-  async answerApproval(sessionId, eventId, outcome) {
+  answerApproval(sessionId, eventId, outcome) {
+    return this.replyOnce(sessionId, 'approval', eventId, outcome, () => this.settleApproval(sessionId, eventId, outcome));
+  }
+
+  replyOnce(sessionId, type, eventId, answer, settle) {
+    const key = JSON.stringify([sessionId, type, eventId]);
+    const signature = JSON.stringify(answer);
+    const pending = this.pendingReplies.get(key);
+    if (pending) return pending.signature === signature ? pending.promise : Promise.reject(new Error('正在提交此请求的决定，请稍候'));
+    const promise = Promise.resolve().then(settle).finally(() => this.pendingReplies.delete(key));
+    this.pendingReplies.set(key, { signature, promise });
+    return promise;
+  }
+
+  async settleApproval(sessionId, eventId, outcome) {
     const transcript = this.transcripts.get(sessionId);
     if (!transcript?.approvals.has(eventId)) throw new Error('该权限请求已经结束');
     const result = await this.client.answerApproval(eventId, outcome);
@@ -670,7 +685,11 @@ class ChatController {
     return result;
   }
 
-  async answerQuestion(sessionId, eventId, answers) {
+  answerQuestion(sessionId, eventId, answers) {
+    return this.replyOnce(sessionId, 'question', eventId, answers, () => this.settleQuestion(sessionId, eventId, answers));
+  }
+
+  async settleQuestion(sessionId, eventId, answers) {
     const transcript = this.transcripts.get(sessionId);
     if (!transcript?.questions.has(eventId)) throw new Error('该问题已经结束');
     const result = await this.client.answerQuestion(eventId, answers);

@@ -141,6 +141,7 @@ const ROUTES = [
   ['POST', /^\/v1\/sessions\/([^/]+)\/cancel$/, 'cancel'],
   ['POST', /^\/v1\/sessions\/([^/]+)\/approvals\/([^/]+)$/, 'answerApproval'],
   ['POST', /^\/v1\/sessions\/([^/]+)\/questions\/([^/]+)$/, 'answerQuestion'],
+  ['DELETE', /^\/v1\/sessions\/([^/]+)\/approval-policy$/, 'revokeApprovalPolicy'],
   ['GET', /^\/v1\/sessions\/([^/]+)\/permission$/, 'permission'],
   ['POST', /^\/v1\/sessions\/([^/]+)\/permission$/, 'selectPermission'],
   ['GET', /^\/v1\/sessions\/([^/]+)\/models$/, 'models'],

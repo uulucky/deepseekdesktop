@@ -17,6 +17,7 @@ const { DIRS } = require('../modules/util');
 const { RemoteGateway } = require('./gateway');
 const rules = require('./rules');
 const qr = require('./qr');
+const { SessionApprovals, safetyAnswers, isSafetyAllowance } = require('./session-approvals');
 
 const SIDECAR = process.platform === 'win32' ? 'dmuse-sidecar.exe' : 'dmuse-sidecar';
 const MAX_ITEMS = 120;
@@ -84,6 +85,12 @@ class RemoteControl {
     this.onState = onState ?? (() => {});
     this.log = log ?? (() => {});
     this.version = version;
+    this.approvalPolicy = new SessionApprovals({
+      chat: () => this.getContext().chat,
+      permission: async (id) => (await this.getContext().client.permissions(id))?.currentValue,
+      maxPermission: () => this.maxPermission(),
+      guard: () => rules.guardEnabled(this.guardFile()),
+    });
     this.child = null;
     this.gateway = null;
     this.state = {
@@ -177,6 +184,7 @@ class RemoteControl {
     child.on('error', (error) => this.update({ status: 'error', error: String(error.message ?? error) }));
     child.on('exit', (code) => {
       if (this.child !== child) return;
+      this.approvalPolicy.clear();
       this.child = null;
       this.gateway?.close();
       this.gateway = null;
@@ -189,6 +197,7 @@ class RemoteControl {
   }
 
   stop() {
+    this.approvalPolicy.clear();
     const child = this.child;
     this.child = null;
     if (child) {
@@ -220,6 +229,9 @@ class RemoteControl {
         this.update({ invite: { kind: event.kind, code: event.code ?? null, expiresAt: event.expiresAt, svg: qr.toSvg(event.qr) } });
         break;
       case 'phones':
+        for (const previous of this.state.phones) {
+          if (!(event.phones ?? []).includes(previous)) this.approvalPolicy.revokePhone(previous);
+        }
         this.update({ phones: event.phones ?? [] });
         break;
       case 'phone':
@@ -242,6 +254,7 @@ class RemoteControl {
   }
 
   setMaxPermission(preset) {
+    if (rules.maxPermission(preset) !== this.maxPermission()) this.approvalPolicy.clear();
     this.store().set('remoteMaxPermission', rules.maxPermission(preset));
     this.onState(this.snapshot());
     return this.snapshot();
@@ -256,6 +269,7 @@ class RemoteControl {
   }
 
   revoke(phone) {
+    this.approvalPolicy.revokePhone(String(phone));
     this.command('revoke', { phone: String(phone) });
     this.gateway?.disconnect(String(phone));
     return this.snapshot();
@@ -275,6 +289,7 @@ class RemoteControl {
   /** Feed transcript updates from ChatController to the phones' event streams. */
   onTranscript(payload) {
     if (!this.gateway || !payload?.transcript) return;
+    this.approvalPolicy.drain(payload.sessionId).catch((error) => this.log('remote', 'session approval ended', String(error?.message ?? error)));
     const t = payload.transcript;
     this.gateway.publish({
       sessionId: payload.sessionId,
@@ -357,7 +372,8 @@ class RemoteControl {
         const limit = Math.min(Math.max(Number(query.get('limit')) || MAX_ITEMS, 1), 500);
         // The main conversation is titled by its current name, so a rename shows up on an open phone.
         const friend = companion()?.isCompanion(sessionId) ? { companion: true, title: companion().name() } : {};
-        return { ...snapshot, ...friend, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit };
+        return { ...snapshot, ...friend, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit,
+          approvalPolicy: await this.approvalPolicy.status(sessionId) };
       },
       sendMessage: async ({ params: [sessionId], body, elevated }) => {
         guard();
@@ -369,20 +385,40 @@ class RemoteControl {
         await chat().cancel(sessionId);
         return { ok: true };
       },
-      answerApproval: async ({ params: [sessionId, eventId], body, elevated }) => {
+      answerApproval: async ({ params: [sessionId, eventId], body, elevated, phone }) => {
         guard();
+        const continuous = body?.outcome === 'allowed-session';
+        const ticket = this.approvalPolicy.ticket(sessionId);
+        if ((continuous || body?.outcome === 'allowed-once') && !elevated) {
+          throw new rules.RemoteRuleError('批准操作前，请先在手机上完成机主验证', 403, 'needs-verification');
+        }
+        if (continuous) notCompanion(sessionId);
         await enforcePermission(sessionId, elevated);
-        await chat().answerApproval(sessionId, eventId, body?.outcome);
-        return { ok: true };
+        if (body?.outcome === 'rejected') this.approvalPolicy.revoke(sessionId);
+        await chat().answerApproval(sessionId, eventId, continuous ? 'allowed-once' : body?.outcome);
+        const approvalPolicy = continuous ? await this.approvalPolicy.allow(sessionId, phone, ticket) : await this.approvalPolicy.status(sessionId);
+        return { ok: true, approvalPolicy };
       },
-      answerQuestion: async ({ params: [sessionId, eventId], body, elevated }) => {
+      answerQuestion: async ({ params: [sessionId, eventId], body, elevated, phone }) => {
         guard();
         const question = transcriptOf(sessionId)?.questions.get(eventId);
+        const continuous = body?.approvalScope === 'session';
+        const ticket = this.approvalPolicy.ticket(sessionId);
+        if (continuous && !isSafetyAllowance(question, body?.answers)) {
+          throw new rules.RemoteRuleError('只有安全护栏的批准操作可开启本对话全部允许', 400, 'bad-approval-scope');
+        }
         if (isSafetyQuestion(question) && JSON.stringify(body?.answers ?? null).includes(SAFETY_ALLOW) && !elevated) {
           throw new rules.RemoteRuleError('放行高风险操作前，请先在手机上完成指纹或面容验证', 403, 'needs-verification');
         }
+        if (continuous) { notCompanion(sessionId); await enforcePermission(sessionId, elevated); }
+        if (isSafetyQuestion(question) && !JSON.stringify(body?.answers ?? null).includes(SAFETY_ALLOW)) this.approvalPolicy.revoke(sessionId);
         await chat().answerQuestion(sessionId, eventId, body?.answers);
-        return { ok: true };
+        const approvalPolicy = continuous ? await this.approvalPolicy.allow(sessionId, phone, ticket) : await this.approvalPolicy.status(sessionId);
+        return { ok: true, approvalPolicy };
+      },
+      revokeApprovalPolicy: async ({ params: [sessionId] }) => {
+        this.approvalPolicy.revoke(sessionId);
+        return { ok: true, approvalPolicy: { supported: true, active: false } };
       },
       permission: async ({ params: [sessionId] }) => ({
         current: (await ctx().client.permissions(sessionId))?.currentValue ?? null,
@@ -390,6 +426,7 @@ class RemoteControl {
       }),
       selectPermission: async ({ params: [sessionId], body, elevated }) => {
         notCompanion(sessionId);
+        this.approvalPolicy.revoke(sessionId);
         const capped = rules.capPermission(body?.preset, this.maxPermission(), { elevated });
         await this.sessions.selectPermission(sessionId, capped.preset);
         return { current: capped.preset, capped: capped.capped };
@@ -421,9 +458,9 @@ class RemoteControl {
       pending: async () => {
         const items = [];
         for (const transcript of chat().transcripts?.values() ?? []) {
-          for (const approval of transcript.approvals.values()) items.push({ type: 'approval', sessionId: transcript.sessionId, title: transcript.title, approval });
+          for (const approval of transcript.approvals.values()) items.push({ type: 'approval', sessionId: transcript.sessionId, title: transcript.title, approval, sessionApprovalSupported: true });
           for (const question of transcript.questions.values()) {
-            items.push({ type: 'question', sessionId: transcript.sessionId, title: transcript.title, question, risky: isSafetyQuestion(question) });
+            items.push({ type: 'question', sessionId: transcript.sessionId, title: transcript.title, question, risky: isSafetyQuestion(question), sessionApprovalSupported: Boolean(safetyAnswers(question)) });
           }
         }
         // Risky confirmations first: they block work and need the most attention.

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Launch the installed application as the console user, never as root.
+set -eu
+[ "${3:-/}" = / ] || exit 1
+app='/Applications/DeepSeek Desktop.app'
+[ ! -L "$app" ] && [ -d "$app" ] || exit 1
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.deepseek.desktop ] || exit 1
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = '@VERSION@' ] || exit 1
+/usr/bin/codesign --verify --deep --strict "$app"
+uid=$(/usr/bin/stat -f '%u' /dev/console)
+case "$uid" in ''|*[!0-9]*) exit 0 ;; esac
+if [ "$uid" -lt 500 ]; then echo 'Installation complete. Open DeepSeek Desktop from Applications after login.'; exit 0; fi
+user=$(/usr/bin/id -nu "$uid")
+/bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "$user" /usr/bin/open -n -a "$app" || {
+    echo 'Installation complete, but the app could not be started. Open it from Applications.' >&2; exit 1;
+}
+echo 'DeepSeek Desktop @VERSION@ installed. Login and conversations were preserved.'

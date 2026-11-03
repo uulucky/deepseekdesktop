@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.6.0**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.6.1**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.0-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.0-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.1-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 [Microsoft Store 渠道](https://apps.microsoft.com/detail/9NMC44LMCNH1)采用独立的发布节奏，本页版本及下载链接对应 GitHub/OSS 直下载版。商店版采用 MSIX，版本和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
 
@@ -65,7 +65,7 @@ DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许�
 | Windows 发行者 | 暂无 Authenticode 证书，可能显示未知发布者；不宣称已通过系统或第三方安全认证 |
 | Mac 发行者 | ad-hoc 签名，无 Developer ID / Apple 公证；首次打开需用户单独允许 |
 | 发布透明度 | 公开 Windows、Apple 芯片与 Intel 原生构建、测试日志、来源证明、SHA-256、依赖清单；不是字节级可重现构建承诺 |
-| 更新 | 三个平台均验证 Ed25519 清单；Windows 安装前校验文件 SHA-256，Mac 打开已签名清单中的下载地址，手动核对文件并替换 |
+| 更新 | 三个平台均验证 Ed25519 清单；Windows 安装前校验文件 SHA-256，Mac 打开签名清单中的安装包，运行逐步安装向导后自动关闭旧版并启动新版 |
 | 数据 | 对话在本机；模型请求可发送上下文与工具内容；API Key 本地文件可能明文 |
 | 广告 | 内置远程广告位，目前无关闭开关；从 uulucky 域名拉取配置与图片，点击打开外站 |
 | 许可 | 源码可查看，个人非商业免费；公司、组织与工作用途需授权；不允许修改或再分发自有代码 |
@@ -76,7 +76,13 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险；日常操作不弹窗，只有安全护栏列出的少数高风险操作会先请你确认（可关闭）。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.6.0 更新
+## 0.6.1 更新
+
+Mac 下载 DMG 后，双击其中的“安装 DeepSeek Desktop.pkg”，按向导安装；安装前请保存正在处理的文件。安装程序关闭当前用户的旧版，替换应用并启动新版，登录和本地对话保留。也提供独立 PKG 和 ZIP。
+
+dmuse 手机端同步更新至 0.1.2：[Android APK](https://img.uulucky.com/han/deepseek/dmuse-0.1.2-Android.apk)；iOS 通过原 TestFlight 内测组更新，鸿蒙通过原 AppTest 测试更新。平台审核/处理期间以测试平台可安装状态为准。
+
+本版改进：主对话收到明确任务后直接派给工作对话，无需再次确认是否开对话；iOS、Android、鸿蒙的手机审批增加“本对话全部允许”，可连续批准当前对话的工具请求和安全护栏确认，普通问题仍需回答。可随时撤销，关闭手机连接、电脑客户端重启或修改权限上限后失效。Windows、Mac Apple 芯片和 Mac Intel 使用同一套流程。主对话派单时评估任务复杂度：简单查询关闭推理，常规多步任务采用中等附近的档位，复杂排错、设计与分析采用高档位，并适配模型实际支持的等级；不沿用默认推理等级，也不额外调用模型来分类。默认模型仍保留，进入工作对话后可手动调整推理。iOS、Android、鸿蒙打开对话时直接定位到最新回复，上翻历史时不会因普通刷新被拉回底部。
 
 - **安全护栏**：Full Access 下的少数高风险命令（破坏性删除、丢弃 Git 修改、强制推送、格式化磁盘、远程脚本直接执行、读取密钥凭据）先在对话里确认；拒绝后 Agent 会收到被拦截的结果。
 - **设置 → 扩展**：一键复用 Claude/Codex 的本机技能（只建链接，不复制或修改原技能）；添加 MCP 服务器并内置 Playwright 浏览器自动化预设；精选插件列出实测结论，目前“免费多引擎联网搜索”可一键安装（固定版本并核对完整性）。

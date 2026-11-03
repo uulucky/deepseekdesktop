@@ -18,9 +18,10 @@ const run = (file, args = []) => execFileSync(process.execPath, [file, ...args],
 });
 run('build/make-icon.js');
 run('build/build-info.js', ['--mac']);
-run('node_modules/electron-builder/cli.js', ['--mac', 'dmg', 'zip', '--' + process.arch, '--publish', 'never']);
+run('node_modules/electron-builder/cli.js', ['--mac', 'zip', '--' + process.arch, '--publish', 'never']);
+require('./mac-installer').makeMacInstaller({ app: path.join(root, 'dist', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Desktop.app'), arch: process.arch, version, dist: path.join(root, 'dist') });
 const prefix = `mac-${process.arch}-`;
-const names = ['dmg', 'zip'].map(ext => `DeepSeekDesktop-${version}-mac-${process.arch}.${ext}`);
+const names = ['dmg', 'zip', 'pkg'].map(ext => `DeepSeekDesktop-${version}-mac-${process.arch}.${ext}`);
 const hash = name => crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'dist', name))).digest('hex');
 const dmg = names[0];
 const descriptor = { version, platforms: { [`darwin-${process.arch}`]: {

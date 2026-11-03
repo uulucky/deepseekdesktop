@@ -126,6 +126,10 @@ function rawConnection(port, firstLine) {
   assert.equal(info.status, 200);
   assert.deepEqual(info.json, { desktop: os.hostname(), version: '9.9.9', platform: process.platform, maxPermission: 'workspace-write', guard: true, keepAwake: false, phone: 'pixel' });
   assert.equal(connected.find((entry) => entry.phone === 'pixel')?.phone, 'pixel');
+  const policy = await call('DELETE', '/v1/sessions/s1/approval-policy');
+  assert.equal(policy.status, 200);
+  assert.deepEqual(policy.json.approvalPolicy, { supported: true, active: false });
+  assert.equal((await call('POST', '/v1/sessions/s1/approvals/a1', { outcome: 'allowed-session' })).json.error.code, 'needs-verification');
 
   // Lists hide archived sessions; transcripts are trimmed for a phone.
   assert.deepEqual((await call('GET', '/v1/sessions')).json.items.map((row) => row.sessionId), ['s1']);

@@ -99,6 +99,9 @@ function main() {
     if (ctx.baseUrl && !ctx.quitting) createMainWindow();
   });
 
+  // Installer sends TERM only to the console user's verified main application process.
+  if (process.platform === 'darwin') process.once('SIGTERM', () => app.quit());
+
   app.on('before-quit', async () => {
     ctx.quitting = true;
     try {

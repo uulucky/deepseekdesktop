@@ -15,7 +15,7 @@ delete process.env.DEEPSEEK_API_KEY;
 delete process.env.DSH_HOME;
 
 const companionModule = require('../src/main/modules/companion');
-const { Companion, statusOf, dispatchPermission, writePreset, companionPaths, profileText, PRESET_ID, MODEL, AUTO_MARKER } = companionModule;
+const { Companion, statusOf, dispatchPermission, writePreset, companionPaths, profileText, PRESET_ID, MODEL, AUTO_MARKER, taskComplexity, taskEffort } = companionModule;
 const tools = require('../src/main/modules/companion/companion-tools.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -53,6 +53,18 @@ async function unit() {
   assert.equal(statusOf(transcript({ items: [{ kind: 'user' }, { kind: 'turn-end', reason: 'cancelled' }] }), {}), 'stopped');
   assert.equal(statusOf(transcript({ items: [{ kind: 'user' }, { kind: 'turn-end', reason: 'error', error: 'x' }] }), {}), 'failed');
   assert.equal(statusOf(null, { running: true }), 'running');
+
+  // Complexity is assessed by the companion, with a fallback for old callers.
+  assert.equal(taskComplexity({ title: '查电脑负载', brief: '查看 CPU、内存和磁盘' }), 'simple');
+  assert.equal(taskComplexity({ title: '检查服务状态', brief: '排查内存泄漏并定位根因' }), 'complex');
+  assert.equal(taskComplexity({ title: '整理文件', brief: '按月份分类' }), 'standard');
+  assert.equal(taskComplexity({ complexity: 'complex', title: '查看文件' }), 'complex', 'semantic tool assessment wins');
+  assert.equal(taskComplexity({ complexity: 'simple', brief: '说明'.repeat(2000) }), 'simple', 'long instructions do not imply complexity');
+  assert.throws(() => taskComplexity({ complexity: 'ultra' }), /任务复杂度/);
+  assert.equal(taskEffort('simple', [{ id: 'off' }, { id: 'high' }]), 'off');
+  assert.equal(taskEffort('complex', [{ id: 'off' }, { id: 'high' }]), 'high');
+  assert.equal(taskEffort('standard', [{ id: 'off' }, { id: 'low' }, { id: 'high' }]), 'low', 'use a supported moderate level');
+  assert.equal(taskEffort('complex', []), undefined, 'no unsupported effort for non-reasoning models');
 
   // A dispatched task never gets Full Access.
   assert.equal(dispatchPermission(null), 'workspace-write');
@@ -201,11 +213,15 @@ async function unit() {
     store.set('companion', { sessionId: 'friend', dispatches: [], notified: {} });
     const guardFile = path.join(temporary, 'guard.json');
     const selected = [];
+    const modelSelections = [];
     let remoteMax = 'read-only';
     const phoneCtx = {
       uiStore: store,
       remote: { maxPermission: () => remoteMax, guardFile: () => guardFile },
-      client: { sessionModels: async () => ({ current: { ...MODEL } }), listWorkspaces: async () => ({ items: [] }), renameSession: async () => {}, listModels: async () => null },
+      client: { sessionModels: async () => ({ current: { ...MODEL } }), listWorkspaces: async () => ({ items: [] }), renameSession: async () => {},
+        listModels: async () => ({ default: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'medium' }, groups: [{ id: 'deepseek-official', models: [{ id: 'deepseek-flash', reasoning: { efforts: [{ id: 'off' }, { id: 'medium' }, { id: 'high' }] } }] }] }),
+        selectModel: async (...args) => { modelSelections.push(args); },
+      },
       chat: { transcripts: new Map(), createSession: async () => ({ sessionId: `p${selected.length}` }) },
       defaultSessionOptions: () => ({ cwd: temporary }),
     };
@@ -215,13 +231,42 @@ async function unit() {
       bridgeFile: path.join(temporary, 'phone-bridge.json'), home: temporary,
       memoryFile: path.join(temporary, 'phone-memory.json'), profileFile: path.join(temporary, 'phone-profile.txt'),
     });
+    store.set('defaultProvider', 'deepseek-official');
+    store.set('defaultModel', 'deepseek-flash');
+    store.set('defaultEffort', 'off');
+    assert.equal(MODEL.reasoningEffort, 'off', 'only the main conversation is fixed to thinking off');
     await phone.beforePrompt('从手机', { origin: 'phone' });
-    assert.equal((await phone.dispatch({ title: '手机派的', brief: '做点事' })).permission, 'read-only');
+    assert.equal((await phone.dispatch({ title: '手机派的', brief: '做点事', complexity: 'simple' })).permission, 'read-only');
+    assert.equal(modelSelections.at(-1)[3], 'off', 'simple tasks turn reasoning off');
     fs.writeFileSync(guardFile, JSON.stringify({ enabled: false }));
     await assert.rejects(phone.dispatch({ title: '护栏关了', brief: '做点事' }), /安全护栏/);
     await phone.beforePrompt('从电脑');
     remoteMax = 'read-only';
-    assert.equal((await phone.dispatch({ title: '电脑派的', brief: '做点事' })).permission, 'workspace-write');
+    store.set('defaultEffort', 'high');
+    assert.equal((await phone.dispatch({ title: '查电脑负载', brief: '查看 CPU、内存、磁盘和负载' })).permission, 'workspace-write');
+    assert.equal(modelSelections.at(-1)[3], 'off', 'simple tasks ignore a saved high effort');
+    assert.equal(store.get('defaultEffort'), 'high', 'automatic selection does not overwrite user preferences');
+    await phone.beforePrompt('另一个明确任务');
+    store.set('defaultEffort', 'off');
+    await phone.dispatch({ title: '分析复杂问题', brief: '分析日志并定位根因', complexity: 'complex' });
+    assert.equal(modelSelections.at(-1)[3], 'high', 'complex work raises reasoning despite a saved off effort');
+    store.delete('defaultProvider');
+    store.delete('defaultModel');
+    store.delete('defaultEffort');
+    await phone.beforePrompt('没有保存新对话偏好');
+    await phone.dispatch({ title: '查电脑负载', brief: '查看 CPU、内存、磁盘和负载' });
+    assert.equal(modelSelections.at(-1)[3], 'off', 'kernel default effort is not inherited either');
+    await phone.beforePrompt('常规任务');
+    const routine = await phone.dispatch({ title: '整理报告', brief: '整理多份报告并汇总', complexity: 'standard' });
+    assert.equal(routine.complexity, 'standard');
+    assert.equal(routine.reasoningEffort, 'medium');
+    assert.equal(phone.ledger().dispatches.at(-1).reasoningEffort, 'medium');
+    await phone.beforePrompt('模型选择失败');
+    phoneCtx.client.selectModel = async () => { throw new Error('fixture selection failed'); };
+    let prompted = false;
+    phone.sessions.prompt = async () => { prompted = true; };
+    await assert.rejects(phone.dispatch({ title: '复杂排错', brief: '排查根因', complexity: 'complex' }), /尚未开始执行/);
+    assert.equal(prompted, false, 'selection failure must not execute using an inherited effort');
     phone.stop();
   }
   console.log('companion unit: ok');
@@ -296,17 +341,26 @@ async function endToEnd(entry) {
     const system = JSON.stringify(turn.body.messages.find((message) => message.role === 'system')?.content ?? '');
     assert.match(system, /你的名字：老朋友/, 'live profile in the persona');
     assert.match(system, /第一次聊天/, 'first chat asks for names');
+    assert.match(system, /用户明确要求查看、检查、查询/, 'the running preset treats a concrete task as permission to dispatch');
+    assert.match(system, /complexity/, 'the running persona assesses task complexity');
+    assert.match(system, /查一下当前电脑的状态、负载情况/, 'computer status checks dispatch directly without a project-selection round trip');
     turn.toolCall('call_dispatch_fixture', 'companion_dispatch', {
-      title: '整理发票', brief: '把工作目录里的发票按月份归档，完成后列出每个月的文件数。', userQuote: '帮我把发票整理一下',
+      title: '整理发票', complexity: 'standard', brief: '把工作目录里的发票按月份归档，完成后列出每个月的文件数。', userQuote: '帮我把发票整理一下',
     });
 
     // The work conversation is an ordinary one: standard tools, the default model, workspace-write.
-    const task = await provider.waitFor('老朋友派来的任务');
+    const task = await provider.waitFor('老朋友派来的任务').catch(error => {
+      console.error('companion fixture tool replies:', provider.requests.flatMap(request => request.body.messages.filter(message => message.role === 'tool')));
+      console.error('companion fixture task events:', companion.ledger().dispatches.map(row => chat.transcripts.get(row.taskId)?.items));
+      throw error;
+    });
     const nativeShell = process.platform === 'win32' ? 'pwsh' : 'bash';
     assert((task.body.tools ?? []).some((tool) => (tool.function?.name ?? tool.name) === nativeShell), `work conversation has the native ${nativeShell} tool`);
     const dispatch = companion.ledger().dispatches[0];
     assert(dispatch?.taskId, 'dispatch recorded');
     assert.equal((await client.permissions(dispatch.taskId)).currentValue, 'workspace-write');
+    assert(['low', 'medium', 'high'].includes((await client.sessionModels(dispatch.taskId)).current.reasoningEffort), 'real kernel receives a supported moderate effort, not the default off');
+    assert.equal(task.body.thinking?.type, 'enabled', 'work request enables reasoning for routine multi-step work');
     await eventually(async () => (await client.listSessions()).find((item) => item.sessionId === dispatch.taskId)?.projections?.values?.title === '整理发票', 'task renamed');
     await eventually(() => companion.describe(dispatch.taskId).status === 'running', 'task running');
 
