@@ -338,7 +338,7 @@ function registerIpc(services) {
     return { ...created, warnings };
   });
   handle('sessions:delete-transcript', (sessionId) => { service('chat').close(sessionId); return true; });
-  const prompt = async (sessionId, text, attachments = [], { origin = 'desktop' } = {}) => {
+  const prompt = async (sessionId, text, attachments = [], { origin = 'desktop', mode = 'queue' } = {}) => {
     const ctx = getContext();
     const message = typeof text === 'string' ? text.trim() : '';
     const normalized = normalizeAttachments(ctx.client, sessionId, attachments);
@@ -347,7 +347,7 @@ function registerIpc(services) {
     let outgoing = await withImageText(ctx, sessionId, message, normalized);
     // The fixed model is re-selected and the task progress put in front on every message.
     if (companion()?.isCompanion(sessionId)) outgoing = await companion().beforePrompt(outgoing, { origin });
-    return service('chat').send(sessionId, outgoing, normalized);
+    return service('chat').send(sessionId, outgoing, normalized, mode);
   };
   handle('sessions:prompt', (sessionId, text, attachments) => prompt(sessionId, text, attachments));
   handle('sessions:attachment', (sessionId, attachmentId) => {

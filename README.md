@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.6.1**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.6.2**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.1-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.2-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 [Microsoft Store 渠道](https://apps.microsoft.com/detail/9NMC44LMCNH1)采用独立的发布节奏，本页版本及下载链接对应 GitHub/OSS 直下载版。商店版采用 MSIX，版本和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
 
@@ -32,7 +32,7 @@ GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件
 - **交互提问**：Agent 需要补充信息时，工作台直接显示待回答卡片，支持选项、自定义回答、多题与取消；侧栏标记待回答会话。
 - **对话管理**：支持重命名、内容搜索、非破坏性归档、添加文件夹工作区，以及从现有对话创建独立新对话。
 - **Key 管理**：登录后创建并配置新 Key，或粘贴已有完整 Key；本地绑定失败时保留一次性完整 Key 供复制和重试。
-- **本地记录与更新**：每小时检查更新。Windows 便携版确认后自动安装并重启；Mac 下载匹配芯片的 DMG 后手动替换应用，数据独立保存。
+- **本地记录与更新**：每小时检查更新。Windows 便携版确认后自动安装并重启；Mac 下载匹配芯片的 DMG 后运行安装向导，数据独立保存。
 
 DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许可免费不等于 API 免费。
 
@@ -42,10 +42,10 @@ DeepSeek API 的使用可能产生服务商费用；客户端下载或个人许�
 
 目标为 macOS 14+，分别支持 Apple 芯片（M 系列）与 Intel；可在苹果菜单 →“关于本机”查看芯片类型。不走 App Store，没有 Apple Developer ID 签名或 Apple 公证。
 
-1. 下载与你的芯片匹配的 DMG，核对来源与校验值，打开后把 `DeepSeek Desktop.app` 拖入“应用程序”。不要长期从安装盘内运行。
+1. 下载与你的芯片匹配的 DMG，核对来源与校验值，打开后双击“安装 DeepSeek Desktop.pkg”，按向导完成安装。也提供独立 PKG 与 ZIP。
 2. 在“应用程序”中打开。如果提示开发者无法验证或 Apple 无法检查恶意软件，先取消；**确认来源可信且文件完整后**，进入“系统设置 → 隐私与安全性 → 仍要打开”，按系统提示确认。该入口可能只在尝试打开后短时间出现。参考 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。
 3. 在账户设置里登录或配置 API Key。默认 Full Access 有常驻风险提醒，可通过滑块改为只读/工作区。macOS 文件夹、自动化等系统授权仍由系统单独控制，Full Access 不会绕过它们。
-4. 数据默认在 `~/Library/Application Support/DeepSeek Desktop/`，实际路径见“设置 → 关于”。关闭窗口后程序仍可留在 Dock；**Cmd+Q 完全退出**。更新时先退出，再把新应用拖入“应用程序”替换，不要删除数据目录。
+4. 数据默认在 `~/Library/Application Support/DeepSeek Desktop/`，实际路径见“设置 → 关于”。关闭窗口后程序仍可留在 Dock；**Cmd+Q 完全退出**。更新时保存进行中的工作，再运行新版安装向导；向导关闭旧版并启动新版，不要删除数据目录。
 
 当前仅使用 ad-hoc 本地签名维持应用包完整性，不代表 Apple 验证发行者或审核安全；**不能保证每台受管理的 Mac 都允许打开**。如果提示“已损坏”或明确的恶意软件警告，请停止打开，重新下载并核对哈希、反馈系统版本；不要关闭 Gatekeeper、SIP 或杀毒软件。更新后可能需要再次允许打开或确认钥匙串访问；登录态通常保留，但系统策略可能要求重新登录。Mac 首版不提供静默自动覆盖/重启更新。
 
@@ -76,20 +76,23 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险；日常操作不弹窗，只有安全护栏列出的少数高风险操作会先请你确认（可关闭）。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.6.1 更新
+## 0.6.2 更新
 
-Mac 下载 DMG 后，双击其中的“安装 DeepSeek Desktop.pkg”，按向导安装；安装前请保存正在处理的文件。安装程序关闭当前用户的旧版，替换应用并启动新版，登录和本地对话保留。也提供独立 PKG 和 ZIP。
+本版为新版 dmuse 工作台提供配套电脑功能，Windows、Mac Apple 芯片和 Mac Intel 同步支持：
 
-dmuse 手机端同步更新至 0.1.2：[Android APK](https://img.uulucky.com/han/deepseek/dmuse-0.1.2-Android.apk)；iOS 通过原 TestFlight 内测组更新，鸿蒙通过原 AppTest 测试更新。平台审核/处理期间以测试平台可安装状态为准。
+- **任务管理**：置顶、重命名、归档、已读状态；长对话分段加载历史，显示正在执行、待回答、待审批、完成和失败等状态。
+- **继续任务**：运行中可排队追加、调整方向或停止后调整；手机重连重复发送同一请求时，电脑不会重复创建或执行。
+- **项目与快捷任务**：选择默认工作目录内的文件夹，保存项目说明和输出偏好，管理快捷任务模板，选择电脑已安装的技能。
+- **定时任务**：支持一次、间隔、每天和每周计划，可暂停、恢复、立即运行和查看记录。任务在电脑本地执行，需开启手机连接并保持电脑在线；离线错过的任务不自动补跑，上一轮等待回答或审批时不重复启动。自动任务仅允许只读或工作区权限。
+- **用量与提醒**：查看任务 Token、缓存用量和余额缓存，可按当前模型配置单价估算费用与预算；估算不能代替服务商账单。应用内显示待处理及完成提醒。
 
-本版改进：主对话收到明确任务后直接派给工作对话，无需再次确认是否开对话；iOS、Android、鸿蒙的手机审批增加“本对话全部允许”，可连续批准当前对话的工具请求和安全护栏确认，普通问题仍需回答。可随时撤销，关闭手机连接、电脑客户端重启或修改权限上限后失效。Windows、Mac Apple 芯片和 Mac Intel 使用同一套流程。主对话派单时评估任务复杂度：简单查询关闭推理，常规多步任务采用中等附近的档位，复杂排错、设计与分析采用高档位，并适配模型实际支持的等级；不沿用默认推理等级，也不额外调用模型来分类。默认模型仍保留，进入工作对话后可手动调整推理。iOS、Android、鸿蒙打开对话时直接定位到最新回复，上翻历史时不会因普通刷新被拉回底部。
+已适配 iOS **0.1.3（Build 7）** 的工作台，通过原 TestFlight 内测组更新。旧版手机可继续使用原有功能；其他手机平台的新功能以各自已安装版本为准。
 
-- **安全护栏**：Full Access 下的少数高风险命令（破坏性删除、丢弃 Git 修改、强制推送、格式化磁盘、远程脚本直接执行、读取密钥凭据）先在对话里确认；拒绝后 Agent 会收到被拦截的结果。
-- **设置 → 扩展**：一键复用 Claude/Codex 的本机技能（只建链接，不复制或修改原技能）；添加 MCP 服务器并内置 Playwright 浏览器自动化预设；精选插件列出实测结论，目前“免费多引擎联网搜索”可一键安装（固定版本并核对完整性）。
-- **媒体与图片**：本地服务的 PATH 自动补全 Homebrew、winget 等常见目录，并把 ffmpeg/ffprobe 的实际位置告诉 Agent；V4-Flash、V4-Pro 等只支持文字的模型收到图片时，用 macOS Vision / Windows OCR 在本机识别文字后随消息发送（可关闭）。
-- **界面**：新的蓝色胖鲸启动动画，也可换成自己的图片或视频；提示消息移到右上角，不再遮挡发送按钮；推理调到“最大”时提示更慢、更费 tokens。
+**系统锁屏推送尚未完成服务端配置和送达验收**，本版不承诺后台推送可用；应用内提醒与主动打开手机后的任务同步可用。云端执行暂不提供。
 
-网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码、网络出口或官方访问策略。真实账号环境仍可能因官方规则收到 403/429，遇到持续拒绝时请等待倒计时结束，不要反复重启刷新。
+Mac 的 DMG 内含逐步安装向导，保留登录、设置和对话；也提供独立 PKG 和 ZIP。Windows 保留便携包及应用内更新。Microsoft Store 渠道本次不更新。
+
+网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码或官方访问策略，官方可能返回 403/429。
 
 ### 如何同时运行多个任务
 

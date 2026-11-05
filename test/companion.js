@@ -413,7 +413,7 @@ async function main() {
 }
 
 main().then(() => {
-  fs.rmSync(temporary, { recursive: true, force: true });
+  fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   process.exit(0);
 }, (error) => {
   console.error(error);

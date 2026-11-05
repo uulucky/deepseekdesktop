@@ -17,6 +17,8 @@ const { DIRS } = require('../modules/util');
 const { RemoteGateway } = require('./gateway');
 const rules = require('./rules');
 const qr = require('./qr');
+const { RequestLedger, historyPage } = require('./task-state');
+const { MobileWorkbench } = require('./workbench');
 const { SessionApprovals, safetyAnswers, isSafetyAllowance } = require('./session-approvals');
 
 const SIDECAR = process.platform === 'win32' ? 'dmuse-sidecar.exe' : 'dmuse-sidecar';
@@ -58,7 +60,7 @@ function isSafetyQuestion(question) {
 /** Attachments arrive base64-encoded; the desktop's own limits are applied by the prompt. */
 function decodeAttachments(list) {
   if (list == null) return [];
-  if (!Array.isArray(list)) throw new rules.RemoteRuleError('附件格式无效', 400, 'bad-attachments');
+  if (!Array.isArray(list) || list.length > 5) throw new rules.RemoteRuleError('附件格式无效', 400, 'bad-attachments');
   return list.map((entry, index) => {
     const value = entry && typeof entry === 'object' ? entry : {};
     if (typeof value.data !== 'string') throw new rules.RemoteRuleError(`附件 ${index + 1} 没有内容`, 400, 'bad-attachments');
@@ -85,6 +87,8 @@ class RemoteControl {
     this.onState = onState ?? (() => {});
     this.log = log ?? (() => {});
     this.version = version;
+    this.requests = new RequestLedger(() => this.store());
+    this.workbench = new MobileWorkbench(this);
     this.approvalPolicy = new SessionApprovals({
       chat: () => this.getContext().chat,
       permission: async (id) => (await this.getContext().client.permissions(id))?.currentValue,
@@ -165,6 +169,7 @@ class RemoteControl {
       windowsHide: true,
     });
     this.child = child;
+    this.workbench.start();
     this.update({ status: 'starting', error: null });
     this.applyKeepAwake();
     let buffer = '';
@@ -184,6 +189,7 @@ class RemoteControl {
     child.on('error', (error) => this.update({ status: 'error', error: String(error.message ?? error) }));
     child.on('exit', (code) => {
       if (this.child !== child) return;
+      this.workbench.stop();
       this.approvalPolicy.clear();
       this.child = null;
       this.gateway?.close();
@@ -197,6 +203,7 @@ class RemoteControl {
   }
 
   stop() {
+    this.workbench.stop();
     this.approvalPolicy.clear();
     const child = this.child;
     this.child = null;
@@ -269,6 +276,9 @@ class RemoteControl {
   }
 
   revoke(phone) {
+    const tickets = { ...this.store().get('phonePushTickets', {}) };
+    delete tickets[String(phone)];
+    this.store().set('phonePushTickets', tickets);
     this.approvalPolicy.revokePhone(String(phone));
     this.command('revoke', { phone: String(phone) });
     this.gateway?.disconnect(String(phone));
@@ -291,6 +301,7 @@ class RemoteControl {
     if (!this.gateway || !payload?.transcript) return;
     this.approvalPolicy.drain(payload.sessionId).catch((error) => this.log('remote', 'session approval ended', String(error?.message ?? error)));
     const t = payload.transcript;
+    this.workbench.onTranscript(payload.sessionId, t);
     this.gateway.publish({
       sessionId: payload.sessionId,
       title: t.title,
@@ -341,10 +352,17 @@ class RemoteControl {
         if (typeof body?.on === 'boolean') this.setKeepAwake(body.on);
         return { keepAwake: this.keepAwakeWanted(), awake: this.blocker !== null, platform: process.platform };
       },
-      listSessions: async () => {
-        const rows = (await this.sessions.sessionRows()).filter((row) => !row.archived);
+      listSessions: async ({ phone = '', query = new URLSearchParams() } = {}) => {
+        let rows = (await this.sessions.sessionRows()).filter((row) => query.get('archived') === '1' ? row.archived : !row.archived).map((row) => this.workbench.decorate(row, phone));
+        const search = (query.get('q') ?? '').trim().toLowerCase();
+        if (search) {
+          const result = query.get('scope') === 'content' && ctx().client.searchSessions ? await ctx().client.searchSessions(search) : null;
+          const ids = new Set((result?.items ?? []).map((r) => r.sessionId));
+          rows = rows.filter((row) => String(row.title ?? '').toLowerCase().includes(search) || ids.has(row.sessionId));
+        }
+        rows.sort((a, b) => Number(b.pinned) - Number(a.pinned) || Number(b.updatedAt) - Number(a.updatedAt));
         const friend = await companion()?.snapshot().catch(() => null);
-        if (!friend?.sessionId) return { items: rows.filter((row) => !row.companion) };
+        if (!friend?.sessionId || query.get('archived') === '1' || (search && !rows.some((row) => row.sessionId === friend.sessionId) && !String(friend.name).toLowerCase().includes(search))) return { items: rows.filter((row) => !row.companion) };
         // A main conversation nobody has written in yet is not listed by the kernel.
         const own = rows.find((row) => row.sessionId === friend.sessionId);
         const pinned = { ...(own ?? { sessionId: friend.sessionId, running: false, updatedAt: Date.now(), turns: 0 }), companion: true, title: friend.name };
@@ -353,7 +371,7 @@ class RemoteControl {
           companion: { sessionId: friend.sessionId, name: friend.name, counts: friend.counts, receipts: friend.receipts.map((task) => ({ taskId: task.taskId, title: task.title, status: task.status })) },
         };
       },
-      createSession: async ({ body, elevated }) => {
+      createSession: async ({ body, elevated, phone = '' }) => this.requests.once(phone, 'create', body, async () => {
         guard();
         const options = ctx().defaultSessionOptions();
         if (typeof body?.workspaceId === 'string' && body.workspaceId.trim()) {
@@ -365,21 +383,52 @@ class RemoteControl {
         const capped = rules.capPermission(requested, this.maxPermission(), { elevated });
         await this.sessions.selectPermission(created.sessionId, capped.preset);
         return { ...created, permission: capped.preset, capped: capped.capped };
-      },
+      }),
       openSession: async ({ params: [sessionId], query }) => {
         await this.sessions.restorePermission(sessionId);
         const snapshot = await chat().open(sessionId);
         const limit = Math.min(Math.max(Number(query.get('limit')) || MAX_ITEMS, 1), 500);
         // The main conversation is titled by its current name, so a rename shows up on an open phone.
         const friend = companion()?.isCompanion(sessionId) ? { companion: true, title: companion().name() } : {};
-        return { ...snapshot, ...friend, items: snapshot.items.slice(-limit), truncated: snapshot.items.length > limit,
+        const page = historyPage(snapshot.items, { limit, before: query.get('before') });
+        const decorated = this.workbench.decorate({ sessionId, title: snapshot.title, running: snapshot.running }, '');
+        return { ...snapshot, ...friend, ...page, status: decorated.status, failure: decorated.error, artifacts: require('./gateway').recentFiles(await this.api().sessionCwd(sessionId), snapshot.items?.find((i) => i.kind === 'user')?.time ?? Date.now(), { limit: 12 }), billing: this.workbench.billing(sessionId),
           approvalPolicy: await this.approvalPolicy.status(sessionId) };
       },
-      sendMessage: async ({ params: [sessionId], body, elevated }) => {
+      sendMessage: async ({ params: [sessionId], body, elevated, phone = '' }) => this.requests.once(phone, `send:${sessionId}`, body, async () => {
         guard();
         const permission = await enforcePermission(sessionId, elevated);
-        await this.sessions.prompt(sessionId, body?.text ?? '', decodeAttachments(body?.attachments), { origin: 'phone' });
-        return { ok: true, permission };
+        this.workbench.beforeSend(sessionId, body, elevated);
+        if (body?.skills != null && (!Array.isArray(body.skills) || body.skills.length > 8 || body.skills.some((id) => typeof id !== 'string' || id.length > 100))) throw new rules.RemoteRuleError('每次最多选择8个已安装技能', 400);
+        if (body?.skills?.length) {
+          const available = await this.workbench.skills(sessionId);
+          if (body.skills.some((id) => !available.items.some((skill) => skill.enabled && skill.id === id))) throw new rules.RemoteRuleError('所选技能已卸载或不可用，请重新选择', 409, 'skill-unavailable');
+        }
+        const wasRunning = Boolean(chat().transcripts?.get(sessionId)?.running);
+        if (body?.mode === 'stop-adjust') await chat().cancel(sessionId);
+        if (body?.mode && !['queue', 'steer', 'stop-adjust'].includes(body.mode)) throw new rules.RemoteRuleError('补充要求方式无效', 400);
+        const row = (await this.sessions.sessionRows()).find((value) => value.sessionId === sessionId);
+        const promptOptions = { ...body, workspaceId: row ? row.workspaceId ?? '' : body?.workspaceId ?? '' };
+        await this.sessions.prompt(sessionId, this.workbench.prompt(sessionId, body?.text ?? '', promptOptions), decodeAttachments(body?.attachments), { origin: 'phone', mode: body?.mode === 'steer' ? 'steer' : 'queue' });
+        return { ok: true, permission, requestId: body?.requestId, delivery: wasRunning && (!body?.mode || body.mode === 'queue') ? 'queued' : 'accepted' };
+      }),
+      workbench: ({ phone, query }) => this.workbench.snapshot(phone, query.get('sessionId') ?? ''),
+      workbenchAction: (request) => { guard(); return this.workbench.action(request); },
+      requestStatus: ({ phone, params: [id], query }) => this.requests.lookup(phone, query.get('op') ?? 'create', id),
+      skills: ({ params: [id] }) => this.workbench.skills(id),
+      notifications: ({ phone, body }) => {
+        const records = this.store().get('phonePushTickets', {});
+        if (body?.enabled === false) delete records[phone];
+        else {
+          if (!/^[A-Za-z0-9_-]{43}$/.test(body?.ticket ?? '') || !Number.isFinite(body?.expiresAt) || body.expiresAt <= Date.now() || body.expiresAt > Date.now() + 31 * 86400000) throw new rules.RemoteRuleError('通知注册凭据无效', 400);
+          records[phone] = { ticket: body.ticket, expiresAt: body.expiresAt };
+        }
+        this.store().set('phonePushTickets', records); return { ok: true };
+      },
+      diagnose: async () => {
+        const started = Date.now(); const connected = this.snapshot();
+        let kernel = false; try { await ctx().client.listSessions(); kernel = true; } catch { /* Report the failed stage, never a false online state. */ }
+        return { stages: [{ id: 'network', ok: true, label: '手机到电脑的加密通道已连通' }, { id: 'gateway', ok: true, label: '电脑网关已响应' }, { id: 'kernel', ok: kernel, label: kernel ? '工作台已响应' : '工作台未响应，请在电脑端检查本地服务' }], lastSuccess: kernel ? Date.now() : null, elapsed: Date.now() - started, keepAwake: connected.keepAwake };
       },
       cancel: async ({ params: [sessionId] }) => {
         await chat().cancel(sessionId);

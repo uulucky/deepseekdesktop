@@ -70,7 +70,7 @@ const sessions = {
   sessionRows: async () => [{ sessionId: 's1', cwd: workdir, archived: false }, { sessionId: 'old', archived: true }],
   restorePermission: async () => {},
   selectPermission: async (id, preset) => { permissions.set(id, preset); return { currentValue: preset }; },
-  prompt: async (id, text, attachments, options) => { prompts.push({ id, text, attachments, permission: permissions.get(id), origin: options?.origin }); },
+  prompt: async (id, text, attachments, options) => { prompts.push({ id, text, attachments, permission: permissions.get(id), origin: options?.origin, mode: options?.mode }); },
 };
 
 function request(port, secret, phone, method, route, body, headers = {}) {
@@ -275,12 +275,48 @@ function rawConnection(port, firstLine) {
   const catalog = (await call('GET', '/v1/catalog')).json;
   assert.deepEqual(catalog.groups[0].models[0].efforts, [{ id: 'high', label: '高' }, { id: 'max', label: 'max' }]);
 
+  // Build 7 uses these actual HTTP routes, not direct calls to the workbench object.
+  setGuard(true);
+  const workbench = await call('GET', '/v1/workbench?sessionId=s1');
+  assert.equal(workbench.status, 200);
+  assert.equal(workbench.json.capabilities.schedules, true);
+  assert.equal(workbench.json.push.configured, false);
+  assert.equal((await call('POST', '/v1/workbench', { op: 'pin', sessionId: 's1', on: true })).status, 200);
+  assert.equal((await call('GET', '/v1/sessions')).json.items.find((r) => r.sessionId === 's1').pinned, true);
+  assert.equal((await call('POST', '/v1/workbench', { op: 'schedule-save', title: '需认证', prompt: '检查' })).json.error.code, 'needs-verification');
+  assert.equal((await call('GET', '/v1/diagnostics')).json.stages.find((r) => r.id === 'gateway').ok, true);
+  const previousPage = (await call('GET', '/v1/sessions/s1?limit=50&before=' + encodeURIComponent(opened.before))).json;
+  assert.equal(previousPage.items.at(-1).text, 'm249');
+  const once = { requestId: 'phone-request-062', text: '同一个请求只发送一次' }, count = prompts.length;
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', once)).status, 200);
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', once)).status, 200);
+  assert.equal(prompts.length, count + 1);
+  assert.equal((await call('GET', '/v1/requests/phone-request-062?op=send%3As1')).json.status, 'accepted');
+  assert.equal((await request(port, secret, 'other-phone', 'GET', '/v1/requests/phone-request-062?op=send%3As1')).json.status, 'not-found');
+  transcript.running = true;
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', { text: '排队', mode: 'queue' })).json.delivery, 'queued');
+  assert.equal(prompts.at(-1).mode, 'queue');
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', { text: '调整', mode: 'steer' })).status, 200);
+  assert.equal(prompts.at(-1).mode, 'steer');
+  const beforeCancel = prompts.length; let cancelled = false;
+  ctx.chat.cancel = async () => { assert.equal(prompts.length, beforeCancel, 'cancel finishes before replacement prompt'); cancelled = true; transcript.running = false; };
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', { text: '停止后调整', mode: 'stop-adjust' })).status, 200);
+  assert(cancelled); assert.equal(prompts.at(-1).mode, 'queue');
+  const beforeInvalid = prompts.length;
+  assert.equal((await call('POST', '/v1/sessions/s1/messages', { text: '无效模式', mode: 'invalid' })).status, 400);
+  assert.equal(prompts.length, beforeInvalid);
+  assert.equal((await call('POST', '/v1/notifications', { ticket: 't'.repeat(43), expiresAt: Date.now() + 60000 })).status, 200);
+  assert.equal((await call('POST', '/v1/notifications', { enabled: false })).status, 200);
+  assert.deepEqual(ui.get('phonePushTickets'), {});
+
   // A phone can ask to be forgotten.
   const revoked = [];
   control.command = (op, extra) => revoked.push([op, extra]);
+  ui.set('phonePushTickets', { 'old-phone': { ticket: 'fixture' }, pixel: { ticket: 'retained' } });
   assert.equal((await request(port, secret, 'old-phone', 'POST', '/v1/unpair', {})).status, 200);
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.deepEqual(revoked, [['revoke', { phone: 'old-phone' }]]);
+  assert.deepEqual(ui.get('phonePushTickets'), { pixel: { ticket: 'retained' } }, 'unpair revokes only that phone notification capability');
 
   // Revoking on the desktop drops the phone's live connections.
   const hanging = net.connect(port, '127.0.0.1');

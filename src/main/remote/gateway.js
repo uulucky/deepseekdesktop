@@ -129,6 +129,12 @@ function recentFiles(root, since = 0, { maxDepth = 3, maxScan = 4000, limit = 50
 
 const ROUTES = [
   ['GET', /^\/v1\/info$/, 'info'],
+  ['GET', /^\/v1\/workbench$/, 'workbench'],
+  ['POST', /^\/v1\/workbench$/, 'workbenchAction'],
+  ['GET', /^\/v1\/diagnostics$/, 'diagnose'],
+  ['POST', /^\/v1\/notifications$/, 'notifications'],
+  ['GET', /^\/v1\/requests\/([^/]+)$/, 'requestStatus'],
+  ['GET', /^\/v1\/sessions\/([^/]+)\/skills$/, 'skills'],
   ['GET', /^\/v1\/sessions$/, 'listSessions'],
   ['POST', /^\/v1\/sessions$/, 'createSession'],
   ['GET', /^\/v1\/pending$/, 'pending'],
