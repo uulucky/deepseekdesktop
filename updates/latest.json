@@ -1,44 +1,44 @@
 {
   "schemaVersion": 2,
-  "version": "0.6.1",
-  "publishedAt": "2026-11-03T02:59:10.874Z",
+  "version": "0.6.2",
+  "publishedAt": "2026-11-05T02:23:52.270Z",
   "notes": [
-    "主对话收到明确任务直接创建工作对话，无需二次确认；按任务复杂度自动选择推理等级，简单查询关闭推理，常规工作采用适中档位，复杂任务提高推理。",
-    "dmuse iOS、Android、鸿蒙 0.1.2 新增“本对话全部允许”，机主验证后减少重复审批，可随时撤销；普通问题仍需回答，权限不扩展到其他对话。",
-    "手机打开长对话直接显示最新回复，阅读历史时普通刷新保留位置；iOS 通过原 TestFlight 内测组、鸿蒙通过原 AppTest 分发，审核状态以平台为准。",
-    "Mac 新增逐步安装向导：打开 DMG 中的 PKG，关闭旧版后安装并启动新版，保留登录、设置和对话；安装前请保存正在处理的文件。",
-    "Windows、Apple 芯片与 Intel Mac 同步更新，Microsoft Store 本次不更新。Windows 无 Authenticode；Mac 为 ad-hoc 签名，无 Developer ID 或 Apple 公证。"
+    "为新版 dmuse 工作台提供任务置顶、重命名、归档、已读状态、长对话历史分页及分层连接诊断。",
+    "支持运行中排队追加、调整方向和停止后调整；同一请求重连重发不会重复创建或执行任务。",
+    "新增项目说明、输出偏好、快捷任务模板、已安装技能选择，以及一次、间隔、每天和每周本地定时计划。待回答或待审批时不重叠执行，离线错过不自动补跑。",
+    "显示任务 Token、缓存用量、余额缓存与配置单价后的费用预算估算；应用内提醒可用，系统锁屏推送仍待服务端配置和送达验收。云端执行暂不提供。",
+    "配套 iOS 0.1.3（Build 7）；Windows、Mac Apple 芯片、Mac Intel 同步更新并保留数据。Mac 运行 DMG 中的安装向导，安装前请保存任务文件。Microsoft Store 本次不更新。"
   ],
   "platforms": {
     "win32-x64": {
       "format": "portable-zip",
-      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-update.zip",
-      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-portable.zip",
-      "size": 2740674,
-      "sha256": "7116ecd28baf79818b8f830972e3fa78a9fe10add453986f252ad00e3082bd2b",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-update.zip",
+      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-portable.zip",
+      "size": 2740673,
+      "sha256": "51085d6d49130442e5850dc64ea2f0e2b2970002c7cc900d4e070e5582b82e43",
       "bootstrap": {
         "format": "bootstrap-exe",
-        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-update-bootstrap.exe",
+        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-update-bootstrap.exe",
         "size": 6373376,
-        "sha256": "bc21c6bc627f8766c2923b472d157687abd94c8e0439b09a12f99a8083bd308f"
+        "sha256": "0e3635a5d48344ffc7dec8ab46c095b804cfee8c850ed5af11a1711b35e14530"
       }
     },
     "darwin-arm64": {
       "format": "manual-dmg",
-      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-arm64.dmg",
-      "size": 225883501,
-      "sha256": "63b82da517a21a2f233888f8585980cc4a2d82564e2f0cb08711355ea62559e9"
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-arm64.dmg",
+      "size": 225885016,
+      "sha256": "1cc0b2434536b221f03802bb16bf4a8f51ce484cca18361ee0084edbd80dc1bf"
     },
     "darwin-x64": {
       "format": "manual-dmg",
-      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.1-mac-x64.dmg",
-      "size": 234207928,
-      "sha256": "38c2f5703c148adea4e70f87569ce13a354974868461e09df11e419f9c0fc434"
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-x64.dmg",
+      "size": 234198202,
+      "sha256": "31574f7cbc677aae0250138a43a8491d9733d521909c84840cb9f28d8b14ee29"
     }
   },
   "signature": {
     "algorithm": "Ed25519",
     "keyId": "2dc3a1563d303a42c92f5289",
-    "value": "Wz7KUgkmVh7I+dTvSOwTDxxSWjptRgH+fhxkZ/H/49lud7WrHbqGt18CpYc/lFiGnzzefoz/G/rNRFWLcLCXAA=="
+    "value": "C+8JXoMH/j1ebS5Ob0/zJibMFmiAUf9Qsdp3fZ8G8v37qnHZiX4WLw/PiyYVDBeFkY16yxaSkwRnqv0JPt6vCw=="
   }
 }
