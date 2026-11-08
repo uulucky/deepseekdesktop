@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "version": "0.6.3",
+  "publishedAt": "2026-11-08T12:28:06.554Z",
+  "notes": [
+    "复杂任务可自动拆成2–8个有依赖和验收条件的子任务，顺序执行、逐项独立审查、有限返工，再整合和独立整体验收。",
+    "新增本地任务进度卡片与中断续跑，跳过已通过的子任务；未通过验收不会因模型回合结束而标成完成。",
+    "验收须引用实际工具检查；多轮执行和审查会增加 API 调用与用量，自动拆分质量仍取决于模型。",
+    "Windows便携版、Apple芯片与Intel Mac同步更新；Microsoft Store渠道本次暂缓。"
+  ],
+  "platforms": {
+    "win32-x64": {
+      "format": "portable-zip",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-update.zip",
+      "manualUrl": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-portable.zip",
+      "size": 2740672,
+      "sha256": "a95ce7eeadc0cca407cc07c0dbed85571d700d1726f052585d277fb1e8a0a413",
+      "bootstrap": {
+        "format": "bootstrap-exe",
+        "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-update-bootstrap.exe",
+        "size": 6373376,
+        "sha256": "00c4f3d762dc74adddf5c72754c6d2b37aba2c35e2d0d121fb5e6c2e7b17cb2a"
+      }
+    },
+    "darwin-arm64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-mac-arm64.dmg",
+      "size": 225885340,
+      "sha256": "b2bf80f1988494a33cd348ddc0b1bdd1e89b5c8710c401f0543544925721a612"
+    },
+    "darwin-x64": {
+      "format": "manual-dmg",
+      "url": "https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-mac-x64.dmg",
+      "size": 234199067,
+      "sha256": "eeaa4e04ce7320b6301573f8543404a3949149e01fcd23a67bff701efac28662"
+    }
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "2dc3a1563d303a42c92f5289",
+    "value": "P082zg5ChMTpZeWBBzKE1Rwrl8DtUBkRSBoDvZkgBbVwgzr5vigvJ/0fgqTAmujhFzD0guiPYcpmihyFtiFnDQ=="
+  }
+}
