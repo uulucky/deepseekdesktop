@@ -4,12 +4,22 @@ const { RemoteRuleError } = require('./rules');
 
 function canonical(value) { return JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v); }
 
+/** A finished model turn is not proof that its automatic workflow passed acceptance. */
+function workflowOutcome(items = []) {
+  const workflow = [...items].reverse().find(item => item.kind === 'workflow');
+  if (workflow?.status === 'blocked') return 'failed';
+  if (workflow?.status === 'cancelled' || workflow?.status === 'running') return 'stopped';
+  return null;
+}
+
 /** A disconnected client is not evidence that execution completed. */
 function taskState(snapshot = {}, fallback = {}) {
   if (snapshot.approvals?.length || snapshot.approvals?.size) return 'waiting-approval';
   if (snapshot.questions?.length || snapshot.questions?.size) return 'waiting-answer';
   if (snapshot.running ?? fallback.running) return 'running';
   if (snapshot.items?.some((i) => i.kind === 'user' && i.pending && !i.failed)) return 'queued';
+  const workflow = workflowOutcome(snapshot.items);
+  if (workflow) return workflow;
   const end = [...(snapshot.items ?? [])].reverse().find((item) => item.kind === 'turn-end');
   if (end?.error || /error|fail/i.test(end?.reason ?? '')) return 'failed';
   if (/cancel|stop|interrupt/i.test(end?.reason ?? '')) return 'stopped';
@@ -76,4 +86,4 @@ class RequestLedger {
     this.inflight.set(key, promise); return promise;
   }
 }
-module.exports = { taskState, historyPage, RequestLedger };
+module.exports = { taskState, workflowOutcome, historyPage, RequestLedger };

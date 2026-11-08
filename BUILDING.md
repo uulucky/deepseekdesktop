@@ -50,6 +50,8 @@ npm run test:integration
 
 测试结果只代表运行它的系统与架构；Mac 通过不能据此宣称 Windows 通过，反之亦然。旧 `node test/smoke.js` 入口也会启动隔离内核，不再默认连接本机 3080 或读取现有对话。
 
+自动任务流程可单独运行 `npm run test:workflow`。契约测试覆盖依赖、验收证据、独立审查、有限返工、阻塞、取消和续跑；真实固定内核联调使用回环模拟模型和临时工作目录，实际创建及读取文件，并验证内核重启后不重放已通过的子任务，不调用付费模型。`npm test` 包含契约测试，`npm run test:integration` 包含此联调，`npm run ui:shot` 生成任务进度卡片截图。流程说明见 [TASK-WORKFLOWS.md](TASK-WORKFLOWS.md)。
+
 ## 产物验证
 
 Release ZIP 与自动更新分发的是同一 CI 构建文件。可执行：

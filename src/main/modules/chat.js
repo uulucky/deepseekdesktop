@@ -156,6 +156,20 @@ class Transcript {
     if (typeof seq === 'number' && seq <= this.lastSeq) return null;
     if (typeof seq === 'number') this.lastSeq = Math.max(this.lastSeq, seq);
     switch (type) {
+      case 'todo/write': {
+        const data = event.data?.desktopWorkflow;
+        if (data?.version !== 1 || data.ownerId !== this.sessionId) return null;
+        // Keep one live progress card per run, rather than a new row per checkpoint.
+        this.items = this.items.filter(item => item.kind !== 'workflow' || item.runId !== data.runId);
+        return this.pushItem(seq, { kind: 'workflow', time, runId: data.runId,
+          status: data.status, phase: data.phase, error: data.error,
+          goal: clip(data.plan?.goal ?? '', 500),
+          tasks: (data.tasks ?? []).map((task, index) => ({ id: task.id,
+            title: clip(data.plan?.tasks?.[index]?.title ?? task.id, 80),
+            status: data.status === 'cancelled' && ['running', 'reviewing'].includes(task.status) ? 'cancelled' : task.status, attempts: task.attempts })),
+          checks: (data.acceptance?.checks ?? []).map(check => ({ criterionId: check.criterionId, passed: check.passed, evidence: clip(check.evidence, 1000) })),
+        });
+      }
       case 'user/message': {
         const source = messageSource(data?.source);
         const text = clip((data?.content ?? []).filter((b) => b?.type === 'text').map((b) => b.text).join('\n'));

@@ -472,6 +472,32 @@ app.whenReady().then(async () => {
   }
   process.on('unhandledRejection', (reason) => console.log('REJECTION', String(reason)));
 
+  const workflowProbe = await win.webContents.executeJavaScript(`(() => {
+    document.querySelectorAll('.toast').forEach(node => node.remove());
+    ChatView.render({ sessionId: 'workflow-ui', running: false, items: [
+      { kind: 'workflow', runId: 'workflow-preview', goal: '为项目接入自动拆分、执行、整合和整体验收', status: 'completed', phase: 'completed',
+        tasks: [ { id: 'a', title: '实现任务拆分与依赖检查', status: 'completed', attempts: 1 },
+          { id: 'b', title: '接入独立审查和失败返工', status: 'completed', attempts: 2 },
+          { id: 'c', title: '整合界面与恢复进度', status: 'completed', attempts: 1 } ],
+        checks: [ { criterionId: '完整流程', passed: true, evidence: '真实内核完成子任务、逐项独立审查、整合与最终验收。' },
+          { criterionId: '中断恢复', passed: true, evidence: '停止并重启后续跑，不重复已通过的子任务。' } ] }
+    ] });
+    const card = document.querySelector('.workflow-card');
+    const box = card.getBoundingClientRect();
+    const stream = document.getElementById('stream').getBoundingClientRect();
+    return { count: document.querySelectorAll('.workflow-card').length,
+      tasks: card.querySelectorAll('li').length, checks: card.querySelectorAll('.workflow-check').length,
+      text: card.textContent, fits: box.right <= stream.right && card.scrollWidth <= card.clientWidth + 1 };
+  })()`);
+  require('node:assert/strict').equal(workflowProbe.count, 1);
+  require('node:assert/strict').equal(workflowProbe.tasks, 3);
+  require('node:assert/strict').equal(workflowProbe.checks, 2);
+  require('node:assert/strict').equal(workflowProbe.fits, true);
+  require('node:assert/strict').match(workflowProbe.text, /第 2 轮/);
+  fs.writeFileSync(shot('-workflow'), (await capture(win)).toPNG());
+  console.log('WORKFLOW PROGRESS UI', JSON.stringify(workflowProbe));
+  await win.webContents.executeJavaScript('ChatView.render(state.transcript)');
+
   await win.webContents.executeJavaScript('document.getElementById("open-profile").click()');
   await new Promise((resolve) => setTimeout(resolve, 1600));
   console.log('ACCOUNT PANEL', JSON.stringify(await win.webContents.executeJavaScript(PANEL_PROBE), null, 2));

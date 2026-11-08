@@ -4,11 +4,11 @@
 
 第三方 DeepSeek 桌面客户端：把本地 Agent 工作台、DeepSeek 官方网页版、余额、充值、API Key 和权限控制集中在一个界面。**不是 DeepSeek 官方产品，也未获得官方背书。**
 
-当前版本：**0.6.2**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
+当前版本：**0.6.3**。支持 Windows 10/11 x64、macOS 14+ Apple 芯片与 Intel。
 
-[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.2-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
+[GitHub 下载页](https://github.com/uulucky/deepseekdesktop/releases/latest) · [Windows 国内下载](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-portable.zip) · [Mac Apple 芯片](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-mac-arm64.dmg) · [Mac Intel](https://img.uulucky.com/han/deepseek/DeepSeekDesktop-0.6.3-mac-x64.dmg) · [隐私与广告](PRIVACY.md) · [网络连接](NETWORK.md) · [安全与验证](SECURITY.md)
 
-GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.2-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
+GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件内更新在审核、签名及校验完成后上线。可核对 [SHA-256 校验值](https://img.uulucky.com/han/deepseek/0.6.3-SHA256SUMS.txt) 和 Release 内的 `build-info.json`。仓库当前开发代码可能包含未发布功能，请以 Release 对应 tag 查看已发布源码。
 
 [Microsoft Store 渠道](https://apps.microsoft.com/detail/9NMC44LMCNH1)采用独立的发布节奏，本页版本及下载链接对应 GitHub/OSS 直下载版。商店版采用 MSIX，版本和更新由 Microsoft Store 管理；数据独立于便携版，不自动迁移原有 `data/`。商店版的构建方式见 [STORE.md](STORE.md)。
 
@@ -16,6 +16,7 @@ GitHub 与国内 OSS/CDN 镜像提供同一份公开 CI 产物；镜像和软件
 
 ## 主要功能
 
+- **自动拆分复杂任务**：跨组件、多交付物的工作可自动拆成2–8个子任务，按依赖执行、逐项独立审查、有限返工，再整合和独立整体验收。进度保存在本机，停止或重启后可继续；验收需要实际工具证据。多轮执行和审查会增加 API 调用与用量，拆分质量仍取决于模型。
 - **主对话“老朋友”**：在固定入口聊天和安排任务，最多同时协调三个工作对话；支持改名、管理长期记忆和任务回执。主动汇报可关闭，开启时每天最多20次，每次会产生一轮 API 调用费用。主对话固定 Flash、关闭推理，派出的工作对话最高使用工作区权限。
 - **dmuse 手机互联**：电脑中开启“设置 → 手机连接”，手机用 dmuse 独立账号扫码或输入配对码，即可继续主对话、派任务、查看进度、回答问题、确认操作和接收结果。任务始终在电脑运行；电脑需开机联网，手机后台不保证持续连接或推送。可在电脑限制手机权限、撤销配对和选择是否防休眠。
 - **双模式**：左上角在“工作台（Harness）”与“网页版（免费）”之间切换。网页版直接加载隔离的 DeepSeek 官方页面，登录和对话由官方页面处理；两个模式的会话、滚动位置和未关闭页面状态互不混用。
@@ -76,23 +77,18 @@ Read Only 用于阅读分析；Workspace Write 允许修改工作目录；Full A
 
 没有保存过权限偏好时，默认 Full Access。输入区会持续提示其风险；日常操作不弹窗，只有安全护栏列出的少数高风险操作会先请你确认（可关闭）。三个档位都能保存为新对话默认值；重启或打开旧对话不会擅自更改该对话的权限。已有的只读、工作区偏好也会保留。**专用工作目录不限制 Full Access 的访问范围。** 详见 [SECURITY.md](SECURITY.md)。
 
-## 0.6.2 更新
+## 0.6.3 更新
 
-本版为新版 dmuse 工作台提供配套电脑功能，Windows、Mac Apple 芯片和 Mac Intel 同步支持：
+Windows x64、Mac Apple 芯片和 Mac Intel 同步支持自动任务流程：
 
-- **任务管理**：置顶、重命名、归档、已读状态；长对话分段加载历史，显示正在执行、待回答、待审批、完成和失败等状态。
-- **继续任务**：运行中可排队追加、调整方向或停止后调整；手机重连重复发送同一请求时，电脑不会重复创建或执行。
-- **项目与快捷任务**：选择默认工作目录内的文件夹，保存项目说明和输出偏好，管理快捷任务模板，选择电脑已安装的技能。
-- **定时任务**：支持一次、间隔、每天和每周计划，可暂停、恢复、立即运行和查看记录。任务在电脑本地执行，需开启手机连接并保持电脑在线；离线错过的任务不自动补跑，上一轮等待回答或审批时不重复启动。自动任务仅允许只读或工作区权限。
-- **用量与提醒**：查看任务 Token、缓存用量和余额缓存，可按当前模型配置单价估算费用与预算；估算不能代替服务商账单。应用内显示待处理及完成提醒。
+- **拆分与执行**：复杂执行请求先检查上下文，再拆成2–8个有依赖和验收条件的小任务，顺序执行，减少同时修改同一文件造成的冲突。
+- **独立审查与整合**：每项完成后独立审查，必要时返工；最后整合实际交付物并独立核对完整需求。每阶段最多三轮，权限或必要信息阻塞时停止并说明原因。
+- **有证据才通过**：验收条件必须引用实际成功的工具检查，不能仅凭子任务回复“已完成”；未通过、取消或中断的流程不会因模型回合结束而显示完成。
+- **进度与续跑**：对话显示子任务、返工轮次和验收说明，计划与进度保存在本地；继续时跳过已通过的子任务，审查阶段中断后从审查继续。
 
-已适配 iOS **0.1.3（Build 7）** 的工作台，通过原 TestFlight 内测组更新。旧版手机可继续使用原有功能；其他手机平台的新功能以各自已安装版本为准。
+主对话派出的复杂任务和普通工作对话均接入此流程；简单查询、小改动及仅要求规划的请求不增加编排步骤。自动触发和拆分仍依赖模型遵循指令，不能保证任意复杂任务全部成功。多轮执行和审查会增加 API 调用与用量。详情见 [自动任务流程](TASK-WORKFLOWS.md)。
 
-**系统锁屏推送尚未完成服务端配置和送达验收**，本版不承诺后台推送可用；应用内提醒与主动打开手机后的任务同步可用。云端执行暂不提供。
-
-Mac 的 DMG 内含逐步安装向导，保留登录、设置和对话；也提供独立 PKG 和 ZIP。Windows 保留便携包及应用内更新。Microsoft Store 渠道本次不更新。
-
-网页版依赖 DeepSeek 官方服务；客户端不会绕过账号、验证码或官方访问策略，官方可能返回 403/429。
+任务在电脑本地运行，复用当前模型、工作目录和权限限制；手机任务仍需电脑开机联网。Mac 按原 DMG/PKG 向导升级，Windows 使用便携 ZIP 或应用内更新。Microsoft Store 渠道本次暂缓更新。
 
 ### 如何同时运行多个任务
 

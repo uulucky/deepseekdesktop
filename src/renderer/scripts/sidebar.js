@@ -36,7 +36,9 @@ const Sidebar = {
       const { view, waiting, running } = taskState(session);
       const title = esc(view?.transcript?.title || session.title || '新对话');
       const active = session.sessionId === state.activeSessionId ? ' active' : '';
-      const label = view?.transcript?.questions?.length ? '待回答' : waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : view?.unread ? '已完成' : relativeTime(session.updatedAt);
+      const workflow = [...(view?.transcript?.items ?? [])].reverse().find(item => item.kind === 'workflow');
+      const workflowLabel = workflow?.status === 'blocked' ? '未通过验收' : workflow && ['cancelled', 'running'].includes(workflow.status) ? '已中断' : '';
+      const label = view?.transcript?.questions?.length ? '待回答' : waiting ? '待批准' : view?.stopping ? '停止中' : running ? '运行中' : workflowLabel || (view?.unread ? '已完成' : relativeTime(session.updatedAt));
       const statusClass = waiting ? ' waiting' : running ? ' running' : view?.unread ? ' unread' : '';
       const snippet = session.snippet ? `<span class="session-snippet">${esc(session.snippet)}</span>` : '';
       const byCompanion = session.byCompanion || window.CompanionView?.task(session.sessionId)

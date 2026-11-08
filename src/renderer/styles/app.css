@@ -887,3 +887,8 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c9cedb; backgr
 .companion-note.muted { color: var(--warn); }
 .friend-fact { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
 .friend-fact > span { flex: 1 1 auto; }
+.workflow-card { margin: 12px 0 12px 41px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 12px; font-size: 13px; line-height: 1.6; }
+.workflow-card p { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-card ol { margin: 8px 0; padding-left: 22px; }
+.workflow-card li span, .workflow-card small { color: var(--text-muted); }
+.workflow-card .workflow-error { color: var(--warn); }

@@ -23,6 +23,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { DIRS, readJsonSync, writeJsonSync } = require('./util');
 const rules = require('../remote/rules');
+const { workflowOutcome } = require('../remote/task-state');
 
 const PRESET_ID = 'desktop-companion';
 const DEFAULT_NAME = '老朋友';
@@ -205,6 +206,8 @@ function statusOf(transcript, row) {
     if (transcript.running) return 'running';
     const items = transcript.items ?? [];
     if (!items.some((item) => item.kind === 'user')) return 'idle';
+    const workflow = workflowOutcome(items);
+    if (workflow) return workflow;
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
       if (item.kind !== 'turn-end') continue;
@@ -222,6 +225,8 @@ function statusOf(transcript, row) {
 
 function lastError(transcript) {
   const items = transcript?.items ?? [];
+  const workflow = [...items].reverse().find(item => item.kind === 'workflow');
+  if (workflow?.status === 'blocked' && workflow.error) return excerpt(workflow.error, 200);
   for (let i = items.length - 1; i >= 0; i--) {
     if (items[i].kind === 'turn-end') return excerpt(items[i].error || items[i].reason || '', 200);
     if (items[i].kind === 'user' && items[i].failed) return excerpt(items[i].failed, 200);
@@ -814,6 +819,7 @@ class Companion {
       `【${this.name()}派来的任务】`,
       ...(quote ? [`用户原话：${excerpt(quote, 600)}`] : []),
       `任务说明：${text}`,
+      ...(assessed === 'complex' ? ['这是复杂执行任务：先检查实际上下文，再自动拆成有依赖和验收条件的子任务，调用 desktop_run_workflow 执行、逐项独立审查、整合和整体验收。流程未通过时明确报告剩余问题，不把子任务回复当作整体完成。'] : []),
       '完成后请给出简短的结论和交付物位置。遇到需要用户决定的事，直接提问。',
     ].join('\n');
     await this.sessions.prompt(taskId, message, []);

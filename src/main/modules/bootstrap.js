@@ -687,6 +687,8 @@ class Bootstrap {
       // re-reads its on/off file per call, so the settings toggle needs no kernel restart.
       const safetyPlugin = path.join(presentationDir, 'safety-guard.cjs');
       fs.copyFileSync(path.join(__dirname, 'desktop-safety-guard.cjs'), safetyPlugin);
+      const workflowPlugin = path.join(presentationDir, 'task-workflow.cjs');
+      fs.copyFileSync(path.join(__dirname, 'desktop-task-workflow.cjs'), workflowPlugin);
       // Finder/Start-menu launches get a minimal PATH; append package-manager folders and the
       // bundled Node (for npx-based MCP servers) after whatever the user already has.
       const kernelPath = augmentedPath(process.env, this.nodeBin ? [path.dirname(this.nodeBin)] : []);
@@ -701,6 +703,8 @@ class Bootstrap {
       }, {
         id: 'desktop-safety-guard', name: safetyPlugin,
         config: { settingsFile: path.join(DIRS.config, 'safety-guard.json') },
+      }, {
+        id: 'desktop-task-workflow', name: workflowPlugin,
       }, ...mcpPatchEntries(DIRS.config)] }]), 'utf8');
       const args = useNodeEntry
         ? [entry, 'web', '--patch', presentationPatch, '--port', String(port), '--no-open']

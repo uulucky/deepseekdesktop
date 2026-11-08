@@ -183,6 +183,16 @@ function renderQuestion(pending) {
 
 /** Render one transcript item (user / assistant / tool / turn marker). */
 function renderItem(item, approvals = [], questions = [], rowKey = '') {
+  if (item.kind === 'workflow') {
+    const labels = { pending: '待执行', running: '执行中', reviewing: '独立审查中', completed: '已通过',
+      blocked: '未通过验收', failed: '待修复', cancelled: '已停止', interrupted: '已中断，可继续', execution: '执行子任务', integration: '整合交付物', acceptance: '整体验收' };
+    const label = item.status === 'running' ? labels[item.phase] || '执行中' : labels[item.status] || item.status;
+    return `<section class="workflow-card" aria-label="自动任务进度"><strong>自动任务 · ${esc(label)}</strong>` +
+      `<p>${esc(item.goal)}</p><ol>` + (item.tasks ?? []).map(task => `<li>${esc(task.title)} <span>${esc(labels[task.status] || task.status)}${task.attempts > 1 ? ` · 第 ${esc(task.attempts)} 轮` : ''}</span></li>`).join('') +
+      '</ol>' + (item.checks ?? []).map(check => `<p class="workflow-check">${check.passed ? '✓' : '○'} ${esc(check.criterionId)}：${esc(check.evidence)}</p>`).join('') +
+      (item.error ? `<p class="workflow-error">${esc(item.error)}</p>` : '') +
+      `<small>任务编号：${esc(item.runId)}</small></section>`;
+  }
   if (item.kind === 'user') {
     // Progress the desktop put in front of a message to the main conversation is for the model,
     // not the bubble; a message the desktop sent by itself shows as a notice.
@@ -344,7 +354,8 @@ const ChatView = {
     const historyNotice = hiddenCount
       ? `<div class="history-window-note">为保证长对话稳定，当前显示最近 ${MAX_VISIBLE_ITEMS} 条记录；更早的 ${hiddenCount} 条仍保存在本地。</div>`
       : '';
-    inner.innerHTML = historyNotice + items.map((item, index) => renderItem(item, approvals, questions,
+    inner.innerHTML = historyNotice + items.map((item, index) => renderItem(item.kind === 'workflow' && item.status === 'running' && !transcript.running
+      ? { ...item, status: 'interrupted' } : item, approvals, questions,
       item.callId ?? (item.kind === 'assistant' && item.turn !== undefined
         ? `assistant:${item.turn}:${item.step}` : `${item.kind}:${item.seq ?? index + hiddenCount}`))).join('')
       + approvals.map(renderApproval).join('') + questions.map(renderQuestion).join('');

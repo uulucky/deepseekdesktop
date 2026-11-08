@@ -57,8 +57,10 @@ class MobileWorkbench {
     const outcome = state.outcomes?.[row.sessionId];
     const resolvedStatus = row.running ? status : (snapshot.items?.length || snapshot.running ? status : outcome?.status ?? status);
     const seq = snapshot.lastSeq ?? outcome?.seq ?? -1, seen = state.seen?.[`${phone}:${row.sessionId}`] ?? -1;
+    const workflow = snapshot.items?.findLast?.((i) => i.kind === 'workflow');
     return { ...row, status: resolvedStatus, statusLabel: STATUS_LABELS[resolvedStatus], unread: seq > seen && ['completed', 'failed', 'stopped'].includes(resolvedStatus), pinned: (state.pins ?? []).includes(row.sessionId), lastSeq: seq,
-      lastActivity: snapshot.items?.at(-1)?.time ?? row.updatedAt, error: snapshot.items?.findLast?.((i) => i.kind === 'turn-end')?.error ?? '',
+      lastActivity: snapshot.items?.at(-1)?.time ?? row.updatedAt, error: snapshot.items?.findLast?.((i) => i.kind === 'turn-end')?.error
+        || (workflow?.status === 'blocked' ? workflow.error : '') || '',
       latest: String((snapshot.items ?? []).filter((i) => ['user', 'assistant'].includes(i.kind)).at(-1)?.parts?.filter((p) => p.kind === 'text').map((p) => p.text).join('') ?? '').replace(/<\/?desktop-summary>/g, '').replace(/<desktop-runtime>[\s\S]*?<\/desktop-runtime>/g, '').slice(0, 160) };
   }
   async snapshot(phone, sessionId = '') {
